@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NTY Classroom Control — UI Preview</title>
+<style>
+/* ============================================
+   Design Tokens — Primary drives theme, Accent drives buttons
+   ============================================ */
+:root {
+  /* User-customizable */
+  --primary: #1E40AF;
+  --accent:  #10B981;
+
+  /* Derived from primary (theme/surfaces) */
+  --bg:           #050B1B;
+  --bg-elevated:  #0B1530;
+  --bg-hover:     #11193A;
+  --bg-card:      #0E1733;
+  --bg-overlay:   rgba(5, 11, 27, 0.85);
+  --border:       #1E2A4F;
+  --border-soft:  #131D3D;
+
+  /* Derived from accent (interactive) */
+  --accent-hover:    #0EA372;
+  --accent-pressed:  #0B845B;
+  --accent-subtle:   rgba(16, 185, 129, 0.15);
+
+  /* Text */
+  --text:           #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted:     #64748B;
+  --text-on-accent: #FFFFFF;
+
+  /* Status */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger:  #EF4444;
+  --info:    #3B82F6;
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --right-rail-width: 320px;
+  --header-height: 56px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  /* Type scale */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Sarabun', 'Noto Sans Thai', sans-serif;
+}
+
+/* ============================================
+   Reset & Base
+   ============================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, textarea, select { font: inherit; color: inherit; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ============================================
+   View Switcher (top demo controls — not part of real app)
+   ============================================ */
+.demo-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 40px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; z-index: 1000;
+  font-size: 13px; color: white;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.1);
+}
+.demo-bar-label {
+  font-weight: 600; opacity: 0.9; padding-right: 8px;
+  border-right: 1px solid rgba(255,255,255,0.2);
+}
+.demo-tab {
+  padding: 6px 14px; border-radius: 6px;
+  background: rgba(255,255,255,0.1);
+  transition: all 0.15s; font-weight: 500;
+}
+.demo-tab:hover { background: rgba(255,255,255,0.2); }
+.demo-tab.active { background: rgba(255,255,255,0.95); color: var(--primary); }
+.demo-bar-spacer { flex: 1; }
+.demo-color-group { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.demo-color-input {
+  width: 28px; height: 28px; border: 2px solid rgba(255,255,255,0.4);
+  border-radius: 6px; cursor: pointer; padding: 0; background: transparent;
+}
+.demo-color-input::-webkit-color-swatch { border: none; border-radius: 4px; }
+.demo-color-input::-webkit-color-swatch-wrapper { padding: 0; border: none; }
+
+/* ============================================
+   App Shell
+   ============================================ */
+.app-shell {
+  display: grid;
+  grid-template-rows: var(--header-height) 1fr;
+  grid-template-columns: var(--sidebar-width) 1fr var(--right-rail-width);
+  height: 100vh; padding-top: 40px;
+  grid-template-areas:
+    "header header header"
+    "sidebar main rail";
+}
+
+/* ============================================
+   Header
+   ============================================ */
+.header {
+  grid-area: header;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-soft);
+  display: flex; align-items: center; padding: 0 20px; gap: 16px;
+}
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 700; font-size: 14px;
+  width: calc(var(--sidebar-width) - 20px);
+}
+.brand-logo {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 60%, white));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 40%, transparent);
+}
+.brand-text { line-height: 1.1; }
+.brand-text small { display: block; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+
+.connection-pill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 999px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.connection-pill .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--success); box-shadow: 0 0 8px var(--success);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.connection-pill code {
+  font-family: 'JetBrains Mono', monospace; color: var(--text);
+}
+.header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary); transition: all 0.15s;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+.student-count {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: var(--accent-subtle);
+  border-radius: 8px; font-weight: 600; font-size: 13px;
+  color: var(--accent);
+}
+
+/* ============================================
+   Sidebar
+   ============================================ */
+.sidebar {
+  grid-area: sidebar;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border-soft);
+  overflow-y: auto; padding: 16px 0;
+}
+.sidebar-section { padding: 0 12px; margin-bottom: 16px; }
+.sidebar-heading {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-muted);
+  padding: 10px 12px 6px; display: flex; align-items: center; gap: 6px;
+}
+.sidebar-heading svg { width: 12px; height: 12px; }
+
+.sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 6px; width: 100%;
+  font-size: 13px; color: var(--text-secondary);
+  transition: all 0.12s; text-align: left;
+  margin-bottom: 1px;
+}
+.sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
+.sidebar-item.active {
+  background: var(--accent-subtle); color: var(--accent);
+  font-weight: 600;
+}
+.sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.sidebar-item .badge {
+  margin-left: auto; font-size: 10px; padding: 2px 6px;
+  background: var(--bg-card); border-radius: 4px; font-weight: 600;
+}
+.sidebar-item.active .badge { background: var(--accent); color: white; }
+
+.sidebar-action {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 10px 12px; border-radius: 6px;
+  font-size: 13px; font-weight: 600;
+  background: var(--accent); color: var(--text-on-accent);
+  transition: all 0.15s;
+}
+.sidebar-action:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.sidebar-action.danger { background: transparent; color: var(--danger); border: 1px solid var(--border); }
+.sidebar-action.danger:hover { background: rgba(239, 68, 68, 0.1); }
+.sidebar-action svg { width: 14px; height: 14px; }
+
+/* ============================================
+   Main content area
+   ============================================ */
+.main {
+  grid-area: main;
+  overflow-y: auto;
+  background: var(--bg);
+}
+.main-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 24px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-soft);
+  position: sticky; top: 0; z-index: 10;
+}
+.search {
+  flex: 1; max-width: 320px;
+  position: relative;
+}
+.search input {
+  width: 100%; padding: 8px 12px 8px 34px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 13px;
+  outline: none; transition: border-color 0.15s;
+}
+.search input:focus { border-color: var(--accent); }
+.search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted); }
+
+.toolbar-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 8px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  transition: all 0.15s;
+}
+.toolbar-btn:hover { background: var(--bg-hover); color: var(--text); }
+.toolbar-btn svg { width: 14px; height: 14px; }
+.toolbar-btn.primary {
+  background: var(--accent); color: var(--text-on-accent);
+  border-color: var(--accent); font-weight: 600;
+}
+.toolbar-btn.primary:hover { background: var(--accent-hover); }
+
+.view-toggle {
+  display: flex; background: var(--bg-card); border-radius: 8px;
+  padding: 2px; border: 1px solid var(--border);
+}
+.view-toggle button {
+  padding: 6px 10px; border-radius: 6px; font-size: 12px;
+  color: var(--text-secondary); transition: all 0.15s;
+}
+.view-toggle button.active {
+  background: var(--bg-hover); color: var(--text);
+}
+
+/* Student grid */
+.student-grid {
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.student-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all 0.18s;
+  cursor: pointer;
+  position: relative;
+}
+.student-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.student-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+.student-screen {
+  aspect-ratio: 16/10;
+  background: linear-gradient(135deg, #1a1f3a, #0a0f1f);
+  position: relative;
+  overflow: hidden;
+}
+/* Mock screen content */
+.mock-screen-content {
+  position: absolute; inset: 8%;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.mock-screen-title {
+  height: 18%;
+  background: linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  border-radius: 3px;
+}
+.mock-screen-content-area {
+  flex: 1; display: grid; grid-template-columns: 1fr 2fr; gap: 4px;
+}
+.mock-screen-sidebar {
+  background: rgba(255,255,255,0.04);
+  border-radius: 3px;
+}
+.mock-screen-canvas {
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  position: relative;
+}
+.mock-screen-canvas::after {
+  content: ''; position: absolute; top: 20%; left: 15%; right: 15%; bottom: 30%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.1), transparent);
+  border-radius: 2px;
+}
+
+.student-status {
+  position: absolute; top: 8px; right: 8px;
+  padding: 3px 8px; border-radius: 999px;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+  font-size: 10px; font-weight: 600; color: white;
+  display: flex; align-items: center; gap: 4px;
+}
+.student-status .dot {
+  width: 5px; height: 5px; border-radius: 50%;
+}
+.student-status.online .dot { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.student-status.locked { color: var(--warning); }
+.student-status.locked .dot { background: var(--warning); }
+.student-status.offline { color: var(--text-muted); }
+.student-status.offline .dot { background: var(--text-muted); }
+
+.student-info {
+  padding: 10px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-card);
+}
+.student-name {
+  font-size: 13px; font-weight: 600;
+}
+.student-meta {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 2px;
+}
+.student-actions {
+  display: flex; gap: 4px;
+}
+.student-action-btn {
+  width: 28px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); transition: all 0.12s;
+}
+.student-action-btn:hover { background: var(--bg-hover); color: var(--accent); }
+.student-action-btn svg { width: 14px; height: 14px; }
+
+/* ============================================
+   Right Rail (Activity / Chat)
+   ============================================ */
+.rail {
+  grid-area: rail;
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border-soft);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.rail-tabs {
+  display: flex; padding: 12px 12px 0; gap: 4px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.rail-tab {
+  padding: 8px 12px; font-size: 12px; font-weight: 500;
+  color: var(--text-secondary); border-radius: 6px 6px 0 0;
+  transition: all 0.15s; position: relative; bottom: -1px;
+}
+.rail-tab.active {
+  color: var(--text); background: var(--bg);
+  border: 1px solid var(--border-soft); border-bottom-color: var(--bg);
+}
+.rail-content { flex: 1; overflow-y: auto; padding: 16px; }
+
+/* Chat */
+.chat-msg {
+  margin-bottom: 12px; padding: 10px 12px;
+  background: var(--bg-card); border-radius: 8px;
+  font-size: 13px;
+}
+.chat-msg-header {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 4px;
+}
+.chat-avatar {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: white;
+  flex-shrink: 0;
+}
+.chat-name { font-weight: 600; font-size: 12px; }
+.chat-time { font-size: 10px; color: var(--text-muted); margin-left: auto; }
+.chat-body { color: var(--text-secondary); line-height: 1.4; }
+
+.chat-input-wrap {
+  padding: 12px; border-top: 1px solid var(--border-soft);
+  display: flex; gap: 8px;
+}
+.chat-input {
+  flex: 1; padding: 8px 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 13px;
+  outline: none;
+}
+.chat-input:focus { border-color: var(--accent); }
+.chat-send {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--accent); color: white;
+  display: flex; align-items: center; justify-content: center;
+}
+.chat-send:hover { background: var(--accent-hover); }
+.chat-send svg { width: 16px; height: 16px; }
+
+/* Activity feed */
+.activity-item {
+  display: flex; gap: 10px; padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--accent-subtle); color: var(--accent);
+}
+.activity-icon.warn { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+.activity-icon.danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+.activity-icon svg { width: 14px; height: 14px; }
+.activity-text { font-size: 12px; }
+.activity-text strong { color: var(--text); }
+.activity-text { color: var(--text-secondary); }
+.activity-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* ============================================
+   Modal Dialog System
+   ============================================ */
+.modal-backdrop {
+  position: fixed; inset: 0; background: var(--bg-overlay);
+  backdrop-filter: blur(6px); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; padding-top: 60px;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.modal-backdrop.open { opacity: 1; pointer-events: auto; }
+.modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%; max-width: 720px; max-height: calc(100vh - 80px);
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  transform: translateY(8px); transition: transform 0.2s;
+}
+.modal-backdrop.open .modal { transform: translateY(0); }
+.modal.compact { max-width: 480px; }
+.modal.wide { max-width: 920px; }
+
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex; align-items: center; gap: 12px;
+}
+.modal-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-subtle); color: var(--accent);
+}
+.modal-icon svg { width: 18px; height: 18px; }
+.modal-title { flex: 1; }
+.modal-title h2 { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+.modal-title p { font-size: 12px; color: var(--text-secondary); }
+.modal-close {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); transition: all 0.15s;
+}
+.modal-close:hover { background: var(--bg-hover); color: var(--text); }
+
+.modal-body { flex: 1; padding: 20px 24px; overflow-y: auto; }
+.modal-footer {
+  padding: 14px 20px; border-top: 1px solid var(--border-soft);
+  display: flex; justify-content: flex-end; gap: 8px; align-items: center;
+}
+.modal-footer .spacer { flex: 1; }
+
+/* Form components */
+.field { margin-bottom: 16px; }
+.field-label {
+  display: block; font-size: 12px; font-weight: 600;
+  margin-bottom: 6px; color: var(--text);
+}
+.field-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.input {
+  width: 100%; padding: 9px 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 13px;
+  outline: none; transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle); }
+.input.with-icon { padding-left: 36px; }
+.input-wrap { position: relative; }
+.input-wrap > svg {
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%); width: 14px; height: 14px;
+  color: var(--text-muted);
+}
+
+textarea.input { resize: vertical; min-height: 80px; font-family: inherit; }
+
+.checkbox {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; border-radius: 8px;
+  cursor: pointer; transition: background 0.15s;
+}
+.checkbox:hover { background: var(--bg-hover); }
+.checkbox input { display: none; }
+.checkbox-mark {
+  width: 18px; height: 18px; border-radius: 5px;
+  border: 2px solid var(--border); flex-shrink: 0; margin-top: 1px;
+  position: relative; transition: all 0.15s;
+}
+.checkbox input:checked ~ .checkbox-mark {
+  background: var(--accent); border-color: var(--accent);
+}
+.checkbox input:checked ~ .checkbox-mark::after {
+  content: ''; position: absolute;
+  left: 5px; top: 1px; width: 4px; height: 9px;
+  border: solid white; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.checkbox-label { font-size: 13px; font-weight: 500; }
+.checkbox-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* Buttons */
+.btn {
+  padding: 9px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: all 0.15s; border: 1px solid transparent;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-primary {
+  background: var(--accent); color: var(--text-on-accent);
+  font-weight: 600;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary {
+  background: var(--bg-card); color: var(--text);
+  border-color: var(--border);
+}
+.btn-secondary:hover { background: var(--bg-hover); }
+.btn-ghost { color: var(--text-secondary); }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+.btn-danger { color: var(--danger); border-color: var(--border); background: transparent; }
+.btn-danger:hover { background: rgba(239, 68, 68, 0.1); }
+.btn svg { width: 14px; height: 14px; }
+
+/* Color picker grid */
+.color-grid {
+  display: grid; grid-template-columns: repeat(8, 1fr);
+  gap: 6px; margin-top: 8px;
+}
+.color-swatch {
+  aspect-ratio: 1; border-radius: 8px; cursor: pointer;
+  border: 2px solid transparent; transition: all 0.15s;
+  position: relative;
+}
+.color-swatch:hover { transform: scale(1.08); }
+.color-swatch.selected {
+  border-color: white;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.color-swatch.selected::after {
+  content: '✓'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+/* Branding preview */
+.branding-grid {
+  display: grid; grid-template-columns: 1fr 380px; gap: 24px;
+}
+.branding-preview {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+  position: sticky; top: 0;
+}
+.preview-window {
+  width: 100%; aspect-ratio: 16/11;
+  background: var(--bg);
+  display: grid; grid-template-rows: 32px 1fr;
+}
+.preview-titlebar {
+  background: var(--bg-elevated);
+  display: flex; align-items: center; padding: 0 10px;
+  font-size: 10px; color: var(--text-secondary);
+  gap: 6px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.preview-titlebar .dot-r { width: 8px; height: 8px; border-radius: 50%; background: #ff5f56; }
+.preview-titlebar .dot-y { width: 8px; height: 8px; border-radius: 50%; background: #ffbd2e; }
+.preview-titlebar .dot-g { width: 8px; height: 8px; border-radius: 50%; background: #27c93f; }
+.preview-content { display: grid; grid-template-columns: 80px 1fr; }
+.preview-sidebar {
+  background: var(--bg-elevated); padding: 8px 6px;
+  border-right: 1px solid var(--border-soft);
+}
+.preview-section {
+  font-size: 8px; font-weight: 700; text-transform: uppercase;
+  color: var(--text-muted); padding: 6px 4px 2px;
+}
+.preview-btn {
+  background: var(--accent); color: white;
+  font-size: 9px; padding: 4px 6px; border-radius: 3px;
+  margin-bottom: 3px; text-align: center;
+}
+.preview-main {
+  padding: 8px; display: grid; gap: 4px;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: min-content;
+}
+.preview-card {
+  aspect-ratio: 16/10;
+  background: var(--bg-card);
+  border-radius: 4px; border: 1px solid var(--border);
+}
+
+.preview-label {
+  text-align: center; font-size: 11px;
+  color: var(--text-muted); padding: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+/* Quiz table */
+.quiz-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: 13px;
+}
+.quiz-table thead th {
+  text-align: left; padding: 10px 12px;
+  font-size: 11px; text-transform: uppercase;
+  font-weight: 600; color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.05em;
+}
+.quiz-table tbody td {
+  padding: 12px; border-bottom: 1px solid var(--border-soft);
+  vertical-align: middle;
+}
+.quiz-table tbody tr { transition: background 0.12s; }
+.quiz-table tbody tr:hover { background: var(--bg-hover); }
+.quiz-table tbody tr.active { background: var(--accent-subtle); }
+
+.quiz-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+}
+.quiz-status.draft { background: var(--bg-hover); color: var(--text-secondary); }
+.quiz-status.live { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+.quiz-status.ended { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+
+.quiz-action {
+  width: 28px; height: 28px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-muted); transition: all 0.15s;
+}
+.quiz-action:hover { background: var(--bg-hover); color: var(--accent); }
+.quiz-action svg { width: 14px; height: 14px; }
+
+/* Hidden views */
+.view { display: none; }
+.view.active { display: block; }
+.view-quiz, .view-roster {
+  padding: 24px;
+}
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 48px 24px;
+  text-align: center; color: var(--text-secondary);
+}
+.empty-state svg { width: 48px; height: 48px; opacity: 0.4; margin-bottom: 12px; }
+.empty-state h3 { color: var(--text); font-size: 15px; margin-bottom: 4px; }
+.empty-state p { font-size: 13px; }
+
+.section-title {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px; padding: 0 24px;
+}
+.section-title h1 { font-size: 18px; font-weight: 700; }
+.section-title p { color: var(--text-secondary); font-size: 12px; margin-left: auto; }
+
+</style>
+</head>
+<body>
+
+<!-- Demo control bar — switch between views & customize colors -->
+<div class="demo-bar">
+  <span class="demo-bar-label">UI Preview</span>
+  <button class="demo-tab active" data-view="dashboard">Dashboard</button>
+  <button class="demo-tab" data-view="quiz">Quiz Manager</button>
+  <button class="demo-tab" data-view="roster">Class Roster</button>
+  <button class="demo-tab" data-modal="branding">🎨 Branding</button>
+  <button class="demo-tab" data-modal="policy">🛡️ Apply Policy</button>
+  <button class="demo-tab" data-modal="password">🔒 Admin Password</button>
+  <span class="demo-bar-spacer"></span>
+  <div class="demo-color-group">
+    <span>Primary</span>
+    <input type="color" class="demo-color-input" id="primaryPicker" value="#1E40AF">
+  </div>
+  <div class="demo-color-group">
+    <span>Accent</span>
+    <input type="color" class="demo-color-input" id="accentPicker" value="#10B981">
+  </div>
+</div>
+
+<div class="app-shell">
+
+  <!-- ============== HEADER ============== -->
+  <div class="header">
+    <div class="brand">
+      <div class="brand-logo">📚</div>
+      <div class="brand-text">
+        Classroom Control
+        <small>NTY MULTIMEDIA</small>
+      </div>
+    </div>
+    <div class="connection-pill">
+      <span class="dot"></span>
+      <span>เชื่อมต่อที่</span>
+      <code>192.168.1.112</code>
+      <span style="color: var(--text-muted)">(Wi-Fi)</span>
+    </div>
+    <button class="icon-btn" title="Copy IP">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+    </button>
+    <div class="header-actions">
+      <div class="student-count">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        <span>9 / 12</span>
+      </div>
+      <button class="icon-btn" title="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      </button>
+      <button class="icon-btn" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============== SIDEBAR ============== -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-heading">เครื่องมือชั้นเรียน</div>
+      <button class="sidebar-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Dashboard</span>
+        <span class="badge">9</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <span>Screen Sharing</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"/></svg>
+        <span>Audio Broadcast</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <span>Camera Monitor</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-heading">ระบบควบคุม</div>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <span>Lock / Unlock</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Apply Policy</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+        <span>Restart All</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10"/></svg>
+        <span>Shutdown All</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-heading">สอน &amp; ประเมิน</div>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <span>Quiz / Exam</span>
+        <span class="badge">3</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <span>Class Roster</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        <span>Mark Attendance</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span>Live Activity</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-heading">การตั้งค่า</div>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Branding</span>
+      </button>
+      <button class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        <span>Language</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section" style="border-top: 1px solid var(--border-soft); padding-top: 12px;">
+      <button class="sidebar-action">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        Broadcast Screen
+      </button>
+      <div style="height: 8px;"></div>
+      <button class="sidebar-action danger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        Logoff All
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- ============== MAIN VIEWS ============== -->
+  <main class="main">
+
+    <!-- Dashboard view -->
+    <div class="view view-dashboard active">
+      <div class="main-toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" placeholder="ค้นหานักเรียน...">
+        </div>
+        <button class="toolbar-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filter
+        </button>
+        <button class="toolbar-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+          Sort
+        </button>
+        <div class="view-toggle">
+          <button class="active" title="Grid view">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </button>
+          <button title="List view">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+        </div>
+        <div style="flex:1"></div>
+        <button class="toolbar-btn primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          New Session
+        </button>
+      </div>
+
+      <div class="student-grid" id="studentGrid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <!-- Quiz Manager view -->
+    <div class="view view-quiz">
+      <div class="section-title">
+        <h1>Quiz / Exam Manager</h1>
+        <p>3 quizzes total · 1 live session</p>
+      </div>
+
+      <div style="padding: 0 24px; display: flex; gap: 8px; margin-bottom: 16px;">
+        <button class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          New Quiz
+        </button>
+        <button class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Import from Word
+        </button>
+        <div style="flex:1"></div>
+        <button class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          View Live Results
+        </button>
+      </div>
+
+      <div style="padding: 0 24px;">
+        <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+          <table class="quiz-table">
+            <thead>
+              <tr>
+                <th style="width: 32px;"></th>
+                <th>Quiz Title</th>
+                <th>Questions</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th>Last Modified</th>
+                <th style="width: 120px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="active">
+                <td><span class="quiz-status live"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span></span></td>
+                <td><strong>วิชาคณิตศาสตร์ ม.3 — บทที่ 5</strong></td>
+                <td>20</td>
+                <td>45 min</td>
+                <td><span class="quiz-status live">Live · 8 active</span></td>
+                <td>2 minutes ago</td>
+                <td>
+                  <button class="quiz-action" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  <button class="quiz-action" title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg></button>
+                  <button class="quiz-action" title="More"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td>วิทยาศาสตร์ — แบบฝึกหัด 4.2</td>
+                <td>15</td>
+                <td>30 min</td>
+                <td><span class="quiz-status draft">Draft</span></td>
+                <td>Yesterday</td>
+                <td>
+                  <button class="quiz-action" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="quiz-action" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+                  <button class="quiz-action" title="More"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td>Quick Vocabulary Check — Unit 7</td>
+                <td>10</td>
+                <td>15 min</td>
+                <td><span class="quiz-status ended">Ended · 24 graded</span></td>
+                <td>Apr 28, 2026</td>
+                <td>
+                  <button class="quiz-action" title="Results"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></button>
+                  <button class="quiz-action" title="Duplicate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+                  <button class="quiz-action" title="More"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Class Roster view -->
+    <div class="view view-roster">
+      <div class="section-title">
+        <h1>Class Rosters</h1>
+        <p>3 classes · 87 students total</p>
+      </div>
+
+      <div style="padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
+        <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; padding: 18px;">
+          <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+              <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 2px;">ม.3/2 — คณิตศาสตร์</h3>
+              <p style="font-size: 12px; color: var(--text-muted);">28 students · last seen today</p>
+            </div>
+            <button class="quiz-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+          </div>
+          <div style="display:flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px;">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--accent)); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">ก</div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6, #ec4899); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">ข</div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #ef4444); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">ค</div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #06b6d4, #3b82f6); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">ง</div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--bg-card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: var(--text-secondary);">+24</div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 6px 10px; font-size: 12px;">Open</button>
+            <button class="btn btn-primary" style="flex: 1; justify-content: center; padding: 6px 10px; font-size: 12px;">Start session</button>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; padding: 18px;">
+          <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+              <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 2px;">ม.4/1 — วิทยาศาสตร์</h3>
+              <p style="font-size: 12px; color: var(--text-muted);">31 students · last seen 2 days ago</p>
+            </div>
+            <button class="quiz-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+          </div>
+          <div style="display:flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px;">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #06b6d4); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">A</div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #f97316, #ef4444); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">B</div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">C</div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--bg-card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: var(--text-secondary);">+28</div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 6px 10px; font-size: 12px;">Open</button>
+            <button class="btn btn-primary" style="flex: 1; justify-content: center; padding: 6px 10px; font-size: 12px;">Start session</button>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-elevated); border: 1px dashed var(--border); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px; cursor: pointer; color: var(--text-muted); transition: all 0.15s;" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)';" onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)';">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32" style="margin-bottom: 8px;"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          <strong style="font-size: 13px;">Create new class</strong>
+          <small style="font-size: 11px; margin-top: 2px;">Import from Excel/CSV</small>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ============== RIGHT RAIL ============== -->
+  <aside class="rail">
+    <div class="rail-tabs">
+      <button class="rail-tab active" data-rail="chat">💬 Chat</button>
+      <button class="rail-tab" data-rail="activity">⚡ Activity</button>
+    </div>
+
+    <div class="rail-content rail-content-chat">
+      <div class="chat-msg">
+        <div class="chat-msg-header">
+          <div class="chat-avatar">ก</div>
+          <span class="chat-name">กิตติพงศ์ ส.</span>
+          <span class="chat-time">2 นาทีที่แล้ว</span>
+        </div>
+        <div class="chat-body">อาจารย์ครับ ทำข้อ 5 ไม่เข้าใจครับ</div>
+      </div>
+      <div class="chat-msg">
+        <div class="chat-msg-header">
+          <div class="chat-avatar">น</div>
+          <span class="chat-name">นภัสสร ม.</span>
+          <span class="chat-time">5 นาทีที่แล้ว</span>
+        </div>
+        <div class="chat-body">เครื่องของฉันเสียงไม่ออก ค่ะ</div>
+      </div>
+      <div class="chat-msg" style="background: var(--accent-subtle); border: 1px solid var(--accent);">
+        <div class="chat-msg-header">
+          <div class="chat-avatar" style="background: var(--accent);">T</div>
+          <span class="chat-name" style="color: var(--accent);">Teacher (You)</span>
+          <span class="chat-time">10 นาทีที่แล้ว</span>
+        </div>
+        <div class="chat-body" style="color: var(--text);">เริ่มทำแบบทดสอบบทที่ 5 นะครับ มีเวลา 45 นาที</div>
+      </div>
+      <div class="chat-msg">
+        <div class="chat-msg-header">
+          <div class="chat-avatar">ส</div>
+          <span class="chat-name">สมชาย ค.</span>
+          <span class="chat-time">15 นาทีที่แล้ว</span>
+        </div>
+        <div class="chat-body">รับทราบครับอาจารย์</div>
+      </div>
+    </div>
+
+    <div class="chat-input-wrap">
+      <input type="text" class="chat-input" placeholder="พิมพ์ข้อความถึงทั้งห้อง...">
+      <button class="chat-send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </aside>
+</div>
+
+
+<!-- ============================================
+     MODAL: BRANDING SETTINGS
+     ============================================ -->
+<div class="modal-backdrop" id="modal-branding">
+  <div class="modal wide">
+    <div class="modal-header">
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+      </div>
+      <div class="modal-title">
+        <h2>Branding Settings</h2>
+        <p>ปรับแต่งสี ชื่อแอพ และโลโก้ — เปลี่ยนแล้วแสดงผลทั้งระบบ</p>
+      </div>
+      <button class="modal-close" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="branding-grid">
+        <div>
+          <div class="field">
+            <label class="field-label">App Name</label>
+            <input type="text" class="input" value="Classroom Control">
+          </div>
+          <div class="field">
+            <label class="field-label">Organization Name</label>
+            <input type="text" class="input" value="NTY MULTIMEDIA">
+            <div class="field-hint">แสดงในหัว window และหน้า login student</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Primary Color
+              <span style="font-weight: 400; color: var(--text-muted); font-size: 11px; margin-left: 8px;">— ธีมพื้นหลัง / sidebar / banner</span>
+            </label>
+            <div class="input-wrap" style="margin-bottom: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+              <input type="text" class="input with-icon" id="primaryHex" value="#1E40AF" style="text-transform: uppercase;">
+            </div>
+            <div class="color-grid">
+              <div class="color-swatch selected" style="background: #1E40AF;" data-color="#1E40AF" data-target="primary"></div>
+              <div class="color-swatch" style="background: #7C3AED;" data-color="#7C3AED" data-target="primary"></div>
+              <div class="color-swatch" style="background: #DC2626;" data-color="#DC2626" data-target="primary"></div>
+              <div class="color-swatch" style="background: #EA580C;" data-color="#EA580C" data-target="primary"></div>
+              <div class="color-swatch" style="background: #0F766E;" data-color="#0F766E" data-target="primary"></div>
+              <div class="color-swatch" style="background: #BE185D;" data-color="#BE185D" data-target="primary"></div>
+              <div class="color-swatch" style="background: #1F2937;" data-color="#1F2937" data-target="primary"></div>
+              <div class="color-swatch" style="background: #4B5563;" data-color="#4B5563" data-target="primary"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Accent Color
+              <span style="font-weight: 400; color: var(--text-muted); font-size: 11px; margin-left: 8px;">— ปุ่ม / ลิงก์ / highlight</span>
+            </label>
+            <div class="input-wrap" style="margin-bottom: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+              <input type="text" class="input with-icon" id="accentHex" value="#10B981" style="text-transform: uppercase;">
+            </div>
+            <div class="color-grid">
+              <div class="color-swatch selected" style="background: #10B981;" data-color="#10B981" data-target="accent"></div>
+              <div class="color-swatch" style="background: #3B82F6;" data-color="#3B82F6" data-target="accent"></div>
+              <div class="color-swatch" style="background: #F59E0B;" data-color="#F59E0B" data-target="accent"></div>
+              <div class="color-swatch" style="background: #EF4444;" data-color="#EF4444" data-target="accent"></div>
+              <div class="color-swatch" style="background: #8B5CF6;" data-color="#8B5CF6" data-target="accent"></div>
+              <div class="color-swatch" style="background: #EC4899;" data-color="#EC4899" data-target="accent"></div>
+              <div class="color-swatch" style="background: #06B6D4;" data-color="#06B6D4" data-target="accent"></div>
+              <div class="color-swatch" style="background: #14B8A6;" data-color="#14B8A6" data-target="accent"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Logo</label>
+            <button class="btn btn-secondary" style="width: 100%; justify-content: center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              Upload logo (.png, .svg)
+            </button>
+            <div class="field-hint">แนะนำ 256×256 px, transparent background</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="branding-preview">
+            <div class="preview-window">
+              <div class="preview-titlebar">
+                <span class="dot-r"></span>
+                <span class="dot-y"></span>
+                <span class="dot-g"></span>
+                <span style="margin-left: 6px;">Classroom Control — Teacher</span>
+              </div>
+              <div class="preview-content">
+                <div class="preview-sidebar">
+                  <div class="preview-section">CLASS</div>
+                  <div class="preview-btn">Lock</div>
+                  <div class="preview-btn">Policy</div>
+                  <div class="preview-section">POWER</div>
+                  <div class="preview-btn">Restart</div>
+                </div>
+                <div class="preview-main">
+                  <div class="preview-card"></div>
+                  <div class="preview-card"></div>
+                  <div class="preview-card"></div>
+                  <div class="preview-card"></div>
+                  <div class="preview-card"></div>
+                  <div class="preview-card"></div>
+                </div>
+              </div>
+            </div>
+            <div class="preview-label">Live preview — สีเปลี่ยนตามที่เลือก</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" data-close>Reset to default</button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" data-close>Cancel</button>
+      <button class="btn btn-primary" data-close>Apply changes</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================
+     MODAL: APPLY POLICY
+     ============================================ -->
+<div class="modal-backdrop" id="modal-policy">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div class="modal-title">
+        <h2>Classroom Policy</h2>
+        <p>เลือกข้อจำกัดที่ต้องการบังคับใช้กับเครื่องนักเรียนทั้งหมด</p>
+      </div>
+      <button class="modal-close" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="checkbox">
+        <input type="checkbox" checked>
+        <span class="checkbox-mark"></span>
+        <div>
+          <div class="checkbox-label">Block USB drives</div>
+          <div class="checkbox-desc">ป้องกันไม่ให้เสียบ flash drive ใหม่ (ต้องใช้ admin service)</div>
+        </div>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox">
+        <span class="checkbox-mark"></span>
+        <div>
+          <div class="checkbox-label">Block CD/DVD drives</div>
+          <div class="checkbox-desc">ปิดการอ่านดิสก์ใหม่จนกว่าจะ revert</div>
+        </div>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" checked>
+        <span class="checkbox-mark"></span>
+        <div>
+          <div class="checkbox-label">Block printing</div>
+          <div class="checkbox-desc">หยุด Print Spooler service บน student PCs</div>
+        </div>
+      </label>
+
+      <label class="checkbox">
+        <input type="checkbox" checked>
+        <span class="checkbox-mark"></span>
+        <div style="flex:1">
+          <div class="checkbox-label">Block applications</div>
+          <div class="checkbox-desc">Auto-kill processes ตามชื่อ exe (คั่นด้วยเครื่องหมาย ,)</div>
+        </div>
+      </label>
+      <textarea class="input" placeholder="discord.exe, steam.exe, chrome.exe" style="margin-bottom: 16px; margin-left: 38px; width: calc(100% - 38px);">discord.exe, steam.exe, telegram.exe</textarea>
+
+      <label class="checkbox">
+        <input type="checkbox">
+        <span class="checkbox-mark"></span>
+        <div style="flex:1">
+          <div class="checkbox-label">Block websites</div>
+          <div class="checkbox-desc">เพิ่มลง hosts file (ใช้ได้ทุก browser)</div>
+        </div>
+      </label>
+      <textarea class="input" placeholder="facebook.com, youtube.com" style="margin-bottom: 16px; margin-left: 38px; width: calc(100% - 38px);"></textarea>
+
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 12px; background: var(--bg-card); border-radius: 8px;">
+        <span style="font-size: 12px; font-weight: 600;">Auto-revert after:</span>
+        <select class="input" style="flex: 1; max-width: 220px;">
+          <option>No limit</option>
+          <option>15 minutes</option>
+          <option>30 minutes</option>
+          <option>1 hour</option>
+          <option>End of class</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" data-close>Revert all</button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" data-close>Cancel</button>
+      <button class="btn btn-primary" data-close>Apply</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================
+     MODAL: ADMIN PASSWORD
+     ============================================ -->
+<div class="modal-backdrop" id="modal-password">
+  <div class="modal compact">
+    <div class="modal-header">
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </div>
+      <div class="modal-title">
+        <h2>Admin Password</h2>
+        <p>ตั้งรหัสผู้ดูแลสำหรับยกเลิกการล็อคเครื่องนักเรียน</p>
+      </div>
+      <button class="modal-close" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="padding: 12px; background: var(--accent-subtle); border-radius: 8px; margin-bottom: 16px; display: flex; gap: 10px; font-size: 12px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--accent)" stroke-width="2" style="flex-shrink:0; margin-top: 1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span style="color: var(--text-secondary);">รหัสจะบันทึกที่ <code style="color: var(--accent); font-family: monospace;">HKCU\Software\NTY\ClassroomCtrl</code> — Export เป็น .reg เพื่อ deploy ไปทุกเครื่อง</span>
+      </div>
+
+      <div class="field">
+        <label class="field-label">New password</label>
+        <div class="input-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          <input type="password" class="input with-icon" placeholder="อย่างน้อย 6 ตัวอักษร">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Confirm password</label>
+        <div class="input-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <input type="password" class="input with-icon" placeholder="พิมพ์ใหม่อีกครั้ง">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" data-close>Reset to default</button>
+      <button class="btn btn-secondary" data-close>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        Export .reg
+      </button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" data-close>Cancel</button>
+      <button class="btn btn-primary" data-close>Save</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ===========================================
+   Generate student grid mock data
+   =========================================== */
+const students = [
+  { name: 'กิตติพงศ์ สิทธิชัย', no: '01', status: 'online' },
+  { name: 'นภัสสร มาลัย', no: '02', status: 'online' },
+  { name: 'สมชาย ครองธรรม', no: '03', status: 'locked' },
+  { name: 'อรทัย พันธ์มะลิ', no: '04', status: 'online' },
+  { name: 'ธนกร ภักดี', no: '05', status: 'offline' },
+  { name: 'พรพิมล วงศ์สุข', no: '06', status: 'online' },
+  { name: 'ชนินทร์ ตันติเจริญ', no: '07', status: 'online' },
+  { name: 'รัชนี สร้อยทอง', no: '08', status: 'locked' },
+  { name: 'วีระชัย ภูมิรัตน์', no: '09', status: 'online' },
+  { name: 'มาลี เพชรน้ำงาม', no: '10', status: 'online' },
+  { name: 'ปิยะนันท์ บุญส่ง', no: '11', status: 'online' },
+  { name: 'อนุชา ศรีสมบัติ', no: '12', status: 'offline' },
+];
+
+const statusLabels = {
+  online: 'Active',
+  locked: 'Locked',
+  offline: 'Offline'
+};
+
+const grid = document.getElementById('studentGrid');
+grid.innerHTML = students.map((s, i) => `
+  <div class="student-card${i === 0 ? ' selected' : ''}" data-i="${i}">
+    <div class="student-screen">
+      <div class="mock-screen-content">
+        <div class="mock-screen-title"></div>
+        <div class="mock-screen-content-area">
+          <div class="mock-screen-sidebar"></div>
+          <div class="mock-screen-canvas"></div>
+        </div>
+      </div>
+      <div class="student-status ${s.status}">
+        <span class="dot"></span>
+        <span>${statusLabels[s.status]}</span>
+      </div>
+    </div>
+    <div class="student-info">
+      <div>
+        <div class="student-name">${s.name}</div>
+        <div class="student-meta">No. ${s.no} · PC-${i+1}</div>
+      </div>
+      <div class="student-actions">
+        <button class="student-action-btn" title="View">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <button class="student-action-btn" title="More">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+`).join('');
+
+// Student card selection
+grid.addEventListener('click', e => {
+  const card = e.target.closest('.student-card');
+  if (!card) return;
+  document.querySelectorAll('.student-card.selected').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+});
+
+/* ===========================================
+   View switcher (top demo tabs)
+   =========================================== */
+document.querySelectorAll('.demo-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const view = tab.dataset.view;
+    const modal = tab.dataset.modal;
+
+    if (view) {
+      document.querySelectorAll('.demo-tab[data-view]').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelector(`.view-${view}`).classList.add('active');
+    }
+
+    if (modal) {
+      document.getElementById(`modal-${modal}`).classList.add('open');
+    }
+  });
+});
+
+// Modal close
+document.querySelectorAll('[data-close]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.closest('.modal-backdrop').classList.remove('open');
+  });
+});
+document.querySelectorAll('.modal-backdrop').forEach(bd => {
+  bd.addEventListener('click', e => {
+    if (e.target === bd) bd.classList.remove('open');
+  });
+});
+
+/* ===========================================
+   Sidebar item navigation
+   =========================================== */
+document.querySelectorAll('.sidebar-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+  });
+});
+
+/* ===========================================
+   Theme color customization
+   =========================================== */
+function applyTheme(primary, accent) {
+  const root = document.documentElement;
+  root.style.setProperty('--primary', primary);
+  root.style.setProperty('--accent', accent);
+
+  // Derive surfaces from primary (darker shades)
+  const dim = (hex, factor) => {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    const dr = Math.round(r * (1 - factor));
+    const dg = Math.round(g * (1 - factor));
+    const db = Math.round(b * (1 - factor));
+    return `#${dr.toString(16).padStart(2,'0')}${dg.toString(16).padStart(2,'0')}${db.toString(16).padStart(2,'0')}`;
+  };
+
+  root.style.setProperty('--bg', dim(primary, 0.93));
+  root.style.setProperty('--bg-elevated', dim(primary, 0.88));
+  root.style.setProperty('--bg-card', dim(primary, 0.85));
+  root.style.setProperty('--bg-hover', dim(primary, 0.78));
+  root.style.setProperty('--border', dim(primary, 0.62));
+  root.style.setProperty('--border-soft', dim(primary, 0.78));
+
+  // Accent variations
+  const lighter = (hex, factor) => {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return `#${Math.min(255, r + Math.round(255*factor)).toString(16).padStart(2,'0')}${Math.min(255, g + Math.round(255*factor)).toString(16).padStart(2,'0')}${Math.min(255, b + Math.round(255*factor)).toString(16).padStart(2,'0')}`;
+  };
+
+  root.style.setProperty('--accent-hover', dim(accent, 0.1));
+  root.style.setProperty('--accent-pressed', dim(accent, 0.25));
+  root.style.setProperty('--accent-subtle', accent + '26'); // 15% alpha
+}
+
+document.getElementById('primaryPicker').addEventListener('input', e => {
+  const accent = document.getElementById('accentPicker').value;
+  applyTheme(e.target.value, accent);
+  document.getElementById('primaryHex').value = e.target.value.toUpperCase();
+});
+document.getElementById('accentPicker').addEventListener('input', e => {
+  const primary = document.getElementById('primaryPicker').value;
+  applyTheme(primary, e.target.value);
+  document.getElementById('accentHex').value = e.target.value.toUpperCase();
+});
+
+/* Branding modal — color swatches */
+document.querySelectorAll('.color-swatch').forEach(sw => {
+  sw.addEventListener('click', () => {
+    const target = sw.dataset.target;
+    const color = sw.dataset.color;
+    document.querySelectorAll(`.color-swatch[data-target="${target}"]`).forEach(s => s.classList.remove('selected'));
+    sw.classList.add('selected');
+    document.getElementById(target + 'Picker').value = color;
+    document.getElementById(target + 'Hex').value = color;
+    const primary = document.getElementById('primaryPicker').value;
+    const accent = document.getElementById('accentPicker').value;
+    applyTheme(primary, accent);
+  });
+});
+
+/* ===========================================
+   Right rail tab switcher
+   =========================================== */
+document.querySelectorAll('.rail-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.rail-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+  });
+});
+
+</script>
+
+</body>
+</html>
