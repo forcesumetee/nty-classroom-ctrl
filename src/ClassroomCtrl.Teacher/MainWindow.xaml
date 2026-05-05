@@ -5,6 +5,7 @@
         xmlns:vm="clr-namespace:ClassroomCtrl.Teacher.ViewModels"
         xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
         xmlns:controls="clr-namespace:ClassroomCtrl.Teacher.Controls"
+        xmlns:views="clr-namespace:ClassroomCtrl.Teacher.Views"
         xmlns:models="clr-namespace:ClassroomCtrl.Shared.Models;assembly=ClassroomCtrl.Shared"
         Title="{DynamicResource Lbl_AppTitle}"
         Height="800" Width="1280"
@@ -21,6 +22,12 @@
         <conv:VideoCodecLabelConverter x:Key="VideoCodecLabel"/>
         <!-- Phase 2: Section C uses this converter (parameter "Inverted" flips the mapping). -->
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <!-- Phase 3 Section E: highlights the active tab in the conversation strip and
+             hides the close-✕ on the Everyone tab. -->
+        <conv:AreEqualConverter x:Key="AreEqual"/>
+        <conv:ConversationKindToCloseVisibilityConverter x:Key="KindToCloseVisibility"/>
+        <!-- Phase 3 Section G: routes main content area between StudentGrid and QuizManager. -->
+        <conv:ViewKindToVisibilityConverter x:Key="ViewKindToVisibility"/>
     </Window.Resources>
 
     <!-- Phase UI-Rewrite Phase 1: 3-column shell.
@@ -96,8 +103,8 @@
                             ToolTip="{DynamicResource Btn_CopyIP}">
                         <TextBlock Text="📋" FontSize="14"/>
                     </Button>
-                    <!-- Phase 2 Section C — Notifications bell.  Badge shows raised-hand count;
-                         click toggles a Popup with the list of raising students. -->
+                    <!-- Phase 3 Section D — Notifications bell.  Badge shows the unread
+                         notification count; click marks all read and toggles the popup. -->
                     <Button x:Name="NotificationsBellBtn"
                             Style="{DynamicResource Button.Icon}"
                             Click="NotificationsBell_Click"
@@ -108,9 +115,9 @@
                                     CornerRadius="999" MinWidth="16" Height="16"
                                     HorizontalAlignment="Right" VerticalAlignment="Top"
                                     Margin="0,-2,-4,0" Padding="4,0"
-                                    Visibility="{Binding HasNotifications,
+                                    Visibility="{Binding HasUnreadNotifications,
                                         Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Text="{Binding RaisedHandsCount}"
+                                <TextBlock Text="{Binding UnreadNotificationsCount}"
                                            Foreground="White" FontSize="9" FontWeight="Bold"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
@@ -121,7 +128,7 @@
                            Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
                         <Border Background="{DynamicResource Surface.Elevated}"
                                 BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
-                                CornerRadius="12" Padding="12" MinWidth="280"
+                                CornerRadius="12" Padding="12" MinWidth="320" MaxWidth="380"
                                 Margin="0,4,8,0">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="16" ShadowDepth="4"
@@ -131,35 +138,62 @@
                                 <TextBlock Text="{DynamicResource Hdr_Notifications}"
                                            Style="{DynamicResource Text.H3}"
                                            Margin="0,0,0,8"/>
-                                <ItemsControl ItemsSource="{Binding RaisedHandsStudents}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Padding="8"
-                                                    Background="{DynamicResource Surface.Card}"
-                                                    BorderBrush="{DynamicResource Border.Soft}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="6" Margin="0,0,0,4">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="✋" FontSize="14"
-                                                               Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                    <StackPanel VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding DisplayName}"
-                                                                   FontWeight="SemiBold" FontSize="12"
-                                                                   Foreground="{DynamicResource Text.Primary}"/>
-                                                        <TextBlock Text="{DynamicResource Lbl_HandRaised}"
+                                <ScrollViewer MaxHeight="320"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding Notifications}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type models:Notification}">
+                                                <Border Padding="10" CornerRadius="6"
+                                                        BorderBrush="{DynamicResource Border.Soft}"
+                                                        BorderThickness="1"
+                                                        Margin="0,0,0,4">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background"
+                                                                    Value="{DynamicResource Surface.Card}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsRead}" Value="False">
+                                                                    <Setter Property="Background"
+                                                                            Value="{DynamicResource Accent.PrimarySubtle}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding Icon}"
+                                                                   FontSize="14"
+                                                                   Margin="0,0,8,0"
+                                                                   VerticalAlignment="Top"/>
+                                                        <TextBlock DockPanel.Dock="Right"
+                                                                   Text="{Binding TimeAgoDisplay}"
                                                                    FontSize="10"
-                                                                   Foreground="{DynamicResource Text.Muted}"/>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                                                   Foreground="{DynamicResource Text.Muted}"
+                                                                   VerticalAlignment="Top"
+                                                                   Margin="6,0,0,0"/>
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       FontWeight="SemiBold" FontSize="12"
+                                                                       Foreground="{DynamicResource Text.Primary}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding Body}"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource Text.Secondary}"
+                                                                       TextWrapping="Wrap"
+                                                                       Margin="0,2,0,0"/>
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
                                 <TextBlock Text="{DynamicResource Lbl_NoNotifications}"
                                            Foreground="{DynamicResource Text.Muted}"
                                            FontSize="12" HorizontalAlignment="Center"
                                            Margin="0,8,0,8"
-                                           Visibility="{Binding HasNotifications,
+                                           Visibility="{Binding HasAnyNotifications,
                                                Converter={StaticResource BoolToVisibility},
                                                ConverterParameter=Inverted}"/>
                             </StackPanel>
@@ -220,9 +254,15 @@
                     <StackPanel Margin="0,16,0,16">
 
                         <!-- Group 1: Class Tools ───────────────────── -->
-                        <TextBlock Style="{DynamicResource Text.SectionHeader}"
-                                   Text="{DynamicResource Hdr_ClassTools}"
-                                   Margin="22,0,12,6"/>
+                        <DockPanel Margin="22,0,12,6">
+                            <controls:HelpIcon DockPanel.Dock="Right"
+                                               TitleKey="Hdr_ClassTools"
+                                               BodyKey="Help_ClassTools"
+                                               VerticalAlignment="Center"/>
+                            <TextBlock Style="{DynamicResource Text.SectionHeader}"
+                                       Text="{DynamicResource Hdr_ClassTools}"
+                                       Margin="0"/>
+                        </DockPanel>
                         <StackPanel Margin="12,0">
                             <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding LockAllCommand}">
                                 <StackPanel Orientation="Horizontal">
@@ -257,9 +297,15 @@
                         </StackPanel>
 
                         <!-- Group 2: Audio ───────────────────── -->
-                        <TextBlock Style="{DynamicResource Text.SectionHeader}"
-                                   Text="{DynamicResource Hdr_Audio}"
-                                   Margin="22,16,12,6"/>
+                        <DockPanel Margin="22,16,12,6">
+                            <controls:HelpIcon DockPanel.Dock="Right"
+                                               TitleKey="Hdr_Audio"
+                                               BodyKey="Help_Audio"
+                                               VerticalAlignment="Center"/>
+                            <TextBlock Style="{DynamicResource Text.SectionHeader}"
+                                       Text="{DynamicResource Hdr_Audio}"
+                                       Margin="0"/>
+                        </DockPanel>
                         <StackPanel Margin="12,0">
                             <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding ToggleSoundsCommand}">
                                 <TextBlock Text="{Binding SoundsButtonText}"
@@ -297,9 +343,15 @@
                         </StackPanel>
 
                         <!-- Group 3: Recording & Breakout ───────────────────── -->
-                        <TextBlock Style="{DynamicResource Text.SectionHeader}"
-                                   Text="{DynamicResource Hdr_RecordingBreakout}"
-                                   Margin="22,16,12,6"/>
+                        <DockPanel Margin="22,16,12,6">
+                            <controls:HelpIcon DockPanel.Dock="Right"
+                                               TitleKey="Hdr_RecordingBreakout"
+                                               BodyKey="Help_RecordingBreakout"
+                                               VerticalAlignment="Center"/>
+                            <TextBlock Style="{DynamicResource Text.SectionHeader}"
+                                       Text="{DynamicResource Hdr_RecordingBreakout}"
+                                       Margin="0"/>
+                        </DockPanel>
                         <StackPanel Margin="12,0">
                             <!-- Sub-section: การบันทึก -->
                             <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding StartRecordingCommand}">
@@ -332,11 +384,33 @@
                         </StackPanel>
 
                         <!-- Group 4: Teach & Assess ───────────────────── -->
-                        <TextBlock Style="{DynamicResource Text.SectionHeader}"
-                                   Text="{DynamicResource Hdr_TeachAssess}"
-                                   Margin="22,16,12,6"/>
+                        <DockPanel Margin="22,16,12,6">
+                            <controls:HelpIcon DockPanel.Dock="Right"
+                                               TitleKey="Hdr_TeachAssess"
+                                               BodyKey="Help_TeachAssess"
+                                               VerticalAlignment="Center"/>
+                            <TextBlock Style="{DynamicResource Text.SectionHeader}"
+                                       Text="{DynamicResource Hdr_TeachAssess}"
+                                       Margin="0"/>
+                        </DockPanel>
                         <StackPanel Margin="12,0">
-                            <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding OpenQuizManagerCommand}">
+                            <!-- Phase 3 Section H — Quiz Manager is the first embedded
+                                 view, so its sidebar entry gets active-state highlighting
+                                 via a DataTrigger on CurrentMainView. -->
+                            <Button Command="{Binding OpenQuizManagerCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button"
+                                           BasedOn="{StaticResource Button.SidebarItem}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CurrentMainView}" Value="QuizManager">
+                                                <Setter Property="Background"
+                                                        Value="{DynamicResource Accent.PrimarySubtle}"/>
+                                                <Setter Property="Foreground"
+                                                        Value="{DynamicResource Accent.Primary}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
                                 <TextBlock Text="{DynamicResource Btn_QuizManager}"
                                            VerticalAlignment="Center" HorizontalAlignment="Left"/>
                             </Button>
@@ -355,9 +429,15 @@
                         </StackPanel>
 
                         <!-- Group 5: System ───────────────────── -->
-                        <TextBlock Style="{DynamicResource Text.SectionHeader}"
-                                   Text="{DynamicResource Hdr_System}"
-                                   Margin="22,16,12,6"/>
+                        <DockPanel Margin="22,16,12,6">
+                            <controls:HelpIcon DockPanel.Dock="Right"
+                                               TitleKey="Hdr_System"
+                                               BodyKey="Help_System"
+                                               VerticalAlignment="Center"/>
+                            <TextBlock Style="{DynamicResource Text.SectionHeader}"
+                                       Text="{DynamicResource Hdr_System}"
+                                       Margin="0"/>
+                        </DockPanel>
                         <StackPanel Margin="12,0">
                             <!-- Sub-section: Power -->
                             <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding RestartAllCommand}">
@@ -396,7 +476,11 @@
         </Border>
 
         <!-- ═════════════════════ MAIN CONTENT (student grid) ═════════════════════ -->
-        <Grid Grid.Row="2" Grid.Column="1" Background="{DynamicResource Surface.Background}">
+        <!-- Phase 3 Section G — wrapped with a visibility binding so the embedded Quiz
+             Manager view (sibling below) can take over this cell when the user navigates. -->
+        <Grid Grid.Row="2" Grid.Column="1" Background="{DynamicResource Surface.Background}"
+              Visibility="{Binding CurrentMainView, Converter={StaticResource ViewKindToVisibility},
+                                   ConverterParameter=StudentGrid}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -474,6 +558,13 @@
                        IsHitTestVisible="False"/>
         </Grid>
 
+        <!-- Phase 3 Section G — embedded Quiz Manager.  Lives in the same Grid cell as the
+             student grid above; visibility is mutually exclusive via CurrentMainView. -->
+        <views:QuizManagerView Grid.Row="2" Grid.Column="1"
+                               Visibility="{Binding CurrentMainView,
+                                            Converter={StaticResource ViewKindToVisibility},
+                                            ConverterParameter=QuizManager}"/>
+
         <!-- ═════════════════════ RIGHT RAIL (chat) ═════════════════════ -->
         <Border Grid.Row="2" Grid.Column="2"
                 Background="{DynamicResource Surface.Elevated}"
@@ -543,7 +634,113 @@
                     </UniformGrid>
                 </Border>
 
-                <!-- Chat input — only visible on the Chat tab; Activity tab is read-only. -->
+                <!-- Phase 3 Section E — conversation tab strip.  Always present at the top
+                     of the chat panel; horizontally scrollable when many DM tabs accumulate.
+                     The active tab gets the accent fill via AreEqual MultiBinding. -->
+                <Border DockPanel.Dock="Top"
+                        BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1"
+                        Padding="6,6,6,0"
+                        Visibility="{Binding IsChatTabSelected, Converter={StaticResource BoolToVisibility}}">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Conversations}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:Conversation}">
+                                    <Border CornerRadius="8,8,0,0"
+                                            Margin="0,0,2,0"
+                                            BorderThickness="1,1,1,0">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background"
+                                                        Value="{DynamicResource Surface.Card}"/>
+                                                <Setter Property="BorderBrush"
+                                                        Value="{DynamicResource Border.Soft}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Value="True">
+                                                        <DataTrigger.Binding>
+                                                            <MultiBinding Converter="{StaticResource AreEqual}">
+                                                                <Binding RelativeSource="{RelativeSource AncestorType=Window}"
+                                                                         Path="DataContext.ActiveConversation"/>
+                                                                <Binding/>
+                                                            </MultiBinding>
+                                                        </DataTrigger.Binding>
+                                                        <Setter Property="Background"
+                                                                Value="{DynamicResource Accent.PrimarySubtle}"/>
+                                                        <Setter Property="BorderBrush"
+                                                                Value="{DynamicResource Accent.Primary}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <DockPanel LastChildFill="True">
+                                            <Button DockPanel.Dock="Right"
+                                                    Width="16" Height="16"
+                                                    Margin="2,0,4,0" Padding="0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    Visibility="{Binding Kind,
+                                                        Converter={StaticResource KindToCloseVisibility}}"
+                                                    Command="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                              Path=DataContext.CloseConversationCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Close">
+                                                <TextBlock Text="✕" FontSize="10"
+                                                           Foreground="{DynamicResource Text.Muted}"/>
+                                            </Button>
+                                            <Border DockPanel.Dock="Right"
+                                                    Background="{DynamicResource Accent.Danger}"
+                                                    CornerRadius="999" MinWidth="16" Height="16"
+                                                    Padding="4,0" Margin="4,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{Binding HasUnread,
+                                                        Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="{Binding UnreadCount}"
+                                                           Foreground="White" FontSize="9"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"/>
+                                            </Border>
+                                            <Button Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    Padding="10,8"
+                                                    Command="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                              Path=DataContext.SwitchConversationCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Border Width="20" Height="20" CornerRadius="999"
+                                                            Background="{DynamicResource Accent.Primary}"
+                                                            Margin="0,0,6,0">
+                                                        <TextBlock Text="{Binding Initial}"
+                                                                   Foreground="White"
+                                                                   FontSize="9" FontWeight="Bold"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding DisplayName}"
+                                                               FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource Text.Primary}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="120"
+                                                               VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Chat input — bound to active conversation's draft so per-tab text persists
+                     across switches.  Only visible on the Chat tab; Activity tab is read-only. -->
                 <Border DockPanel.Dock="Bottom"
                         BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,1,0,0"
                         Padding="12"
@@ -554,7 +751,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0" Style="{DynamicResource TextBox.Default}"
-                                 Text="{Binding ChatInputText, UpdateSourceTrigger=PropertyChanged}"/>
+                                 Text="{Binding ActiveConversation.DraftInput, UpdateSourceTrigger=PropertyChanged}"/>
                         <Button Grid.Column="1" Style="{DynamicResource Button.Primary}"
                                 Command="{Binding SendChatCommand}"
                                 Margin="8,0,0,0" Width="40" Height="40" Padding="0"
@@ -564,12 +761,14 @@
                     </Grid>
                 </Border>
 
-                <!-- Phase 2 Section F — Activity feed panel; visible only on the Activity tab. -->
+                <!-- Phase 3 Section D — Activity feed sources from Notifications (newest-first).
+                     Per-row icon comes from NotificationKind; full log includes already-read
+                     notifications so this is the persistent history view. -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Visibility="{Binding IsActivityTabSelected, Converter={StaticResource BoolToVisibility}}">
                     <ItemsControl ItemsSource="{Binding ActivityFeed}" Margin="12,8">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type models:ChatMessage}">
+                            <DataTemplate DataType="{x:Type models:Notification}">
                                 <Border Background="{DynamicResource Surface.Card}"
                                         BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1"
                                         CornerRadius="6" Padding="10,8" Margin="0,0,0,4">
@@ -577,18 +776,23 @@
                                         <Border DockPanel.Dock="Left" Width="28" Height="28"
                                                 Background="{DynamicResource Accent.PrimarySubtle}"
                                                 CornerRadius="6" Margin="0,0,10,0">
-                                            <TextBlock Text="⚡" FontSize="12"
+                                            <TextBlock Text="{Binding Icon}" FontSize="12"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <TextBlock DockPanel.Dock="Right"
-                                                   Text="{Binding TimeDisplay}"
+                                                   Text="{Binding TimeAgoDisplay}"
                                                    FontSize="10"
                                                    Foreground="{DynamicResource Text.Muted}"
                                                    VerticalAlignment="Top" Margin="6,0,0,0"/>
-                                        <TextBlock Text="{Binding MessageText}"
-                                                   FontSize="12"
-                                                   Foreground="{DynamicResource Text.Secondary}"
-                                                   TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontWeight="SemiBold" FontSize="12"
+                                                       Foreground="{DynamicResource Text.Primary}"/>
+                                            <TextBlock Text="{Binding Body}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource Text.Secondary}"
+                                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        </StackPanel>
                                     </DockPanel>
                                 </Border>
                             </DataTemplate>
@@ -596,13 +800,13 @@
                     </ItemsControl>
                 </ScrollViewer>
 
-                <!-- Phase 2 Section E — chat bubble with avatar + sender + time + body.
-                     DataTrigger swaps Background/Border for Teacher (highlighted) and System (dim).
-                     Wrapped in Section F's tab-visibility so the Activity tab can take this slot. -->
+                <!-- Phase 3 Section E — chat bubbles render the active conversation's
+                     messages.  Switching tabs re-targets the binding to the new conversation's
+                     ObservableCollection without copying data. -->
                 <ScrollViewer x:Name="ChatScrollViewer"
                               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Visibility="{Binding IsChatTabSelected, Converter={StaticResource BoolToVisibility}}">
-                    <ItemsControl ItemsSource="{Binding ChatMessages}" Margin="12,8">
+                    <ItemsControl ItemsSource="{Binding ActiveConversation.Messages}" Margin="12,8">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type models:ChatMessage}">
                                 <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="8"

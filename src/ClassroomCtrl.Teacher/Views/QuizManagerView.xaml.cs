@@ -1,28 +1,36 @@
-using ClassroomCtrl.Exam.Shared;
-using ClassroomCtrl.Shared.Localization;
-using ClassroomCtrl.Teacher.Services;
-using Microsoft.Win32;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using ClassroomCtrl.Shared.Localization;
+using ClassroomCtrl.Teacher.Quiz;
+using ClassroomCtrl.Teacher.Services;
+using Microsoft.Win32;
 using ExamModel = ClassroomCtrl.Exam.Shared.Exam;
 
-namespace ClassroomCtrl.Teacher.Quiz;
+namespace ClassroomCtrl.Teacher.Views;
 
-// Phase 3 Section G: deprecated by embedded QuizManagerView (Views/QuizManagerView.xaml).
-// Kept as a no-call shim so any orphaned reference still compiles; remove in Phase 5.
-public partial class QuizManagerWindow : Window
+/// <summary>
+/// Phase 3 Section G — Quiz Manager promoted from a modal Window to an embedded view
+/// rendered in MainWindow's main content slot.  Logic mirrors QuizManagerWindow; sub-
+/// dialogs (QuizEditorWindow, ExamResultsWindow) still open as Windows owned by the
+/// containing MainWindow, since those are Phase 5 territory.
+/// </summary>
+public partial class QuizManagerView : UserControl
 {
-    public QuizManagerWindow()
+    public QuizManagerView()
     {
         InitializeComponent();
-        if (App.Exam != null)
+        Loaded += (_, _) =>
         {
-            QuizListBox.ItemsSource = App.Exam.Quizzes;
-        }
+            if (App.Exam != null)
+                QuizListBox.ItemsSource = App.Exam.Quizzes;
+        };
     }
 
     private ExamModel? Selected => QuizListBox.SelectedItem as ExamModel;
+
+    private Window? OwnerWindow => Window.GetWindow(this);
 
     private void QuizListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -44,7 +52,7 @@ public partial class QuizManagerWindow : Window
     private void NewQuiz_Click(object sender, RoutedEventArgs e)
     {
         var newQuiz = new ExamModel { Title = "New Quiz", TimeLimitMinutes = 15 };
-        var editor = new QuizEditorWindow(newQuiz) { Owner = this };
+        var editor = new QuizEditorWindow(newQuiz) { Owner = OwnerWindow };
         if (editor.ShowDialog() == true && App.Exam != null)
         {
             App.Exam.SaveQuiz(newQuiz);
@@ -56,7 +64,7 @@ public partial class QuizManagerWindow : Window
     {
         if (Selected == null || App.Exam == null) return;
         var keepId = Selected.Id;
-        var editor = new QuizEditorWindow(Selected) { Owner = this };
+        var editor = new QuizEditorWindow(Selected) { Owner = OwnerWindow };
         if (editor.ShowDialog() == true)
         {
             App.Exam.SaveQuiz(Selected);
@@ -77,21 +85,20 @@ public partial class QuizManagerWindow : Window
     }
 
     /// <summary>
-    /// Bug #4 fix: Exam is a plain POCO (no INotifyPropertyChanged), and EditQuiz reuses
-    /// the same Exam reference, so ObservableCollection's Replace event fires with
-    /// Old==New and the ListBoxItem never rebuilds. We force a full reload from disk so
-    /// every row is a fresh deserialized object — bindings re-evaluate against new values.
+    /// Bug #4 fix (carried over from QuizManagerWindow): reload quizzes from disk so
+    /// rebound rows are fresh objects — Exam is a POCO so ObservableCollection.Replace
+    /// alone wouldn't push the new values through.
     /// </summary>
     private void RefreshQuizList(System.Guid? selectId = null)
     {
         if (App.Exam == null) return;
-        App.Exam.LoadQuizzes(); // Clear() + reload from %ProgramData%\NTY\ClassroomCtrl\Quizzes
+        App.Exam.LoadQuizzes();
         if (selectId.HasValue)
         {
             QuizListBox.SelectedItem = App.Exam.Quizzes
                 .FirstOrDefault(q => q.Id == selectId.Value);
         }
-        QuizListBox_SelectionChanged(null!, null!); // refresh preview pane
+        QuizListBox_SelectionChanged(null!, null!);
     }
 
     private void ImportWord_Click(object sender, RoutedEventArgs e)
@@ -114,7 +121,7 @@ public partial class QuizManagerWindow : Window
                 return;
             }
             StatusText.Text = Loc.Format("Msg_Imported", imported.Questions.Count);
-            var editor = new QuizEditorWindow(imported) { Owner = this };
+            var editor = new QuizEditorWindow(imported) { Owner = OwnerWindow };
             if (editor.ShowDialog() == true && App.Exam != null)
             {
                 App.Exam.SaveQuiz(imported);
@@ -149,8 +156,7 @@ public partial class QuizManagerWindow : Window
             await App.Server.BroadcastQuizStartAsync(Selected, sessionId, System.Threading.CancellationToken.None);
             StatusText.Text = Loc.Format("Msg_QuizSent", Selected.Title);
 
-            // Auto-open results window so teacher sees submissions roll in.
-            var results = new ExamResultsWindow(Selected) { Owner = this };
+            var results = new ExamResultsWindow(Selected) { Owner = OwnerWindow };
             results.Show();
         }
         catch (System.Exception ex)
@@ -166,7 +172,7 @@ public partial class QuizManagerWindow : Window
             MessageBox.Show(Loc.Get("Err_NoActiveSession"));
             return;
         }
-        var results = new ExamResultsWindow(App.Exam.CurrentExam) { Owner = this };
+        var results = new ExamResultsWindow(App.Exam.CurrentExam) { Owner = OwnerWindow };
         results.Show();
     }
 

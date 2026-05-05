@@ -24,6 +24,10 @@ public partial class MainWindow : Window
         HookViewModel(e.NewValue as ViewModels.MainViewModel);
     }
 
+    // Phase 3 Section E — track the conversation we're currently subscribed to so the
+    // auto-scroll listener can be detached/reattached when the user switches tabs.
+    private System.Collections.Specialized.INotifyCollectionChanged? _scrolledMessages;
+
     private void HookViewModel(ViewModels.MainViewModel? vm)
     {
         if (vm == null) return;
@@ -33,9 +37,20 @@ public partial class MainWindow : Window
         vm.PropertyChanged += VmOnPropertyChanged;
         UpdateToolbarVisibility(vm.IsScreenSharing, vm);
 
-        // Phase 2 Section E — auto-scroll the chat to bottom when a new message arrives.
-        vm.ChatMessages.CollectionChanged -= OnChatMessagesChanged;
-        vm.ChatMessages.CollectionChanged += OnChatMessagesChanged;
+        // Phase 3 Section E — auto-scroll listens to the active conversation; rebind on switch.
+        AttachActiveConversationScrollListener(vm.ActiveConversation);
+    }
+
+    private void AttachActiveConversationScrollListener(Shared.Models.Conversation? conv)
+    {
+        if (_scrolledMessages != null)
+            _scrolledMessages.CollectionChanged -= OnChatMessagesChanged;
+        _scrolledMessages = conv?.Messages;
+        if (_scrolledMessages != null)
+            _scrolledMessages.CollectionChanged += OnChatMessagesChanged;
+        // Scroll to bottom on tab switch so the user always sees the latest message.
+        Dispatcher.BeginInvoke(new Action(() => ChatScrollViewer?.ScrollToEnd()),
+            System.Windows.Threading.DispatcherPriority.Render);
     }
 
     private void OnChatMessagesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -50,9 +65,15 @@ public partial class MainWindow : Window
 
     private void VmOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ViewModels.MainViewModel.IsScreenSharing) && sender is ViewModels.MainViewModel vm)
+        if (sender is not ViewModels.MainViewModel vm) return;
+        if (e.PropertyName == nameof(ViewModels.MainViewModel.IsScreenSharing))
         {
             UpdateToolbarVisibility(vm.IsScreenSharing, vm);
+        }
+        else if (e.PropertyName == nameof(ViewModels.MainViewModel.ActiveConversation))
+        {
+            // Phase 3 Section E — rebind auto-scroll to the new active conversation.
+            AttachActiveConversationScrollListener(vm.ActiveConversation);
         }
     }
 
@@ -102,9 +123,15 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Phase 2 Section C — toggle the notifications popup attached to the bell.</summary>
+    /// <summary>Phase 3 Section D — toggle the notifications popup; opening also marks
+    /// every existing notification read so the badge clears.  History stays in the popup
+    /// (and Activity tab) but the unread highlight goes away.</summary>
     private void NotificationsBell_Click(object sender, RoutedEventArgs e)
-        => NotificationsPopup.IsOpen = !NotificationsPopup.IsOpen;
+    {
+        if (DataContext is ViewModels.MainViewModel vm)
+            vm.MarkAllNotificationsRead();
+        NotificationsPopup.IsOpen = !NotificationsPopup.IsOpen;
+    }
 
     // Phase 2 Section D — StudentTile_RightClick moved to StudentCard.xaml.cs (Card_RightClick).
 }

@@ -44,8 +44,11 @@
                           Command="{Binding PlacementTarget.Tag.RevertPolicyForStudentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                 <Separator/>
-                <MenuItem Header="{DynamicResource Menu_SendDM}"
-                          Command="{Binding PlacementTarget.Tag.SendDirectMessageCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                <!-- Phase 3 Section F: opening a Chat (DM tab in the right rail) replaces
+                     the old Send-DM modal flow.  Modal still wired in MainViewModel for
+                     backward compatibility but UI no longer surfaces it. -->
+                <MenuItem Header="{DynamicResource Menu_Chat}"
+                          Command="{Binding PlacementTarget.Tag.OpenDMConversationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                 <Separator/>
                 <MenuItem Header="{DynamicResource Menu_SetAsHost}"

@@ -15,37 +15,95 @@ using CommunityToolkit.Mvvm.Input;
 // over-the-wire type).  Bare ChatMessage refers to the UI-side log entry from now on.
 using ChatMessage = ClassroomCtrl.Shared.Models.ChatMessage;
 using ChatMessageKind = ClassroomCtrl.Shared.Models.ChatMessageKind;
+// Phase 3 Section C — bell + Activity tab feed (system/error/hand-raised events).
+using Notification = ClassroomCtrl.Shared.Models.Notification;
+using NotificationKind = ClassroomCtrl.Shared.Models.NotificationKind;
+// Phase 3 Section E — chat panel splits into per-conversation tabs (Zoom-style).
+using Conversation = ClassroomCtrl.Shared.Models.Conversation;
+using ConversationKind = ClassroomCtrl.Shared.Models.ConversationKind;
 
 namespace ClassroomCtrl.Teacher.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
     public ObservableCollection<StudentViewModel> Students { get; } = new();
-    // Phase 2 Section E — ObservableCollection<ChatMessage> (UI/log model).  Use the
-    // AppendXxxChat helpers below; bare .Add(string) no longer compiles, which is the point.
-    public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
     public ObservableCollection<RoomViewModel> Rooms { get; } = new();
+
+    // Phase 3 Section E — conversation tabs replace the single flat ChatMessages list.
+    // EveryoneConversation always exists and can't be closed.  DM conversations are
+    // spawned on demand via OpenDMConversation / inbound DMs.  ActiveConversation drives
+    // the visible message list and the input box's two-way DraftInput binding.
+    public ObservableCollection<Conversation> Conversations { get; } = new();
+    public Conversation EveryoneConversation { get; } = new Conversation
+    {
+        Id = "everyone",
+        // DisplayName is updated in RefreshLocalizedTexts so the language switch picks it up.
+        DisplayName = "Everyone",
+        Kind = ConversationKind.Everyone,
+    };
+
+    [ObservableProperty] private Conversation? activeConversation;
+
+    // Phase 3 Section G/H — main content area view router.  StudentGrid is the default;
+    // QuizManager swaps in the embedded QuizManagerView. New embedded views go here as
+    // they're added in later phases (Class Roster etc.).
+    public enum MainViewKind { StudentGrid, QuizManager }
+
+    [ObservableProperty] private MainViewKind currentMainView = MainViewKind.StudentGrid;
+
+    // Phase 3 Section C — system / error / hand-raised events.  Newest-first (Insert at 0)
+    // so the bell popup and Activity tab show recent activity without reversing.  Capped at
+    // 100 to bound memory across long classes.  AddNotification is the single mutator.
+    public ObservableCollection<Notification> Notifications { get; } = new();
+
+    public int UnreadNotificationsCount => Notifications.Count(n => !n.IsRead);
+    public bool HasUnreadNotifications  => UnreadNotificationsCount > 0;
+    public bool HasAnyNotifications     => Notifications.Count > 0;
+
+    internal void AddNotification(string title, string body, NotificationKind kind = NotificationKind.System)
+    {
+        Notifications.Insert(0, new Notification
+        {
+            Title = title,
+            Body = body,
+            Kind = kind,
+        });
+
+        // Cap at 100 to prevent unbounded growth (newest at front, drop oldest at tail).
+        while (Notifications.Count > 100) Notifications.RemoveAt(Notifications.Count - 1);
+
+        OnPropertyChanged(nameof(UnreadNotificationsCount));
+        OnPropertyChanged(nameof(HasUnreadNotifications));
+        OnPropertyChanged(nameof(HasAnyNotifications));
+        OnPropertyChanged(nameof(ActivityFeed));
+    }
+
+    internal void MarkAllNotificationsRead()
+    {
+        var anyChanged = false;
+        foreach (var n in Notifications)
+        {
+            if (!n.IsRead) { n.IsRead = true; anyChanged = true; }
+        }
+        if (anyChanged)
+        {
+            OnPropertyChanged(nameof(UnreadNotificationsCount));
+            OnPropertyChanged(nameof(HasUnreadNotifications));
+        }
+    }
 
     // Phase 2 Section E — chat append helpers.  All bubble construction lives here so the
     // call sites stay readable and the SenderName / Kind invariants hold without duplication.
+    // Phase 3 Section C — system / error route to Notifications.
+    // Phase 3 Section E — Teacher / Student / DM helpers route to per-tab conversations.
     internal void AppendSystemChat(string text)
-        => ChatMessages.Add(new ChatMessage
-        {
-            SenderName = Loc.Get("Chat_SystemPrefix"),
-            Kind = ChatMessageKind.System,
-            MessageText = text,
-        });
+        => AddNotification(Loc.Get("Chat_SystemPrefix"), text, NotificationKind.System);
 
     internal void AppendErrorChat(string text)
-        => ChatMessages.Add(new ChatMessage
-        {
-            SenderName = Loc.Get("Chat_SystemPrefix"),
-            Kind = ChatMessageKind.System,
-            MessageText = $"[Error] {text}",
-        });
+        => AddNotification(Loc.Get("Chat_SystemPrefix"), text, NotificationKind.Error);
 
     internal void AppendTeacherChat(string text)
-        => ChatMessages.Add(new ChatMessage
+        => EveryoneConversation.Messages.Add(new ChatMessage
         {
             SenderName = Loc.Get("Chat_MePrefix"),
             Kind = ChatMessageKind.Teacher,
@@ -53,20 +111,44 @@ public partial class MainViewModel : ObservableObject
         });
 
     internal void AppendStudentChat(string senderName, string text)
-        => ChatMessages.Add(new ChatMessage
+    {
+        EveryoneConversation.Messages.Add(new ChatMessage
         {
             SenderName = senderName,
             Kind = ChatMessageKind.Student,
             MessageText = text,
         });
+        // If the user is reading some other tab, mark Everyone as having unread.
+        if (ActiveConversation != EveryoneConversation) EveryoneConversation.UnreadCount++;
+    }
 
-    internal void AppendDMChat(string senderName, string text)
-        => ChatMessages.Add(new ChatMessage
+    /// <summary>Outgoing DM the teacher just sent (no inbound counterpart) — appended to
+    /// the matching DM conversation; auto-creates the tab when missing.</summary>
+    internal void AppendDMChat(string senderName, string text, string? studentPCName = null)
+    {
+        var conv = string.IsNullOrEmpty(studentPCName)
+            ? null
+            : Conversations.FirstOrDefault(c => c.Kind == ConversationKind.DM && c.StudentPCName == studentPCName);
+
+        // Fallback when caller didn't supply PCName — mirror legacy behavior and dump in Everyone.
+        if (conv == null)
+        {
+            EveryoneConversation.Messages.Add(new ChatMessage
+            {
+                SenderName = senderName,
+                Kind = ChatMessageKind.DM,
+                MessageText = text,
+            });
+            return;
+        }
+
+        conv.Messages.Add(new ChatMessage
         {
             SenderName = senderName,
             Kind = ChatMessageKind.DM,
             MessageText = text,
         });
+    }
 
     // Phase 4 Part 4: codec dropdown
     public ObservableCollection<VideoCodec> CodecOptions { get; } = new() { VideoCodec.Mjpeg, VideoCodec.H264 };
@@ -78,7 +160,6 @@ public partial class MainViewModel : ObservableObject
         AppendSystemChat(Loc.Format("Chat_CodecChanged", value));
     }
 
-    [ObservableProperty] private string chatInputText = "";
     [ObservableProperty] private int connectedCount;
     [ObservableProperty] private string connectedCountText = "";
     // Phase 2 Section A: header subtitle. Pulled from BrandingService.Current.OrganizationName,
@@ -107,11 +188,11 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(RaisedHandsStudents));
     }
 
-    // Phase 2 Section F — derived view of System events for the right-rail "Activity" tab.
-    // Newest first, capped at 50 to keep memory bounded for long classes.  Refreshed via
-    // ChatMessages.CollectionChanged subscription set up in the constructor.
-    public IEnumerable<ChatMessage> ActivityFeed
-        => ChatMessages.Where(m => m.IsSystem).Reverse().Take(50);
+    // Phase 3 Section C — Activity tab now sources from Notifications (full log of system /
+    // error / hand-raised events including ones the user already acknowledged via the bell).
+    // Notifications is already newest-first so no Reverse() needed; cap at 50 visible.
+    public IEnumerable<Notification> ActivityFeed
+        => Notifications.Take(50);
 
     // Phase 2 Section F — right-rail tab selector (0 = Chat, 1 = Activity).  TabSelectedIndex
     // change drives the Visibility binding via BoolToVisibility on tab body Borders.
@@ -129,6 +210,10 @@ public partial class MainViewModel : ObservableObject
     // Phase 1.5: live local-IP banner
     [ObservableProperty] private string localIPDisplay = "";
     private System.Windows.Threading.DispatcherTimer? _ipRefreshTimer;
+    // Phase 3 Section A — re-renders TimeAgoDisplay on every visible chat/notification bubble
+    // every 30s.  Pumps PropertyChanged on each instance so DataTemplate bindings re-evaluate
+    // ("Just now" → "1 min ago" → "5 min ago" without user action).
+    private System.Windows.Threading.DispatcherTimer? _timeAgoRefreshTimer;
     [ObservableProperty] private bool screensLocked;
     [ObservableProperty] private string lockButtonText = "";
     [ObservableProperty] private bool isScreenSharing;
@@ -345,15 +430,18 @@ public partial class MainViewModel : ObservableObject
         Loc.LanguageChanged += RefreshLocalizedTexts;
         RefreshLocalizedTexts();
 
+        // Phase 3 Section E — initialize the conversation list with the always-on
+        // Everyone tab.  Must run after RefreshLocalizedTexts so DisplayName picks up
+        // the localized "Everyone" label on first paint.
+        InitConversations();
+
         // Phase 2 Section A: header subtitle pulls from branding so admin-customized
         // organization name shows under the title.  Subscribed once for the VM lifetime.
         BrandingService.Changed += RefreshBrandingTexts;
         RefreshBrandingTexts();
 
-        // Phase 2 Section F: ActivityFeed is a derived projection over ChatMessages so notify
-        // subscribers whenever the collection changes.  Cheap because it's an IEnumerable
-        // re-evaluated on demand, not a materialized list.
-        ChatMessages.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ActivityFeed));
+        // Phase 3 Section C: ActivityFeed now sources from Notifications and AddNotification
+        // raises the change event itself — no ChatMessages subscription needed anymore.
 
         // Phase 8 (Bug D) — restore last-applied broadcast policy from disk so the dialog
         // pre-checks the previously-set boxes after a Teacher restart. Per-student policy
@@ -398,6 +486,28 @@ public partial class MainViewModel : ObservableObject
         _ipRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _ipRefreshTimer.Tick += (_, _) => RefreshLocalIPDisplay();
         _ipRefreshTimer.Start();
+
+        // Phase 3 Section A — start the time-ago refresh.  Background priority so it never
+        // pre-empts user input; 30s cadence keeps "5 min ago" labels from drifting more than
+        // half a step.  Notifications collection is added in Section C; defensively coalesced.
+        _timeAgoRefreshTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(30),
+        };
+        _timeAgoRefreshTimer.Tick += (_, _) => RefreshTimeAgoDisplays();
+        _timeAgoRefreshTimer.Start();
+    }
+
+    private void RefreshTimeAgoDisplays()
+    {
+        // Pump per-instance PropertyChanged so DataTemplate bindings re-evaluate.  Raising
+        // OnPropertyChanged on the collection itself does NOT re-render items — bindings
+        // are tied to each ChatMessage / Notification instance's own PropertyChanged.
+        foreach (var conv in Conversations)
+            foreach (var msg in conv.Messages)
+                msg.NotifyTimeChanged();
+        foreach (var notif in Notifications) notif.NotifyTimeChanged();
     }
 
     private void OnNetworkAddressChanged(object? sender, EventArgs e)
@@ -546,6 +656,8 @@ public partial class MainViewModel : ObservableObject
         if (App.AdaptiveBitrate != null) RefreshBitrateLabel(App.AdaptiveBitrate.CurrentBitrateBps);
         UpdateRecordingTexts();
         UpdateSoundsButtonText();
+        // Phase 3 Section E — Everyone tab label follows the active language.
+        EveryoneConversation.DisplayName = Loc.Get("Hdr_Everyone");
     }
 
     private void RefreshBrandingTexts()
@@ -972,7 +1084,10 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.SendDirectMessageAsync(s.EndpointId, input, System.Threading.CancellationToken.None);
-            AppendDMChat(s.DisplayName, input);
+            // Phase 3 Section E — funnel DM into the per-student conversation tab so the
+            // history is preserved alongside any future inbound replies on the same thread.
+            OpenDMConversation(s);
+            AppendDMChat(s.DisplayName, input, s.MachineName);
         }
         catch (System.Exception ex)
         {
@@ -1179,17 +1294,13 @@ public partial class MainViewModel : ObservableObject
         return parts.Count == 0 ? "—" : string.Join(", ", parts);
     }
 
-    private void OpenQuizManager()
-    {
-        // ShowDialog (modal) — Show() left the window owned-but-modeless, so clicking
-        // MainWindow stole focus and z-ordered Quiz Manager behind it. Users reported
-        // X being unreachable. Modal eliminates the focus race.
-        var win = new ClassroomCtrl.Teacher.Quiz.QuizManagerWindow
-        {
-            Owner = System.Windows.Application.Current.MainWindow,
-        };
-        win.ShowDialog();
-    }
+    // Phase 3 Section G — Quiz Manager is now an embedded view.  Sidebar's "ระบบข้อสอบ"
+    // command flips CurrentMainView; the Window-level QuizManagerWindow file is kept as
+    // a deprecated shim until Phase 5 cleanup.
+    private void OpenQuizManager() => CurrentMainView = MainViewKind.QuizManager;
+
+    [RelayCommand]
+    private void OpenStudentGridView() => CurrentMainView = MainViewKind.StudentGrid;
 
     private void OpenLanguage()
     {
@@ -1257,6 +1368,43 @@ public partial class MainViewModel : ObservableObject
     {
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
+            // Phase 3 Section E — direct messages from a student route to that student's
+            // DM tab (auto-created if missing).  Broadcast / breakout-room chat continues
+            // to land in the Everyone conversation with the existing [Room] prefix.
+            if (chat.RecipientId.HasValue)
+            {
+                var sender = Students.FirstOrDefault(x => x.EndpointId == chat.SenderId);
+                var pcName = sender?.MachineName;
+                var displayName = sender?.DisplayName ?? chat.SenderName;
+                if (string.IsNullOrEmpty(pcName))
+                {
+                    // Unknown sender — fall back to Everyone so the message isn't dropped.
+                    AppendStudentChat(chat.SenderName, chat.Text);
+                    return;
+                }
+                var conv = Conversations.FirstOrDefault(c =>
+                    c.Kind == ConversationKind.DM && c.StudentPCName == pcName);
+                if (conv == null)
+                {
+                    conv = new Conversation
+                    {
+                        Id = $"dm:{pcName}",
+                        DisplayName = displayName,
+                        Kind = ConversationKind.DM,
+                        StudentPCName = pcName,
+                    };
+                    Conversations.Add(conv);
+                }
+                conv.Messages.Add(new ChatMessage
+                {
+                    SenderName = chat.SenderName,
+                    Kind = ChatMessageKind.Student,
+                    MessageText = chat.Text,
+                });
+                if (ActiveConversation != conv) conv.UnreadCount++;
+                return;
+            }
+
             var prefix = chat.RoomId.HasValue ? "[Room] " : "";
             AppendStudentChat(chat.SenderName, prefix + chat.Text);
         });
@@ -1273,10 +1421,15 @@ public partial class MainViewModel : ObservableObject
                     ? System.Windows.Visibility.Visible
                     : System.Windows.Visibility.Collapsed;
             }
-            AppendSystemChat(Loc.Format(
-                hr.IsRaised ? "Chat_HandRaisedBy" : "Chat_HandLoweredBy",
-                hr.StudentName));
-            // Phase 2 Section C — bell badge listens to count of raised hands.
+            // Phase 3 Section D — raise events get a HandRaised-kind notification (special
+            // icon, prominent in bell popup); lower events use plain System kind so they're
+            // still visible in Activity but don't re-pulse the bell badge meaningfully.
+            if (hr.IsRaised)
+                AddNotification(Loc.Get("Lbl_HandRaised"), hr.StudentName, NotificationKind.HandRaised);
+            else
+                AddNotification(Loc.Get("Chat_SystemPrefix"),
+                    Loc.Format("Chat_HandLoweredBy", hr.StudentName));
+            // Phase 2 Section C — RaisedHandsStudents (legacy) still backs other UIs.
             RaiseNotificationsChanged();
         });
     }
@@ -1588,22 +1741,96 @@ public partial class MainViewModel : ObservableObject
 
     private async void SendChat()
     {
-        var text = ChatInputText;
-        if (string.IsNullOrWhiteSpace(text)) return;
-        AppendTeacherChat(text);
-        ChatInputText = "";
+        // Phase 3 Section E — input lives on the active conversation now.  Everyone tab
+        // broadcasts; DM tab routes through SendDirectMessageAsync to the matching student
+        // resolved by PCName (since that's what Conversation.StudentPCName stores).
+        var conv = ActiveConversation;
+        if (conv == null) return;
+        var text = (conv.DraftInput ?? "").Trim();
+        if (string.IsNullOrEmpty(text)) return;
+        conv.DraftInput = "";
 
-        if (App.Server != null)
+        if (App.Server == null) return;
+
+        if (conv.Kind == ConversationKind.Everyone)
         {
-            try
-            {
-                await App.Server.BroadcastChatAsync(text, System.Threading.CancellationToken.None);
-            }
-            catch (System.Exception ex)
-            {
-                AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
-            }
+            AppendTeacherChat(text);
+            try { await App.Server.BroadcastChatAsync(text, System.Threading.CancellationToken.None); }
+            catch (System.Exception ex) { AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message)); }
         }
+        else if (conv.Kind == ConversationKind.DM && !string.IsNullOrEmpty(conv.StudentPCName))
+        {
+            var s = Students.FirstOrDefault(x => x.MachineName == conv.StudentPCName);
+            if (s == null)
+            {
+                AppendErrorChat(Loc.Format("Err_SendFailed", "student offline"));
+                return;
+            }
+            // Append outgoing bubble locally (Me → student) before the network round-trip.
+            conv.Messages.Add(new ChatMessage
+            {
+                SenderName = Loc.Get("Chat_MePrefix"),
+                Kind = ChatMessageKind.DM,
+                MessageText = text,
+            });
+            try { await App.Server.SendDirectMessageAsync(s.EndpointId, text, System.Threading.CancellationToken.None); }
+            catch (System.Exception ex) { AppendErrorChat(Loc.Format("Err_SendFailed", ex.Message)); }
+        }
+    }
+
+    // ─────── Phase 3 Section E: Conversation tab commands ───────
+
+    private void InitConversations()
+    {
+        var everyone = EveryoneConversation;
+        Conversations.Add(everyone);
+        ActiveConversation = everyone;
+    }
+
+    /// <summary>Open or focus the DM tab for the given student.  Called from the
+    /// per-student ContextMenu (Section F) and used as the entry point for new DM threads.</summary>
+    [RelayCommand]
+    private void OpenDMConversation(StudentViewModel? student)
+    {
+        if (student == null) return;
+        var pcName = student.MachineName;
+        var existing = Conversations.FirstOrDefault(c =>
+            c.Kind == ConversationKind.DM && c.StudentPCName == pcName);
+        if (existing != null)
+        {
+            ActiveConversation = existing;
+            existing.UnreadCount = 0;
+            return;
+        }
+        var conv = new Conversation
+        {
+            Id = $"dm:{pcName}",
+            DisplayName = student.DisplayName,
+            Kind = ConversationKind.DM,
+            StudentPCName = pcName,
+        };
+        Conversations.Add(conv);
+        ActiveConversation = conv;
+    }
+
+    /// <summary>Close a DM tab.  Everyone is non-closable so we no-op there.  Falls back to
+    /// Everyone when the active tab is the one being closed.</summary>
+    [RelayCommand]
+    private void CloseConversation(Conversation? conv)
+    {
+        if (conv == null || conv.Kind == ConversationKind.Everyone) return;
+        var wasActive = ActiveConversation == conv;
+        Conversations.Remove(conv);
+        if (wasActive) ActiveConversation = EveryoneConversation;
+    }
+
+    /// <summary>Switch the active tab; clears unread on the destination so the badge drops.</summary>
+    [RelayCommand]
+    private void SwitchConversation(Conversation? conv)
+    {
+        if (conv == null) return;
+        ActiveConversation = conv;
+        conv.UnreadCount = 0;
     }
 }
 

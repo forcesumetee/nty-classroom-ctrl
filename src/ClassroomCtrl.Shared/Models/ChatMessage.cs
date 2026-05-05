@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using ClassroomCtrl.Shared.Localization;
 
 namespace ClassroomCtrl.Shared.Models;
@@ -16,7 +17,7 @@ public enum ChatMessageKind
     DM,
 }
 
-public class ChatMessage
+public class ChatMessage : INotifyPropertyChanged
 {
     public string SenderName { get; init; } = "";
     public DateTime Timestamp { get; init; } = DateTime.Now;
@@ -48,4 +49,12 @@ public class ChatMessage
     public bool IsTeacher => Kind == ChatMessageKind.Teacher;
     public bool IsStudent => Kind == ChatMessageKind.Student;
     public bool IsDM      => Kind == ChatMessageKind.DM;
+
+    // Phase 3 Section A — bubble re-renders TimeAgoDisplay when MainViewModel's 30-second
+    // DispatcherTimer ticks NotifyTimeChanged on each instance.  TimeAgoDisplay has no
+    // setter so re-evaluation only happens via this PropertyChanged signal.
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void NotifyTimeChanged()
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TimeAgoDisplay)));
 }

@@ -1,0 +1,136 @@
+<UserControl x:Class="ClassroomCtrl.Teacher.Views.QuizManagerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface.Background}"
+             TextElement.Foreground="{DynamicResource Text.Primary}"
+             FontFamily="Segoe UI"
+             d:DesignWidth="960" d:DesignHeight="640">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Phase 3 Section H header — Back-to-Dashboard + view title.  Wired to the
+             OpenStudentGridViewCommand on MainViewModel through the parent Window. -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,12">
+            <Button DockPanel.Dock="Left"
+                    Style="{DynamicResource Button.Secondary}"
+                    Content="{DynamicResource Btn_BackToDashboard}"
+                    Command="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                              Path=DataContext.OpenStudentGridViewCommand}"/>
+            <TextBlock Text="{DynamicResource Lbl_QuizManager}"
+                       Style="{DynamicResource Text.H2}"
+                       Margin="16,0,0,0"
+                       VerticalAlignment="Center"/>
+        </DockPanel>
+
+        <!-- Toolbar -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
+            <Button Content="{DynamicResource Btn_NewQuiz}" Click="NewQuiz_Click"
+                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+            <Button Content="{DynamicResource Btn_EditQuiz}" Click="EditQuiz_Click"
+                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+            <Button Content="{DynamicResource Btn_DeleteQuiz}" Click="DeleteQuiz_Click"
+                    Style="{DynamicResource Button.Danger}" Margin="0,0,8,0"/>
+            <Button Content="{DynamicResource Btn_ImportWord}" Click="ImportWord_Click"
+                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+            <Button Content="{DynamicResource Btn_SendQuiz}" Click="SendQuiz_Click"
+                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+            <Button Content="{DynamicResource Btn_ViewResults}" Click="ViewResults_Click"
+                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+            <Button Content="{DynamicResource Btn_EndExam}" Click="EndExam_Click"
+                    Style="{DynamicResource Button.Danger}"/>
+        </StackPanel>
+
+        <!-- Body: 2-column layout (320 list / * preview) -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <ListBox x:Name="QuizListBox" Grid.Column="0"
+                     Style="{DynamicResource ListBox.Default}"
+                     SelectionChanged="QuizListBox_SelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource Surface.Elevated}"
+                                CornerRadius="10" Padding="12,10" Margin="0,0,0,6">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" Style="{DynamicResource Text.H3}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <TextBlock Style="{DynamicResource Text.Caption}">
+                                        <Run Text="{Binding TimeLimitMinutes}"/>
+                                        <Run Text="min"/>
+                                    </TextBlock>
+                                    <TextBlock Style="{DynamicResource Text.Caption}" Text="  ·  "/>
+                                    <TextBlock Style="{DynamicResource Text.Caption}">
+                                        <Run Text="{Binding TotalPoints, Mode=OneWay}"/>
+                                        <Run Text="pts"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Border Grid.Column="1"
+                    Background="{DynamicResource Surface.Elevated}"
+                    BorderBrush="{DynamicResource Surface.Border}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource CornerRadius.MD}"
+                    Margin="16,0,0,0" Padding="16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock x:Name="PreviewTitle"
+                                   Style="{DynamicResource Text.H2}"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock x:Name="PreviewMeta"
+                                   Style="{DynamicResource Text.Caption}"
+                                   Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="PreviewDesc"
+                                   Style="{DynamicResource Text.Body}"
+                                   Foreground="{DynamicResource Text.Secondary}"
+                                   TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <TextBlock Text="{DynamicResource Lbl_Questions}"
+                                   Style="{DynamicResource Text.H3}"
+                                   Margin="0,0,0,8"/>
+                        <ItemsControl x:Name="PreviewQuestions">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource Surface.Border}"
+                                            BorderThickness="0,0,0,1" Padding="0,8">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Text}"
+                                                       Style="{DynamicResource Text.Body}"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Style="{DynamicResource Text.Caption}" Margin="0,2,0,0">
+                                                <Run Text="["/>
+                                                <Run Text="{Binding Type}"/>
+                                                <Run Text="·"/>
+                                                <Run Text="{Binding Points}"/>
+                                                <Run Text="pts]"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <TextBlock Grid.Row="3" x:Name="StatusText"
+                   Style="{DynamicResource Text.Caption}"
+                   Margin="0,12,0,0"/>
+    </Grid>
+</UserControl>
