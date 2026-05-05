@@ -4,6 +4,8 @@
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:vm="clr-namespace:ClassroomCtrl.Teacher.ViewModels"
         xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+        xmlns:controls="clr-namespace:ClassroomCtrl.Teacher.Controls"
+        xmlns:models="clr-namespace:ClassroomCtrl.Shared.Models;assembly=ClassroomCtrl.Shared"
         Title="{DynamicResource Lbl_AppTitle}"
         Height="800" Width="1280"
         MinHeight="640" MinWidth="1024"
@@ -17,6 +19,8 @@
     <Window.Resources>
         <conv:HexToBrushConverter x:Key="HexToBrush"/>
         <conv:VideoCodecLabelConverter x:Key="VideoCodecLabel"/>
+        <!-- Phase 2: Section C uses this converter (parameter "Inverted" flips the mapping). -->
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
     </Window.Resources>
 
     <!-- Phase UI-Rewrite Phase 1: 3-column shell.
@@ -54,9 +58,7 @@
                         <TextBlock Text="{DynamicResource BrandTitleBar}"
                                    FontSize="14" FontWeight="Bold"
                                    Foreground="{DynamicResource Text.Primary}"/>
-                        <!-- TODO Phase 2: bind to a BrandingService-driven OrganizationName property
-                             once the schema gains one. For Phase 1 the literal mirrors the footer. -->
-                        <TextBlock Text="NTY MULTIMEDIA"
+                        <TextBlock Text="{Binding OrganizationSubtitle}"
                                    FontSize="11"
                                    Foreground="{DynamicResource Text.Secondary}"/>
                     </StackPanel>
@@ -94,6 +96,75 @@
                             ToolTip="{DynamicResource Btn_CopyIP}">
                         <TextBlock Text="📋" FontSize="14"/>
                     </Button>
+                    <!-- Phase 2 Section C — Notifications bell.  Badge shows raised-hand count;
+                         click toggles a Popup with the list of raising students. -->
+                    <Button x:Name="NotificationsBellBtn"
+                            Style="{DynamicResource Button.Icon}"
+                            Click="NotificationsBell_Click"
+                            ToolTip="{DynamicResource Tooltip_Notifications}">
+                        <Grid>
+                            <TextBlock Text="🔔" FontSize="14"/>
+                            <Border Background="{DynamicResource Accent.Danger}"
+                                    CornerRadius="999" MinWidth="16" Height="16"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Margin="0,-2,-4,0" Padding="4,0"
+                                    Visibility="{Binding HasNotifications,
+                                        Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding RaisedHandsCount}"
+                                           Foreground="White" FontSize="9" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                    </Button>
+                    <Popup x:Name="NotificationsPopup"
+                           PlacementTarget="{Binding ElementName=NotificationsBellBtn}"
+                           Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                        <Border Background="{DynamicResource Surface.Elevated}"
+                                BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
+                                CornerRadius="12" Padding="12" MinWidth="280"
+                                Margin="0,4,8,0">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="16" ShadowDepth="4"
+                                                  Color="Black" Opacity="0.4"/>
+                            </Border.Effect>
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Hdr_Notifications}"
+                                           Style="{DynamicResource Text.H3}"
+                                           Margin="0,0,0,8"/>
+                                <ItemsControl ItemsSource="{Binding RaisedHandsStudents}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Padding="8"
+                                                    Background="{DynamicResource Surface.Card}"
+                                                    BorderBrush="{DynamicResource Border.Soft}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="6" Margin="0,0,0,4">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="✋" FontSize="14"
+                                                               Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   FontWeight="SemiBold" FontSize="12"
+                                                                   Foreground="{DynamicResource Text.Primary}"/>
+                                                        <TextBlock Text="{DynamicResource Lbl_HandRaised}"
+                                                                   FontSize="10"
+                                                                   Foreground="{DynamicResource Text.Muted}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{DynamicResource Lbl_NoNotifications}"
+                                           Foreground="{DynamicResource Text.Muted}"
+                                           FontSize="12" HorizontalAlignment="Center"
+                                           Margin="0,8,0,8"
+                                           Visibility="{Binding HasNotifications,
+                                               Converter={StaticResource BoolToVisibility},
+                                               ConverterParameter=Inverted}"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                     <Button Style="{DynamicResource Button.Icon}"
                             Command="{Binding OpenBrandingSettingsCommand}"
                             ToolTip="{DynamicResource Btn_BrandingSettings}">
@@ -332,7 +403,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Toolbar with search (visual only — wire-up in Phase 2) -->
+            <!-- Toolbar with search — Phase 2 Section B: filters Students via StudentsView CollectionView. -->
             <Border Grid.Row="0" Padding="24,16"
                     Background="{DynamicResource Surface.Background}"
                     BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1">
@@ -345,11 +416,12 @@
                             <TextBlock DockPanel.Dock="Left" Text="🔍" FontSize="13"
                                        Foreground="{DynamicResource Text.Muted}"
                                        Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <!-- TODO Phase 2: bind to a SearchTerm property + filter Students. -->
                             <TextBox Background="Transparent" BorderThickness="0"
                                      Foreground="{DynamicResource Text.Primary}"
-                                     IsEnabled="False"
-                                     VerticalAlignment="Center"/>
+                                     CaretBrush="{DynamicResource Text.Primary}"
+                                     VerticalAlignment="Center"
+                                     ToolTip="{DynamicResource Hint_SearchStudents}"
+                                     Text="{Binding SearchTerm, UpdateSourceTrigger=PropertyChanged}"/>
                         </DockPanel>
                     </Border>
                 </DockPanel>
@@ -358,7 +430,7 @@
             <!-- Student grid. Phase 1 keeps the legacy DataTemplate intact (with badges, REC button,
                  ContextMenu) so per-student commands keep working; Phase 2 will swap it for a
                  dedicated StudentCard UserControl. -->
-            <ItemsControl x:Name="StudentList" Grid.Row="1" ItemsSource="{Binding Students}"
+            <ItemsControl x:Name="StudentList" Grid.Row="1" ItemsSource="{Binding StudentsView}"
                           Margin="20,16,20,16">
                 <ItemsControl.Template>
                     <ControlTemplate TargetType="ItemsControl">
@@ -370,142 +442,13 @@
                 </ItemsControl.Template>
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <WrapPanel ItemWidth="220" ItemHeight="220"/>
+                        <!-- ItemWidth/Height = Card Width (220) + 14px margin spacing in DataTemplate -->
+                        <WrapPanel ItemWidth="234" ItemHeight="220"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <materialDesign:Card Margin="0,0,14,14" Padding="0" Width="206" Height="206">
-                            <Border Background="Transparent"
-                                    PreviewMouseRightButtonDown="StudentTile_RightClick">
-                                <Border.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="{DynamicResource Menu_ViewStudentScreen}"
-                                                  Command="{Binding DataContext.ViewStudentScreenCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="{DynamicResource Menu_LockScreen}"
-                                                  Command="{Binding DataContext.LockOneCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="{DynamicResource Menu_UnlockScreen}"
-                                                  Command="{Binding DataContext.UnlockOneCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="{DynamicResource Menu_ApplyPolicyToStudent}"
-                                                  Command="{Binding DataContext.ApplyPolicyToStudentCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="{DynamicResource Menu_RevertPolicyForStudent}"
-                                                  Command="{Binding DataContext.RevertPolicyForStudentCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="{DynamicResource Menu_SendDM}"
-                                                  Command="{Binding DataContext.SendDirectMessageCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="{DynamicResource Menu_SetAsHost}"
-                                                  Command="{Binding DataContext.SetAsHostCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="{DynamicResource Menu_RemoveHost}"
-                                                  Command="{Binding DataContext.RemoveHostCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="{DynamicResource Menu_StartDemo}"
-                                                  Command="{Binding DataContext.StartDemoCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="{DynamicResource Menu_StopDemo}"
-                                                  Command="{Binding DataContext.StopDemoCommand, Source={x:Reference StudentList}}"/>
-                                        <Separator/>
-                                        <MenuItem Header="{DynamicResource Menu_AssignToRoom}"
-                                                  ItemsSource="{Binding DataContext.Rooms, Source={x:Reference StudentList}}">
-                                            <MenuItem.ItemContainerStyle>
-                                                <Style TargetType="MenuItem">
-                                                    <Setter Property="Header" Value="{Binding RoomName}"/>
-                                                    <Setter Property="Command" Value="{Binding DataContext.AssignToRoomCommand, Source={x:Reference StudentList}}"/>
-                                                    <Setter Property="CommandParameter" Value="{Binding}"/>
-                                                </Style>
-                                            </MenuItem.ItemContainerStyle>
-                                        </MenuItem>
-                                        <MenuItem Header="{DynamicResource Menu_RemoveFromRoom}"
-                                                  Command="{Binding DataContext.RemoveFromRoomCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="{DynamicResource Menu_Logoff}"
-                                                  Command="{Binding DataContext.LogoffOneCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="{DynamicResource Menu_Restart}"
-                                                  Command="{Binding DataContext.RestartOneCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="{DynamicResource Menu_Shutdown}"
-                                                  Command="{Binding DataContext.ShutdownOneCommand, Source={x:Reference StudentList}}"
-                                                  CommandParameter="{Binding}"/>
-                                    </ContextMenu>
-                                </Border.ContextMenu>
-                                <DockPanel>
-                                    <Border DockPanel.Dock="Top"
-                                            Visibility="{Binding HandRaisedVisibility}"
-                                            Background="#F59E0B" Padding="4">
-                                        <TextBlock Text="{DynamicResource Lbl_HandRaised}" Foreground="White"
-                                                   FontWeight="Bold" FontSize="11"
-                                                   HorizontalAlignment="Center"/>
-                                    </Border>
-                                    <Border DockPanel.Dock="Top"
-                                            Visibility="{Binding PerStudentPolicyBadgeVisibility}"
-                                            Background="#7C3AED" Padding="4">
-                                        <TextBlock Text="{DynamicResource Lbl_PolicySet}" Foreground="White"
-                                                   FontWeight="Bold" FontSize="10"
-                                                   HorizontalAlignment="Center"/>
-                                    </Border>
-                                    <Border DockPanel.Dock="Top"
-                                            Visibility="{Binding RoomBadgeVisibility}"
-                                            Background="{Binding RoomBadgeColorHex, Converter={StaticResource HexToBrush}}"
-                                            Padding="4">
-                                        <TextBlock Text="{Binding RoomName}" Foreground="White"
-                                                   FontWeight="Bold" FontSize="10"
-                                                   HorizontalAlignment="Center"/>
-                                    </Border>
-                                    <StackPanel Margin="10">
-                                        <TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/>
-                                        <TextBlock Text="{Binding MachineName}" FontSize="10" Foreground="Gray"/>
-                                        <Border Margin="0,4,0,0" Background="{DynamicResource Surface.Hover}" Height="100">
-                                            <Grid>
-                                                <Image Stretch="Uniform" Source="{Binding ThumbnailImage}"/>
-                                                <Border HorizontalAlignment="Right" VerticalAlignment="Top"
-                                                        Margin="4" Padding="4,2" CornerRadius="3"
-                                                        Background="#10B981"
-                                                        Visibility="{Binding TalkingBadgeVisibility}"
-                                                        ToolTip="{DynamicResource Lbl_Talking}">
-                                                    <TextBlock Text="🎤" Foreground="White" FontSize="11"/>
-                                                </Border>
-                                                <Border HorizontalAlignment="Center" VerticalAlignment="Top"
-                                                        Margin="4" Padding="6,2" CornerRadius="3"
-                                                        Background="#F59E0B"
-                                                        Visibility="{Binding HostBadgeVisibility}"
-                                                        ToolTip="{DynamicResource Lbl_Host}">
-                                                    <TextBlock Text="👑 HOST" Foreground="White" FontSize="10" FontWeight="Bold"/>
-                                                </Border>
-                                                <Button HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                        Margin="4" Width="48" Height="22"
-                                                        Background="{Binding RecButtonColorHex, Converter={StaticResource HexToBrush}}"
-                                                        Foreground="White" BorderBrush="White" BorderThickness="1"
-                                                        FontSize="9" FontWeight="Bold"
-                                                        Content="{Binding RecButtonText}"
-                                                        Opacity="{Binding RecOpacity}"
-                                                        IsEnabled="{Binding CanRecord}"
-                                                        Cursor="Hand" Padding="0"
-                                                        ToolTip="{DynamicResource Tooltip_RecButton}"
-                                                        Command="{Binding DataContext.ToggleStudentRecordingCommand, Source={x:Reference StudentList}}"
-                                                        CommandParameter="{Binding}"
-                                                        Panel.ZIndex="100"/>
-                                                <Border HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                        Margin="4" Width="10" Height="10" CornerRadius="5"
-                                                        Background="{Binding QualityDotColorHex, Converter={StaticResource HexToBrush}}"
-                                                        ToolTip="{DynamicResource Lbl_QualityScore}"/>
-                                            </Grid>
-                                        </Border>
-                                    </StackPanel>
-                                </DockPanel>
-                            </Border>
-                        </materialDesign:Card>
+                        <controls:StudentCard Margin="0,0,14,14"/>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -536,35 +479,75 @@
                 Background="{DynamicResource Surface.Elevated}"
                 BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1,0,0,0">
             <DockPanel>
-                <!-- Tabs (Phase 1: only Chat is functional. Activity is a TODO Phase 2 placeholder). -->
+                <!-- Phase 2 Section F — right-rail tabs.  Clicking sets RightRailTabIndex
+                     which toggles the Chat vs Activity panels' Visibility below. -->
                 <Border DockPanel.Dock="Top"
                         BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1"
                         Padding="12,12,12,0">
-                    <StackPanel Orientation="Horizontal">
-                        <Border Background="{DynamicResource Surface.Background}"
-                                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1,1,1,0"
-                                CornerRadius="6,6,0,0" Padding="14,8" Margin="0,0,4,-1">
+                    <UniformGrid Columns="2">
+                        <RadioButton GroupName="RailTabs"
+                                     IsChecked="{Binding IsChatTabSelected, Mode=OneWay}"
+                                     Command="{Binding SelectChatTabCommand}">
+                            <RadioButton.Template>
+                                <ControlTemplate TargetType="RadioButton">
+                                    <Border x:Name="Bd" Padding="12,8" CornerRadius="6,6,0,0"
+                                            Background="Transparent" BorderThickness="0">
+                                        <ContentPresenter HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Bd" Property="Background"
+                                                    Value="{DynamicResource Surface.Background}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background"
+                                                    Value="{DynamicResource Surface.Hover}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </RadioButton.Template>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="💬" FontSize="12" Margin="0,0,6,0"/>
                                 <TextBlock Text="{DynamicResource Hdr_ClassChat}"
                                            FontSize="12" FontWeight="SemiBold"
                                            Foreground="{DynamicResource Text.Primary}"/>
                             </StackPanel>
-                        </Border>
-                        <Border Padding="14,8" Opacity="0.5">
+                        </RadioButton>
+                        <RadioButton GroupName="RailTabs"
+                                     IsChecked="{Binding IsActivityTabSelected, Mode=OneWay}"
+                                     Command="{Binding SelectActivityTabCommand}">
+                            <RadioButton.Template>
+                                <ControlTemplate TargetType="RadioButton">
+                                    <Border x:Name="Bd" Padding="12,8" CornerRadius="6,6,0,0"
+                                            Background="Transparent" BorderThickness="0">
+                                        <ContentPresenter HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Bd" Property="Background"
+                                                    Value="{DynamicResource Surface.Background}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background"
+                                                    Value="{DynamicResource Surface.Hover}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </RadioButton.Template>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="⚡" FontSize="12" Margin="0,0,6,0"/>
-                                <TextBlock Text="Activity" FontSize="12"
-                                           Foreground="{DynamicResource Text.Secondary}"/>
+                                <TextBlock Text="Activity" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Text.Primary}"/>
                             </StackPanel>
-                        </Border>
-                    </StackPanel>
+                        </RadioButton>
+                    </UniformGrid>
                 </Border>
 
-                <!-- Chat input -->
+                <!-- Chat input — only visible on the Chat tab; Activity tab is read-only. -->
                 <Border DockPanel.Dock="Bottom"
                         BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,1,0,0"
-                        Padding="12">
+                        Padding="12"
+                        Visibility="{Binding IsChatTabSelected, Converter={StaticResource BoolToVisibility}}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -581,19 +564,93 @@
                     </Grid>
                 </Border>
 
-                <!-- Messages list. ChatMessages is ObservableCollection<string>; bubble each line in a card. -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <!-- Phase 2 Section F — Activity feed panel; visible only on the Activity tab. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              Visibility="{Binding IsActivityTabSelected, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl ItemsSource="{Binding ActivityFeed}" Margin="12,8">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:ChatMessage}">
+                                <Border Background="{DynamicResource Surface.Card}"
+                                        BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1"
+                                        CornerRadius="6" Padding="10,8" Margin="0,0,0,4">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Left" Width="28" Height="28"
+                                                Background="{DynamicResource Accent.PrimarySubtle}"
+                                                CornerRadius="6" Margin="0,0,10,0">
+                                            <TextBlock Text="⚡" FontSize="12"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Text="{Binding TimeDisplay}"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource Text.Muted}"
+                                                   VerticalAlignment="Top" Margin="6,0,0,0"/>
+                                        <TextBlock Text="{Binding MessageText}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource Text.Secondary}"
+                                                   TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Phase 2 Section E — chat bubble with avatar + sender + time + body.
+                     DataTrigger swaps Background/Border for Teacher (highlighted) and System (dim).
+                     Wrapped in Section F's tab-visibility so the Activity tab can take this slot. -->
+                <ScrollViewer x:Name="ChatScrollViewer"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              Visibility="{Binding IsChatTabSelected, Converter={StaticResource BoolToVisibility}}">
                     <ItemsControl ItemsSource="{Binding ChatMessages}" Margin="12,8">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Margin="0,0,0,8" Padding="12,10"
+                            <DataTemplate DataType="{x:Type models:ChatMessage}">
+                                <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="8"
                                         Background="{DynamicResource Surface.Card}"
-                                        BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1"
-                                        CornerRadius="8">
-                                    <TextBlock Text="{Binding}"
-                                               Style="{DynamicResource Text.Body}"
-                                               Foreground="{DynamicResource Text.Primary}"
-                                               TextWrapping="Wrap"/>
+                                        BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsTeacher}" Value="True">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource Accent.PrimarySubtle}"/>
+                                                    <Setter Property="BorderBrush"
+                                                            Value="{DynamicResource Accent.Primary}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsSystem}" Value="True">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource Surface.Hover}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel>
+                                        <DockPanel Margin="0,0,0,4">
+                                            <Border DockPanel.Dock="Left"
+                                                    Width="22" Height="22" CornerRadius="999"
+                                                    Background="{DynamicResource Accent.Primary}"
+                                                    Margin="0,0,8,0">
+                                                <TextBlock Text="{Binding SenderInitial}"
+                                                           Foreground="White" FontSize="10" FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Text="{Binding TimeAgoDisplay}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource Text.Muted}"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding SenderName}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Text.Primary}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding MessageText}"
+                                                   FontSize="13"
+                                                   Foreground="{DynamicResource Text.Secondary}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

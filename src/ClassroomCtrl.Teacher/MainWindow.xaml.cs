@@ -32,6 +32,20 @@ public partial class MainWindow : Window
         vm.PropertyChanged -= VmOnPropertyChanged;
         vm.PropertyChanged += VmOnPropertyChanged;
         UpdateToolbarVisibility(vm.IsScreenSharing, vm);
+
+        // Phase 2 Section E — auto-scroll the chat to bottom when a new message arrives.
+        vm.ChatMessages.CollectionChanged -= OnChatMessagesChanged;
+        vm.ChatMessages.CollectionChanged += OnChatMessagesChanged;
+    }
+
+    private void OnChatMessagesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+        {
+            // Defer to dispatcher so the new bubble has been measured before we scroll.
+            Dispatcher.BeginInvoke(new Action(() => ChatScrollViewer?.ScrollToEnd()),
+                System.Windows.Threading.DispatcherPriority.Render);
+        }
     }
 
     private void VmOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -78,27 +92,19 @@ public partial class MainWindow : Window
         {
             Clipboard.SetText(ip);
             if (DataContext is ViewModels.MainViewModel vm)
-                vm.ChatMessages.Add(Loc.Format("Msg_IPCopied", ip));
+                vm.AppendSystemChat(Loc.Format("Msg_IPCopied", ip));
         }
         catch (Exception ex)
         {
             // Clipboard can be locked by another app — fail soft.
             if (DataContext is ViewModels.MainViewModel vm)
-                vm.ChatMessages.Add($"[Error] {ex.Message}");
+                vm.AppendErrorChat(ex.Message);
         }
     }
 
-    /// <summary>
-    /// Phase 8 Breakout — remember which student tile was right-clicked,
-    /// so AssignToRoomCommand knows the target.
-    /// </summary>
-    private void StudentTile_RightClick(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is FrameworkElement fe
-            && fe.DataContext is ViewModels.StudentViewModel student
-            && DataContext is ViewModels.MainViewModel vm)
-        {
-            vm.SetPendingAssignStudent(student);
-        }
-    }
+    /// <summary>Phase 2 Section C — toggle the notifications popup attached to the bell.</summary>
+    private void NotificationsBell_Click(object sender, RoutedEventArgs e)
+        => NotificationsPopup.IsOpen = !NotificationsPopup.IsOpen;
+
+    // Phase 2 Section D — StudentTile_RightClick moved to StudentCard.xaml.cs (Card_RightClick).
 }

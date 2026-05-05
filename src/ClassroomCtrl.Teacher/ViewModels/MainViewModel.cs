@@ -1,21 +1,72 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Windows.Data;
 using System.Windows.Media.Imaging;
+using ClassroomCtrl.Shared.Branding;
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Teacher.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+// Phase 2 Section E — alias resolves the name clash with Protocol.ChatMessage (the
+// over-the-wire type).  Bare ChatMessage refers to the UI-side log entry from now on.
+using ChatMessage = ClassroomCtrl.Shared.Models.ChatMessage;
+using ChatMessageKind = ClassroomCtrl.Shared.Models.ChatMessageKind;
 
 namespace ClassroomCtrl.Teacher.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
     public ObservableCollection<StudentViewModel> Students { get; } = new();
-    public ObservableCollection<string> ChatMessages { get; } = new();
+    // Phase 2 Section E — ObservableCollection<ChatMessage> (UI/log model).  Use the
+    // AppendXxxChat helpers below; bare .Add(string) no longer compiles, which is the point.
+    public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
     public ObservableCollection<RoomViewModel> Rooms { get; } = new();
+
+    // Phase 2 Section E — chat append helpers.  All bubble construction lives here so the
+    // call sites stay readable and the SenderName / Kind invariants hold without duplication.
+    internal void AppendSystemChat(string text)
+        => ChatMessages.Add(new ChatMessage
+        {
+            SenderName = Loc.Get("Chat_SystemPrefix"),
+            Kind = ChatMessageKind.System,
+            MessageText = text,
+        });
+
+    internal void AppendErrorChat(string text)
+        => ChatMessages.Add(new ChatMessage
+        {
+            SenderName = Loc.Get("Chat_SystemPrefix"),
+            Kind = ChatMessageKind.System,
+            MessageText = $"[Error] {text}",
+        });
+
+    internal void AppendTeacherChat(string text)
+        => ChatMessages.Add(new ChatMessage
+        {
+            SenderName = Loc.Get("Chat_MePrefix"),
+            Kind = ChatMessageKind.Teacher,
+            MessageText = text,
+        });
+
+    internal void AppendStudentChat(string senderName, string text)
+        => ChatMessages.Add(new ChatMessage
+        {
+            SenderName = senderName,
+            Kind = ChatMessageKind.Student,
+            MessageText = text,
+        });
+
+    internal void AppendDMChat(string senderName, string text)
+        => ChatMessages.Add(new ChatMessage
+        {
+            SenderName = senderName,
+            Kind = ChatMessageKind.DM,
+            MessageText = text,
+        });
 
     // Phase 4 Part 4: codec dropdown
     public ObservableCollection<VideoCodec> CodecOptions { get; } = new() { VideoCodec.Mjpeg, VideoCodec.H264 };
@@ -24,12 +75,57 @@ public partial class MainViewModel : ObservableObject
     partial void OnSelectedCodecChanged(VideoCodec value)
     {
         App.SelectedCodec = value;
-        ChatMessages.Add(Loc.Format("Chat_CodecChanged", value));
+        AppendSystemChat(Loc.Format("Chat_CodecChanged", value));
     }
 
     [ObservableProperty] private string chatInputText = "";
     [ObservableProperty] private int connectedCount;
     [ObservableProperty] private string connectedCountText = "";
+    // Phase 2 Section A: header subtitle. Pulled from BrandingService.Current.OrganizationName,
+    // refreshed on construction + on every branding-config save (BrandingService.Changed).
+    [ObservableProperty] private string organizationSubtitle = "";
+
+    // Phase 2 Section B: search filter for the student grid.  StudentsView wraps the Students
+    // collection through an ICollectionView so the same source can be filtered without mutating
+    // it.  SearchTerm change triggers Refresh(); Filter falls open when the term is whitespace.
+    [ObservableProperty] private string searchTerm = "";
+    public ICollectionView StudentsView { get; }
+
+    // Phase 2 Section C: header bell badge + popup.  Reads HandRaisedVisibility because the
+    // existing model never grew a bool — Phase 13 wired the badge straight to a Visibility
+    // property.  Refreshed by RaiseNotificationsChanged() whenever hand-raise state mutates.
+    public int RaisedHandsCount =>
+        Students.Count(s => s.HandRaisedVisibility == System.Windows.Visibility.Visible);
+    public bool HasNotifications => RaisedHandsCount > 0;
+    public IEnumerable<StudentViewModel> RaisedHandsStudents =>
+        Students.Where(s => s.HandRaisedVisibility == System.Windows.Visibility.Visible);
+
+    private void RaiseNotificationsChanged()
+    {
+        OnPropertyChanged(nameof(RaisedHandsCount));
+        OnPropertyChanged(nameof(HasNotifications));
+        OnPropertyChanged(nameof(RaisedHandsStudents));
+    }
+
+    // Phase 2 Section F — derived view of System events for the right-rail "Activity" tab.
+    // Newest first, capped at 50 to keep memory bounded for long classes.  Refreshed via
+    // ChatMessages.CollectionChanged subscription set up in the constructor.
+    public IEnumerable<ChatMessage> ActivityFeed
+        => ChatMessages.Where(m => m.IsSystem).Reverse().Take(50);
+
+    // Phase 2 Section F — right-rail tab selector (0 = Chat, 1 = Activity).  TabSelectedIndex
+    // change drives the Visibility binding via BoolToVisibility on tab body Borders.
+    [ObservableProperty] private int rightRailTabIndex;
+    public bool IsChatTabSelected => RightRailTabIndex == 0;
+    public bool IsActivityTabSelected => RightRailTabIndex == 1;
+    partial void OnRightRailTabIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsChatTabSelected));
+        OnPropertyChanged(nameof(IsActivityTabSelected));
+    }
+
+    public IRelayCommand SelectChatTabCommand { get; }
+    public IRelayCommand SelectActivityTabCommand { get; }
     // Phase 1.5: live local-IP banner
     [ObservableProperty] private string localIPDisplay = "";
     private System.Windows.Threading.DispatcherTimer? _ipRefreshTimer;
@@ -164,6 +260,23 @@ public partial class MainViewModel : ObservableObject
 
     public MainViewModel()
     {
+        // Phase 2 Section F — tab-select commands.  Setting RightRailTabIndex drives
+        // IsChatTabSelected / IsActivityTabSelected which the XAML binds for visibility.
+        SelectChatTabCommand = new RelayCommand(() => RightRailTabIndex = 0);
+        SelectActivityTabCommand = new RelayCommand(() => RightRailTabIndex = 1);
+
+        // Phase 2 Section B — wrap Students with a CollectionView so the search box can filter
+        // without mutating the underlying collection (which is mutated by Server callbacks).
+        StudentsView = CollectionViewSource.GetDefaultView(Students);
+        StudentsView.Filter = obj =>
+        {
+            if (string.IsNullOrWhiteSpace(SearchTerm)) return true;
+            if (obj is not StudentViewModel s) return true;
+            var q = SearchTerm.Trim();
+            return (s.DisplayName?.Contains(q, System.StringComparison.OrdinalIgnoreCase) == true)
+                || (s.MachineName?.Contains(q, System.StringComparison.OrdinalIgnoreCase) == true);
+        };
+
         LockAllCommand = new RelayCommand(ToggleLockAll);
         ShareScreenCommand = new RelayCommand(ToggleShareScreen);
         ToggleMicCommand = new RelayCommand(ToggleMic);
@@ -231,6 +344,16 @@ public partial class MainViewModel : ObservableObject
 
         Loc.LanguageChanged += RefreshLocalizedTexts;
         RefreshLocalizedTexts();
+
+        // Phase 2 Section A: header subtitle pulls from branding so admin-customized
+        // organization name shows under the title.  Subscribed once for the VM lifetime.
+        BrandingService.Changed += RefreshBrandingTexts;
+        RefreshBrandingTexts();
+
+        // Phase 2 Section F: ActivityFeed is a derived projection over ChatMessages so notify
+        // subscribers whenever the collection changes.  Cheap because it's an IEnumerable
+        // re-evaluated on demand, not a materialized list.
+        ChatMessages.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ActivityFeed));
 
         // Phase 8 (Bug D) — restore last-applied broadcast policy from disk so the dialog
         // pre-checks the previously-set boxes after a Teacher restart. Per-student policy
@@ -306,7 +429,7 @@ public partial class MainViewModel : ObservableObject
         var bc = App.ScreenBroadcaster;
         if (bc?.IsBroadcasting != true)
         {
-            ChatMessages.Add(Loc.Get("Err_RecordingNoBroadcast"));
+            AppendSystemChat(Loc.Get("Err_RecordingNoBroadcast"));
             return;
         }
 
@@ -331,7 +454,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
         }
     }
 
@@ -349,7 +472,7 @@ public partial class MainViewModel : ObservableObject
             _recordingTimer.Tick += (_, _) => UpdateRecordingTexts();
             _recordingTimer.Start();
 
-            ChatMessages.Add(Loc.Get("Chat_RecordingStarted"));
+            AppendSystemChat(Loc.Get("Chat_RecordingStarted"));
         });
     }
 
@@ -362,7 +485,7 @@ public partial class MainViewModel : ObservableObject
             _recordingTimer?.Stop();
             _recordingTimer = null;
             UpdateRecordingTexts();
-            ChatMessages.Add(Loc.Format("Chat_RecordingStopped", System.IO.Path.GetFileName(outputPath)));
+            AppendSystemChat(Loc.Format("Chat_RecordingStopped", System.IO.Path.GetFileName(outputPath)));
         });
     }
 
@@ -375,7 +498,7 @@ public partial class MainViewModel : ObservableObject
             _recordingTimer?.Stop();
             _recordingTimer = null;
             UpdateRecordingTexts();
-            ChatMessages.Add($"[Error] {message}");
+            AppendErrorChat(message);
         });
     }
 
@@ -425,6 +548,13 @@ public partial class MainViewModel : ObservableObject
         UpdateSoundsButtonText();
     }
 
+    private void RefreshBrandingTexts()
+    {
+        OrganizationSubtitle = BrandingService.Current?.OrganizationName ?? "";
+    }
+
+    partial void OnSearchTermChanged(string value) => StudentsView?.Refresh();
+
     partial void OnConnectedCountChanged(int value)
     {
         ConnectedCountText = Loc.Format("Lbl_StudentsConnected", value);
@@ -465,11 +595,11 @@ public partial class MainViewModel : ObservableObject
         {
             await App.Server.BroadcastForceMuteAllAsync(System.Threading.CancellationToken.None);
             foreach (var s in Students) s.IsTalking = false;
-            ChatMessages.Add(Loc.Get("Chat_TeacherMutedAll"));
+            AppendSystemChat(Loc.Get("Chat_TeacherMutedAll"));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
         }
     }
 
@@ -480,7 +610,7 @@ public partial class MainViewModel : ObservableObject
         var newValue = !IsMicOn;
         App.AudioBroadcaster.MicEnabled = newValue;
         IsMicOn = newValue;
-        ChatMessages.Add(Loc.Get(newValue ? "Chat_AudioStarted" : "Chat_AudioStopped"));
+        AppendSystemChat(Loc.Get(newValue ? "Chat_AudioStarted" : "Chat_AudioStopped"));
     }
 
     private void ToggleSystemAudio()
@@ -490,7 +620,7 @@ public partial class MainViewModel : ObservableObject
         var newValue = !IsSystemAudioOn;
         App.AudioBroadcaster.SystemAudioEnabled = newValue;
         IsSystemAudioOn = newValue;
-        ChatMessages.Add(Loc.Get(newValue ? "Chat_SystemAudioStarted" : "Chat_SystemAudioStopped"));
+        AppendSystemChat(Loc.Get(newValue ? "Chat_SystemAudioStarted" : "Chat_SystemAudioStopped"));
     }
 
     private void ToggleShareScreen()
@@ -501,13 +631,13 @@ public partial class MainViewModel : ObservableObject
         {
             App.ScreenBroadcaster.Stop();
             IsScreenSharing = false;
-            ChatMessages.Add(Loc.Get("Chat_ScreenShareStopped"));
+            AppendSystemChat(Loc.Get("Chat_ScreenShareStopped"));
         }
         else
         {
             App.ScreenBroadcaster.Start();
             IsScreenSharing = true;
-            ChatMessages.Add(Loc.Get("Chat_ScreenShareStarted"));
+            AppendSystemChat(Loc.Get("Chat_ScreenShareStarted"));
         }
     }
 
@@ -520,11 +650,11 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.BroadcastLockAsync(ScreensLocked, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Get(ScreensLocked ? "Chat_AllScreensLocked" : "Chat_AllScreensUnlocked"));
+            AppendSystemChat(Loc.Get(ScreensLocked ? "Chat_AllScreensLocked" : "Chat_AllScreensUnlocked"));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add(Loc.Format("Err_LockFailed", ex.Message));
+            AppendSystemChat(Loc.Format("Err_LockFailed", ex.Message));
         }
     }
 
@@ -534,13 +664,13 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.LockOneAsync(s.EndpointId, locked, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Format(
+            AppendSystemChat(Loc.Format(
                 locked ? "Chat_LockedScreen" : "Chat_UnlockedScreen",
                 s.DisplayName));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
         }
     }
 
@@ -557,15 +687,15 @@ public partial class MainViewModel : ObservableObject
         if (dlg.ShowDialog() != true) return;
 
         var name = Path.GetFileName(dlg.FileName);
-        ChatMessages.Add(Loc.Format("Chat_SendingFile", name));
+        AppendSystemChat(Loc.Format("Chat_SendingFile", name));
         try
         {
             await App.Server.BroadcastFileAsync(dlg.FileName, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Format("Chat_FileSent", name));
+            AppendSystemChat(Loc.Format("Chat_FileSent", name));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add(Loc.Format("Err_SendFileFailed", ex.Message));
+            AppendSystemChat(Loc.Format("Err_SendFileFailed", ex.Message));
         }
     }
 
@@ -637,7 +767,7 @@ public partial class MainViewModel : ObservableObject
             CurrentBlockedHostnames = new List<string>();
             ClearAppliedPolicyState();
             _ = App.Server.BroadcastPolicyRevertAsync(System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Get("Chat_PolicyReverted"));
+            AppendSystemChat(Loc.Get("Chat_PolicyReverted"));
         }
         else
         {
@@ -667,7 +797,7 @@ public partial class MainViewModel : ObservableObject
             var durationLabel = dlg.DurationSeconds > 0
                 ? Loc.Format("Chat_PolicyExpiresIn", dlg.DurationSeconds / 60)
                 : "";
-            ChatMessages.Add(Loc.Format("Chat_PolicyApplied2", summary) + durationLabel);
+            AppendSystemChat(Loc.Format("Chat_PolicyApplied2", summary) + durationLabel);
         }
     }
 
@@ -726,7 +856,7 @@ public partial class MainViewModel : ObservableObject
         var durationLabel = dlg.DurationSeconds > 0
             ? Loc.Format("Chat_PolicyExpiresIn", dlg.DurationSeconds / 60)
             : "";
-        ChatMessages.Add(Loc.Format("Chat_PerStudentPolicyApplied", s.DisplayName, summary) + durationLabel);
+        AppendSystemChat(Loc.Format("Chat_PerStudentPolicyApplied", s.DisplayName, summary) + durationLabel);
     }
 
     private void RevertPolicyForStudent(StudentViewModel? s)
@@ -742,7 +872,7 @@ public partial class MainViewModel : ObservableObject
         s.PerStudentPolicyBadgeVisibility = System.Windows.Visibility.Collapsed;
 
         _ = App.Server.RevertPolicyForOneAsync(s.EndpointId, System.Threading.CancellationToken.None);
-        ChatMessages.Add(Loc.Format("Chat_PerStudentPolicyReverted", s.DisplayName));
+        AppendSystemChat(Loc.Format("Chat_PerStudentPolicyReverted", s.DisplayName));
     }
 
     private async void ViewStudentScreen(StudentViewModel? s)
@@ -765,11 +895,11 @@ public partial class MainViewModel : ObservableObject
             // or StudentScreenWindow decoder receiving frames but not rendering.
             // TODO: Deferred to post-launch debugging session.
             await App.Server.RequestStudentStreamAsync(s.EndpointId, ClassroomCtrl.Shared.Protocol.VideoCodec.Mjpeg, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Format("Chat_ViewingStudentScreen", s.DisplayName));
+            AppendSystemChat(Loc.Format("Chat_ViewingStudentScreen", s.DisplayName));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
             window.Close();
         }
     }
@@ -781,7 +911,7 @@ public partial class MainViewModel : ObservableObject
         if (App.Server == null) return;
         if (Students.Count == 0)
         {
-            ChatMessages.Add(Loc.Get("Lbl_AppName") + ": no students connected");
+            AppendSystemChat(Loc.Get("Lbl_AppName") + ": no students connected");
             return;
         }
 
@@ -793,11 +923,11 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.BroadcastPowerAsync(type, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Format(GetIssuedChatKey(type), Loc.Get("Lbl_AllStudentsTarget")));
+            AppendSystemChat(Loc.Format(GetIssuedChatKey(type), Loc.Get("Lbl_AllStudentsTarget")));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
         }
     }
 
@@ -813,11 +943,11 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.PowerOneAsync(s.EndpointId, type, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Format(GetIssuedChatKey(type), s.DisplayName));
+            AppendSystemChat(Loc.Format(GetIssuedChatKey(type), s.DisplayName));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
         }
     }
 
@@ -842,11 +972,11 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.SendDirectMessageAsync(s.EndpointId, input, System.Threading.CancellationToken.None);
-            ChatMessages.Add($"[{Loc.Get("Chat_TeacherPrefix")} → {s.DisplayName}] {input}");
+            AppendDMChat(s.DisplayName, input);
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add(Loc.Format("Err_SendFailed", ex.Message));
+            AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
         }
     }
 
@@ -869,7 +999,7 @@ public partial class MainViewModel : ObservableObject
         {
             if (n < 1 || n > 20)
             {
-                ChatMessages.Add(Loc.Get("Err_BreakoutInvalidCount"));
+                AppendSystemChat(Loc.Get("Err_BreakoutInvalidCount"));
                 return;
             }
             for (int i = 1; i <= n; i++)
@@ -893,7 +1023,7 @@ public partial class MainViewModel : ObservableObject
 
             if (names.Count == 0)
             {
-                ChatMessages.Add(Loc.Get("Err_BreakoutInvalidCount"));
+                AppendSystemChat(Loc.Get("Err_BreakoutInvalidCount"));
                 return;
             }
 
@@ -908,7 +1038,7 @@ public partial class MainViewModel : ObservableObject
             }
         }
 
-        ChatMessages.Add(Loc.Format("Chat_BreakoutRoomsCreated", Rooms.Count));
+        AppendSystemChat(Loc.Format("Chat_BreakoutRoomsCreated", Rooms.Count));
     }
 
     private async void AssignStudentToRoom(StudentViewModel? s, RoomViewModel? room)
@@ -922,11 +1052,11 @@ public partial class MainViewModel : ObservableObject
             s.RoomName = room.RoomName;
             s.RoomBadgeColorHex = room.ColorHex;
             s.RoomBadgeVisibility = System.Windows.Visibility.Visible;
-            ChatMessages.Add(Loc.Format("Chat_StudentMovedToRoom", s.DisplayName, room.RoomName));
+            AppendSystemChat(Loc.Format("Chat_StudentMovedToRoom", s.DisplayName, room.RoomName));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
         }
     }
 
@@ -940,11 +1070,11 @@ public partial class MainViewModel : ObservableObject
             s.RoomId = null;
             s.RoomName = "";
             s.RoomBadgeVisibility = System.Windows.Visibility.Collapsed;
-            ChatMessages.Add(Loc.Format("Chat_StudentReturnedToMain", s.DisplayName));
+            AppendSystemChat(Loc.Format("Chat_StudentReturnedToMain", s.DisplayName));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
         }
     }
 
@@ -952,7 +1082,7 @@ public partial class MainViewModel : ObservableObject
     {
         if (App.Server == null || Rooms.Count == 0)
         {
-            ChatMessages.Add(Loc.Get("Err_BreakoutNoRooms"));
+            AppendSystemChat(Loc.Get("Err_BreakoutNoRooms"));
             return;
         }
         if (Students.Count == 0) return;
@@ -973,14 +1103,14 @@ public partial class MainViewModel : ObservableObject
             catch { }
             idx++;
         }
-        ChatMessages.Add(Loc.Format("Chat_AutoBalanced", Students.Count, Rooms.Count));
+        AppendSystemChat(Loc.Format("Chat_AutoBalanced", Students.Count, Rooms.Count));
     }
 
     private async void RenameRooms()
     {
         if (Rooms.Count == 0)
         {
-            ChatMessages.Add(Loc.Get("Err_BreakoutNoRooms"));
+            AppendSystemChat(Loc.Get("Err_BreakoutNoRooms"));
             return;
         }
 
@@ -1007,7 +1137,7 @@ public partial class MainViewModel : ObservableObject
                 catch { }
             }
         }
-        ChatMessages.Add(Loc.Get("Chat_RoomsRenamed"));
+        AppendSystemChat(Loc.Get("Chat_RoomsRenamed"));
     }
 
     private async void EndBreakout()
@@ -1023,11 +1153,11 @@ public partial class MainViewModel : ObservableObject
                 st.RoomBadgeVisibility = System.Windows.Visibility.Collapsed;
             }
             Rooms.Clear();
-            ChatMessages.Add(Loc.Get("Chat_BreakoutEnded"));
+            AppendSystemChat(Loc.Get("Chat_BreakoutEnded"));
         }
         catch (System.Exception ex)
         {
-            ChatMessages.Add($"[Error] {ex.Message}");
+            AppendErrorChat(ex.Message);
         }
     }
 
@@ -1100,6 +1230,8 @@ public partial class MainViewModel : ObservableObject
                 Students.RemoveAt(Students.Count - 1);
                 ConnectedCount = Students.Count;
             }
+            // Phase 2 Section C — a student leaving might have had their hand raised.
+            RaiseNotificationsChanged();
         });
     }
 
@@ -1126,7 +1258,7 @@ public partial class MainViewModel : ObservableObject
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var prefix = chat.RoomId.HasValue ? "[Room] " : "";
-            ChatMessages.Add($"{prefix}[{chat.SenderName}] {chat.Text}");
+            AppendStudentChat(chat.SenderName, prefix + chat.Text);
         });
     }
 
@@ -1141,9 +1273,11 @@ public partial class MainViewModel : ObservableObject
                     ? System.Windows.Visibility.Visible
                     : System.Windows.Visibility.Collapsed;
             }
-            ChatMessages.Add(Loc.Format(
+            AppendSystemChat(Loc.Format(
                 hr.IsRaised ? "Chat_HandRaisedBy" : "Chat_HandLoweredBy",
                 hr.StudentName));
+            // Phase 2 Section C — bell badge listens to count of raised hands.
+            RaiseNotificationsChanged();
         });
     }
 
@@ -1178,15 +1312,15 @@ public partial class MainViewModel : ObservableObject
         if (s == null || App.Server == null) return;
         if (s.RoomId == null)
         {
-            ChatMessages.Add(Loc.Get("Err_HostNotInRoom"));
+            AppendSystemChat(Loc.Get("Err_HostNotInRoom"));
             return;
         }
         try
         {
             await App.Server.SetRoomHostAsync(s.RoomId.Value, s.EndpointId, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Format("Chat_HostAssigned", s.DisplayName, s.RoomName));
+            AppendSystemChat(Loc.Format("Chat_HostAssigned", s.DisplayName, s.RoomName));
         }
-        catch (System.Exception ex) { ChatMessages.Add($"[Error] {ex.Message}"); }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
     }
 
     private async void RemoveHost(StudentViewModel? s)
@@ -1195,9 +1329,9 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.SetRoomHostAsync(s.RoomId.Value, null, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Format("Chat_HostRemoved", s.RoomName));
+            AppendSystemChat(Loc.Format("Chat_HostRemoved", s.RoomName));
         }
-        catch (System.Exception ex) { ChatMessages.Add($"[Error] {ex.Message}"); }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
     }
 
     // ─────── Phase 9.1: Student Demonstration ───────
@@ -1208,9 +1342,9 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.BroadcastDemoStartAsync(s.EndpointId, s.DisplayName, System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Format("Chat_DemoStarted", s.DisplayName));
+            AppendSystemChat(Loc.Format("Chat_DemoStarted", s.DisplayName));
         }
-        catch (System.Exception ex) { ChatMessages.Add($"[Error] {ex.Message}"); }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
     }
 
     private async void StopDemo()
@@ -1219,9 +1353,9 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await App.Server.BroadcastDemoStopAsync(System.Threading.CancellationToken.None);
-            ChatMessages.Add(Loc.Get("Chat_DemoStopped"));
+            AppendSystemChat(Loc.Get("Chat_DemoStopped"));
         }
-        catch (System.Exception ex) { ChatMessages.Add($"[Error] {ex.Message}"); }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
     }
 
     // ─────── Phase 9.2: Screen Pen ───────
@@ -1255,13 +1389,13 @@ public partial class MainViewModel : ObservableObject
         if (App.Camera.IsActive)
         {
             App.Camera.Stop();
-            ChatMessages.Add(Loc.Get("Chat_CameraStopped"));
+            AppendSystemChat(Loc.Get("Chat_CameraStopped"));
         }
         else
         {
             var dlg = new CameraSelectorDialog { Owner = System.Windows.Application.Current.MainWindow };
             if (dlg.ShowDialog() == true)
-                ChatMessages.Add(Loc.Get("Chat_CameraStarted"));
+                AppendSystemChat(Loc.Get("Chat_CameraStarted"));
         }
         UpdateCameraButtonText();
     }
@@ -1309,12 +1443,12 @@ public partial class MainViewModel : ObservableObject
     {
         if (App.Roster == null || App.Roster.ActiveRoster == null)
         {
-            ChatMessages.Add(Loc.Get("Err_NoActiveRoster"));
+            AppendSystemChat(Loc.Get("Err_NoActiveRoster"));
             return;
         }
         var connected = Students.Select(s => s.MachineName).ToList();
         var present = App.Roster.MarkAttendance(connected);
-        ChatMessages.Add(Loc.Format("Chat_AttendanceMarked", present, App.Roster.ActiveRoster.Students.Count));
+        AppendSystemChat(Loc.Format("Chat_AttendanceMarked", present, App.Roster.ActiveRoster.Students.Count));
     }
 
     private void OnActiveRosterChanged(object? sender, ClassroomCtrl.Shared.Models.Roster.ClassRoster? roster)
@@ -1375,7 +1509,7 @@ public partial class MainViewModel : ObservableObject
         if (s == null || App.PerStudentRecording == null) return;
         if (!ViewingStudents.Contains(s.EndpointId))
         {
-            ChatMessages.Add(Loc.Get("Err_RecordingRequiresView"));
+            AppendSystemChat(Loc.Get("Err_RecordingRequiresView"));
             return;
         }
         if (App.PerStudentRecording.IsRecording(s.EndpointId)) return;
@@ -1391,7 +1525,7 @@ public partial class MainViewModel : ObservableObject
                     await App.Server.NotifyStudentRecordingAsync(s.EndpointId, true, System.Threading.CancellationToken.None);
             }
             catch { }
-            ChatMessages.Add(Loc.Format("Toast_RecordingStarted", s.DisplayName));
+            AppendSystemChat(Loc.Format("Toast_RecordingStarted", s.DisplayName));
         }
     }
 
@@ -1429,7 +1563,7 @@ public partial class MainViewModel : ObservableObject
                 await App.Server.NotifyStudentRecordingAsync(s.EndpointId, false, System.Threading.CancellationToken.None);
         }
         catch { }
-        ChatMessages.Add(Loc.Format("Toast_RecordingStopped", s.DisplayName, path ?? ""));
+        AppendSystemChat(Loc.Format("Toast_RecordingStopped", s.DisplayName, path ?? ""));
     }
 
     // ─────── Phase 11.3: Branding settings dialog ───────
@@ -1456,7 +1590,7 @@ public partial class MainViewModel : ObservableObject
     {
         var text = ChatInputText;
         if (string.IsNullOrWhiteSpace(text)) return;
-        ChatMessages.Add($"[{Loc.Get("Chat_TeacherPrefix")}] {text}");
+        AppendTeacherChat(text);
         ChatInputText = "";
 
         if (App.Server != null)
@@ -1467,7 +1601,7 @@ public partial class MainViewModel : ObservableObject
             }
             catch (System.Exception ex)
             {
-                ChatMessages.Add(Loc.Format("Err_SendFailed", ex.Message));
+                AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
             }
         }
     }

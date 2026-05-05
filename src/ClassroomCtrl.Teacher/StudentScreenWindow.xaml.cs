@@ -279,7 +279,7 @@ public partial class StudentScreenWindow : Window
 
             // Surface a chat line in the main window so the teacher sees the saved path.
             if (System.Windows.Application.Current?.MainWindow?.DataContext is ViewModels.MainViewModel vm)
-                vm.ChatMessages.Add(Loc.Format("Msg_ScreenshotSaved", path));
+                vm.AppendSystemChat(Loc.Format("Msg_ScreenshotSaved", path));
         }
         finally
         {
@@ -306,7 +306,7 @@ public partial class StudentScreenWindow : Window
             UpdateRecordButton(false);
             if (System.Windows.Application.Current?.MainWindow?.DataContext is ViewModels.MainViewModel vm)
             {
-                vm.ChatMessages.Add(Loc.Format("Toast_RecordingStopped", _studentName, path ?? ""));
+                vm.AppendSystemChat(Loc.Format("Toast_RecordingStopped", _studentName, path ?? ""));
                 var s = vm.Students.FirstOrDefault(x => x.EndpointId == _studentId);
                 if (s != null) s.IsBeingRecorded = false;
             }
@@ -325,7 +325,7 @@ public partial class StudentScreenWindow : Window
                 UpdateRecordButton(true);
                 if (System.Windows.Application.Current?.MainWindow?.DataContext is ViewModels.MainViewModel vm)
                 {
-                    vm.ChatMessages.Add(Loc.Format("Toast_RecordingStarted", _studentName));
+                    vm.AppendSystemChat(Loc.Format("Toast_RecordingStarted", _studentName));
                     var s = vm.Students.FirstOrDefault(x => x.EndpointId == _studentId);
                     if (s != null) s.IsBeingRecorded = true;
                 }
