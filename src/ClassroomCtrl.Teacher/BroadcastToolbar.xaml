@@ -1,0 +1,105 @@
+<Window x:Class="ClassroomCtrl.Teacher.BroadcastToolbar"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+        Title="Broadcast Toolbar"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="NoResize"
+        Topmost="True"
+        ShowInTaskbar="False"
+        Background="Transparent"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="Manual"
+        Opacity="1.0"
+        MouseLeftButtonDown="OnDragStart"
+        MouseEnter="OnMouseEnter"
+        MouseLeave="OnMouseLeave">
+    <Window.Resources>
+        <conv:BoolToOnOffBrushConverter x:Key="OnOff"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    </Window.Resources>
+    <Border Background="{DynamicResource Surface.Elevated}"
+            CornerRadius="{DynamicResource CornerRadius.LG}"
+            Padding="8"
+            BorderBrush="{DynamicResource Surface.Border}" BorderThickness="1"
+            Effect="{DynamicResource DropShadow.Floating}">
+        <StackPanel Orientation="Horizontal">
+
+            <!-- Mic toggle: green=on (Accent.PrimarySubtle bg + Accent.Primary fg), gray=off + red strikethrough -->
+            <Button Command="{Binding ToggleMicCommand}"
+                    Style="{DynamicResource Button.Icon}"
+                    Width="44" Height="44" Margin="3"
+                    Background="{Binding IsMicOn, Converter={StaticResource OnOff}, ConverterParameter=Subtle}"
+                    Foreground="{Binding IsMicOn, Converter={StaticResource OnOff}, ConverterParameter=Foreground}"
+                    ToolTip="{Binding MicTooltipText}">
+                <Grid>
+                    <TextBlock Text="🎤" FontSize="18"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Path Data="M 12,12 L 32,32"
+                          Stroke="{DynamicResource Accent.Danger}" StrokeThickness="2"
+                          Visibility="{Binding IsMicOn, Converter={StaticResource BoolToVis}, ConverterParameter=Inverted}"/>
+                </Grid>
+            </Button>
+
+            <!-- System audio (Speaker) toggle -->
+            <Button Command="{Binding ToggleSystemAudioCommand}"
+                    Style="{DynamicResource Button.Icon}"
+                    Width="44" Height="44" Margin="3"
+                    Background="{Binding IsSystemAudioOn, Converter={StaticResource OnOff}, ConverterParameter=Subtle}"
+                    Foreground="{Binding IsSystemAudioOn, Converter={StaticResource OnOff}, ConverterParameter=Foreground}"
+                    ToolTip="{Binding SpeakerTooltipText}">
+                <Grid>
+                    <TextBlock Text="🔊" FontSize="18"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Path Data="M 12,12 L 32,32"
+                          Stroke="{DynamicResource Accent.Danger}" StrokeThickness="2"
+                          Visibility="{Binding IsSystemAudioOn, Converter={StaticResource BoolToVis}, ConverterParameter=Inverted}"/>
+                </Grid>
+            </Button>
+
+            <!-- Screen Pen -->
+            <Button Command="{Binding OpenScreenPenCommand}"
+                    Style="{DynamicResource Button.Icon}"
+                    Width="44" Height="44" Margin="3"
+                    ToolTip="{DynamicResource Tooltip_ScreenPen}">
+                <TextBlock Text="✏️" FontSize="18"/>
+            </Button>
+
+            <!-- Chat (focuses MainWindow) -->
+            <Button Click="ShowChat_Click"
+                    Style="{DynamicResource Button.Icon}"
+                    Width="44" Height="44" Margin="3"
+                    ToolTip="{DynamicResource Tooltip_Chat}">
+                <TextBlock Text="💬" FontSize="18"/>
+            </Button>
+
+            <!-- Camera -->
+            <Button Command="{Binding ToggleCameraCommand}"
+                    Style="{DynamicResource Button.Icon}"
+                    Width="44" Height="44" Margin="3"
+                    ToolTip="{DynamicResource Btn_Camera}">
+                <TextBlock Text="📷" FontSize="18"/>
+            </Button>
+
+            <!-- Recording: red bg when active -->
+            <Button Command="{Binding StartRecordingCommand}"
+                    Style="{DynamicResource Button.Icon}"
+                    Width="44" Height="44" Margin="3"
+                    Background="{Binding IsRecording, Converter={StaticResource OnOff}, ConverterParameter=Recording}"
+                    Foreground="{DynamicResource Text.Primary}"
+                    ToolTip="{Binding RecordingButtonText}">
+                <TextBlock Text="🔴" FontSize="18"/>
+            </Button>
+
+            <!-- Stop Share (semantic danger) -->
+            <Button Command="{Binding ShareScreenCommand}"
+                    Style="{DynamicResource Button.Icon}"
+                    Width="44" Height="44" Margin="3"
+                    Foreground="{DynamicResource Accent.Danger}"
+                    ToolTip="{Binding ShareScreenButtonText}">
+                <TextBlock Text="⏹" FontSize="18"/>
+            </Button>
+        </StackPanel>
+    </Border>
+</Window>

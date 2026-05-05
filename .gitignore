@@ -1,0 +1,42 @@
+﻿# Build outputs
+bin/
+obj/
+publish/
+build-test/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Other IDEs
+.idea/
+.vscode/
+
+# Claude Code
+.claude/
+
+# Build artifacts
+*.pdb
+*.dll.config
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Test results
+TestResults/
+[Tt]est[Rr]esult*/
+
+# OS junk
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Logs
+*.log
+
+# MSI build
+*.msi
+*.wixpdb

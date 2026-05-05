@@ -1,0 +1,80 @@
+================================================================================
+  Third-Party Software Acknowledgement — FFmpeg
+================================================================================
+
+This product includes binaries from the FFmpeg project (https://www.ffmpeg.org/).
+The bundled `ffmpeg.exe` is used at runtime to mux raw H.264 video and PCM audio
+captures into MP4 container files for the recording feature.
+
+Project URL:    https://www.ffmpeg.org/
+Source code:    https://git.ffmpeg.org/ffmpeg.git
+Legal info:     https://www.ffmpeg.org/legal.html
+.NET wrapper:   NReco.VideoConverter 1.2.1 (https://www.nrecosite.com/video_converter_net.aspx)
+
+
+--------------------------------------------------------------------------------
+  FFmpeg License (LGPL v2.1 by default; some optional libs are GPL)
+--------------------------------------------------------------------------------
+
+The FFmpeg project is dual-licensed: most parts are released under the GNU
+Lesser General Public License version 2.1 or later (LGPL v2.1+); some optional
+libraries (such as libpostproc, libx264, libfdk_aac) are GPL- or non-free
+licensed and must be enabled at build time.
+
+This product uses an FFmpeg build that is compatible with LGPL v2.1+. The
+`ffmpeg.exe` binary is invoked as an external process — this product does NOT
+statically link any FFmpeg libraries.
+
+Per LGPL v2.1+ requirements:
+
+  1. The corresponding source code for the bundled FFmpeg binary is available
+     at https://git.ffmpeg.org/ffmpeg.git (mirror at https://github.com/FFmpeg/FFmpeg).
+
+  2. Users may replace the bundled `ffmpeg.exe` with a different LGPL-compatible
+     build by overwriting the file in the install directory.
+
+  3. The full text of LGPL v2.1 is available at:
+     https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+  4. The full text of GPL v2 (referenced by LGPL) is available at:
+     https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+
+--------------------------------------------------------------------------------
+  NReco.VideoConverter wrapper
+--------------------------------------------------------------------------------
+
+The .NET wrapper that invokes the bundled FFmpeg binary is NReco.VideoConverter
+by Vitalii Fedorchenko / NReco team.
+
+License terms (per https://www.nrecosite.com/video_converter_net.aspx):
+  • Free for non-SaaS apps with single-server production deployment.
+  • ClassroomCtrl is installed software at schools (one Teacher PC per
+    classroom = single-server) → free use applies.
+
+For commercial SaaS or multi-server deployments, a paid license must be
+obtained from NReco.
+
+
+--------------------------------------------------------------------------------
+  Patent / codec notice
+--------------------------------------------------------------------------------
+
+Recording produces MP4 files containing H.264 video and AAC audio. Both codecs
+are subject to patent licensing (MPEG-LA AVC pool + MPEG-LA AAC patent pool).
+The FFmpeg distribution does NOT include patent licenses for these codecs —
+distributors are responsible for their own compliance.
+
+ClassroomCtrl operates under MPEG-LA's first-100,000-units/year free tier for
+both AVC encoder/decoder and AAC. See LICENSE-OpenH264.txt for the H.264
+discussion; AAC distribution is also covered under the same volume threshold.
+
+Action items if shipping volume exceeds the free tier:
+  1. Purchase MPEG-LA AVC + AAC licenses directly, OR
+  2. Replace bundled FFmpeg with a build that disables AAC and falls back to
+     a royalty-free audio codec (e.g. Opus in MP4 — limited player support).
+  3. Consult legal counsel before scaling production distribution beyond
+     pilot programs.
+
+
+================================================================================

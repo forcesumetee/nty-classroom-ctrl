@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClassroomCtrl.Exam.Shared/ClassroomCtrl.Exam.Shared.csproj" />
+    <Project Path="src/ClassroomCtrl.Licensing/ClassroomCtrl.Licensing.csproj" />
+    <Project Path="src/ClassroomCtrl.Networking/ClassroomCtrl.Networking.csproj" />
+    <Project Path="src/ClassroomCtrl.Shared/ClassroomCtrl.Shared.csproj" />
+    <Project Path="src/ClassroomCtrl.Student.Agent/ClassroomCtrl.Student.Agent.csproj" />
+    <Project Path="src/ClassroomCtrl.Student.Service/ClassroomCtrl.Student.Service.csproj" />
+    <Project Path="src/ClassroomCtrl.Student.Watchdog/ClassroomCtrl.Student.Watchdog.csproj" />
+    <Project Path="src/ClassroomCtrl.Teacher/ClassroomCtrl.Teacher.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/LicenseTest/LicenseTest.csproj" />
+  </Folder>
+</Solution>

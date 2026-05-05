@@ -1,0 +1,101 @@
+<Window x:Class="ClassroomCtrl.Student.Agent.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="{DynamicResource Lbl_AgentTitle}"
+        Height="500" Width="380"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="False"
+        Topmost="False"
+        TextElement.Foreground="{DynamicResource Text.Primary}"
+        Background="{DynamicResource Surface.Background}"
+        FontFamily="Segoe UI"
+        Closing="Window_Closing">
+    <DockPanel>
+        <!-- Header -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Surface.Elevated}" Padding="16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="{DynamicResource Lbl_ClassroomConnected}"
+                               Style="{DynamicResource Text.H2}"/>
+                    <TextBlock x:Name="StatusText"
+                               Text="{DynamicResource Lbl_MonitoringActive}"
+                               Style="{DynamicResource Text.Caption}"
+                               FontStyle="Italic"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="{DynamicResource Btn_Language}"
+                        Click="Language_Click"
+                        Style="{DynamicResource Button.Secondary}"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"/>
+                <Button Grid.Column="2" Content="{DynamicResource Btn_Settings}"
+                        Click="Settings_Click"
+                        Style="{DynamicResource Button.Secondary}"
+                        VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- Action buttons -->
+        <Grid DockPanel.Dock="Top" Margin="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="{DynamicResource Btn_RaiseHand}"
+                    Style="{DynamicResource Button.Primary}"
+                    Margin="4" Click="RaiseHand_Click"/>
+            <Button x:Name="MicButton" Grid.Column="1"
+                    Style="{DynamicResource Button.Primary}"
+                    Margin="4" Click="ToggleMic_Click"/>
+            <Button x:Name="VoiceButton" Grid.Column="2"
+                    Style="{DynamicResource Button.Primary}"
+                    Margin="4" Click="ToggleVoice_Click"
+                    Content="{DynamicResource Btn_JoinVoice}"/>
+        </Grid>
+
+        <!-- Chat input -->
+        <Grid DockPanel.Dock="Bottom" Margin="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="ChatInput"
+                     Style="{DynamicResource TextBox.Default}"
+                     KeyDown="ChatInput_KeyDown"/>
+            <Button Grid.Column="1" Content="{DynamicResource Btn_Send}"
+                    Style="{DynamicResource Button.Primary}"
+                    Click="SendChat_Click" Margin="4,0,0,0"/>
+        </Grid>
+
+        <!-- Copyright corner -->
+        <TextBlock DockPanel.Dock="Bottom" Text="© NTY MULTIMEDIA CO.,LTD"
+                   Style="{DynamicResource Text.Footer}"
+                   HorizontalAlignment="Center" Margin="0,4,0,8"/>
+
+        <!-- Chat. Items are added as plain strings from code-behind; bubble each one
+             in a card so the panel doesn't look like a flat text dump. -->
+        <ListBox x:Name="ChatList"
+                 Style="{DynamicResource ListBox.Default}"
+                 HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 Margin="12,0">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="0,0,0,4" Padding="12,8"
+                            Background="{DynamicResource Surface.Overlay}"
+                            CornerRadius="{DynamicResource CornerRadius.SM}">
+                        <TextBlock Text="{Binding}"
+                                   Style="{DynamicResource Text.Body}"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</Window>

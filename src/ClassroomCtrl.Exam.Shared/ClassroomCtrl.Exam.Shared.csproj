@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ClassroomCtrl.Shared\ClassroomCtrl.Shared.csproj" />
+    <PackageReference Include="MessagePack" Version="2.5.187" />
+  </ItemGroup>
+</Project>

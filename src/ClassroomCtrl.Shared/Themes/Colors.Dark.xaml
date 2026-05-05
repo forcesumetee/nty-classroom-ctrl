@@ -1,0 +1,40 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Phase 6C — Dark theme. Renamed from Colors.xaml; values unchanged from Phase 1. -->
+
+    <!-- ─────────── Surface tier ─────────── -->
+    <SolidColorBrush x:Key="Surface.Background"  Color="#0A1628"/>
+    <SolidColorBrush x:Key="Surface.Elevated"    Color="#142840"/>
+    <SolidColorBrush x:Key="Surface.Overlay"     Color="#1E3A5F"/>
+    <SolidColorBrush x:Key="Surface.Border"      Color="#2D4A6E"/>
+    <SolidColorBrush x:Key="Surface.BorderFocus" Color="#3B82F6"/>
+
+    <!-- ─────────── Accent tier (Primary + PrimaryHover are BrandingService-overridable) ─────────── -->
+    <SolidColorBrush x:Key="Accent.Primary"        Color="#3B82F6"/>
+    <SolidColorBrush x:Key="Accent.PrimaryHover"   Color="#2563EB"/>
+    <SolidColorBrush x:Key="Accent.PrimaryPressed" Color="#1D4ED8"/>
+    <SolidColorBrush x:Key="Accent.PrimarySubtle"  Color="#1E3A8A"/>
+
+    <!-- ─────────── Semantic tier ─────────── -->
+    <SolidColorBrush x:Key="Accent.Success"      Color="#10B981"/>
+    <SolidColorBrush x:Key="Accent.SuccessHover" Color="#059669"/>
+    <SolidColorBrush x:Key="Accent.Warning"      Color="#F59E0B"/>
+    <SolidColorBrush x:Key="Accent.WarningHover" Color="#D97706"/>
+    <SolidColorBrush x:Key="Accent.Danger"       Color="#EF4444"/>
+    <SolidColorBrush x:Key="Accent.DangerHover"  Color="#DC2626"/>
+
+    <!-- ─────────── Text tier ─────────── -->
+    <SolidColorBrush x:Key="Text.Primary"   Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Text.Secondary" Color="#94A3B8"/>
+    <SolidColorBrush x:Key="Text.Tertiary"  Color="#64748B"/>
+    <SolidColorBrush x:Key="Text.OnAccent"  Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Text.Disabled"  Color="#475569"/>
+
+    <!-- ─────────── Status tier ─────────── -->
+    <SolidColorBrush x:Key="Status.Online"    Color="#10B981"/>
+    <SolidColorBrush x:Key="Status.Locked"    Color="#F59E0B"/>
+    <SolidColorBrush x:Key="Status.Offline"   Color="#64748B"/>
+    <SolidColorBrush x:Key="Status.Recording" Color="#EF4444"/>
+
+</ResourceDictionary>

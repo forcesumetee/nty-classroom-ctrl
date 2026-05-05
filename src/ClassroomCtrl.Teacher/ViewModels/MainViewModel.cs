@@ -1,0 +1,1569 @@
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Windows.Media.Imaging;
+using ClassroomCtrl.Shared.Localization;
+using ClassroomCtrl.Shared.Protocol;
+using ClassroomCtrl.Teacher.Services;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
+namespace ClassroomCtrl.Teacher.ViewModels;
+
+public partial class MainViewModel : ObservableObject
+{
+    public ObservableCollection<StudentViewModel> Students { get; } = new();
+    public ObservableCollection<string> ChatMessages { get; } = new();
+    public ObservableCollection<RoomViewModel> Rooms { get; } = new();
+
+    // Phase 4 Part 4: codec dropdown
+    public ObservableCollection<VideoCodec> CodecOptions { get; } = new() { VideoCodec.Mjpeg, VideoCodec.H264 };
+    [ObservableProperty] private VideoCodec selectedCodec = VideoCodec.Mjpeg;
+
+    partial void OnSelectedCodecChanged(VideoCodec value)
+    {
+        App.SelectedCodec = value;
+        ChatMessages.Add(Loc.Format("Chat_CodecChanged", value));
+    }
+
+    [ObservableProperty] private string chatInputText = "";
+    [ObservableProperty] private int connectedCount;
+    [ObservableProperty] private string connectedCountText = "";
+    // Phase 1.5: live local-IP banner
+    [ObservableProperty] private string localIPDisplay = "";
+    private System.Windows.Threading.DispatcherTimer? _ipRefreshTimer;
+    [ObservableProperty] private bool screensLocked;
+    [ObservableProperty] private string lockButtonText = "";
+    [ObservableProperty] private bool isScreenSharing;
+    [ObservableProperty] private string shareScreenButtonText = "";
+    [ObservableProperty] private bool isMicOn;
+    [ObservableProperty] private string micButtonText = "";
+    [ObservableProperty] private bool isSystemAudioOn;
+    [ObservableProperty] private string systemAudioButtonText = "";
+
+    // Toolbar tooltips that follow on/off state.
+    public string MicTooltipText => Loc.Get(IsMicOn ? "Tooltip_MicOn" : "Tooltip_MicOff");
+    public string SpeakerTooltipText => Loc.Get(IsSystemAudioOn ? "Tooltip_SpeakerOn" : "Tooltip_SpeakerOff");
+
+    [ObservableProperty] private double masterVolume = 1.0;
+
+    // Phase 4 Part 5: live bitrate label
+    [ObservableProperty] private string currentBitrateText = "";
+
+    // Phase 5a: recording state
+    [ObservableProperty] private bool isRecording;
+    [ObservableProperty] private string recordingButtonText = "";
+    [ObservableProperty] private string recordingElapsedText = "";
+    [ObservableProperty] private System.Windows.Visibility recordingIndicatorVisibility = System.Windows.Visibility.Collapsed;
+    private System.Windows.Threading.DispatcherTimer? _recordingTimer;
+    private DateTimeOffset _recordingStartedAt;
+
+    [ObservableProperty] private bool currentBlockUsbStorage;
+    [ObservableProperty] private bool currentBlockOpticalDrive;
+    [ObservableProperty] private bool currentBlockPrinting;
+    [ObservableProperty] private List<string> currentBlockedProcessNames = new();
+    [ObservableProperty] private List<string> currentBlockedHostnames = new();
+
+    // Phase 8 (Bug D) — applied-policy state survives app restart. Lives next to branding.json
+    // under %ProgramData% so it's machine-wide and visible across teacher logins. Saved on
+    // Apply (whole-class path), cleared on Revert. Per-student policy is intentionally NOT
+    // persisted here — only the broadcast policy, since that's the customer-reported bug.
+    private static readonly string AppliedPolicyJsonPath = Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.CommonApplicationData),
+        "NTY", "ClassroomCtrl", "applied-policy.json");
+
+    public IRelayCommand LockAllCommand { get; }
+    public IRelayCommand ShareScreenCommand { get; }
+    public IRelayCommand ToggleMicCommand { get; }
+    public IRelayCommand ToggleSystemAudioCommand { get; }
+    public IRelayCommand MuteAllStudentsCommand { get; }
+    public IRelayCommand SendFileCommand { get; }
+    public IRelayCommand StartRecordingCommand { get; }
+    public IRelayCommand OpenRecordingsFolderCommand { get; }
+    public IRelayCommand OpenBreakoutCommand { get; }
+    public IRelayCommand ApplyPolicyCommand { get; }
+    public IRelayCommand OpenLanguageCommand { get; }
+    public IRelayCommand SendChatCommand { get; }
+    public IRelayCommand<StudentViewModel?> LockOneCommand { get; }
+    public IRelayCommand<StudentViewModel?> UnlockOneCommand { get; }
+    public IRelayCommand<StudentViewModel?> ApplyPolicyToStudentCommand { get; }
+    public IRelayCommand<StudentViewModel?> RevertPolicyForStudentCommand { get; }
+    public IRelayCommand<StudentViewModel?> SendDirectMessageCommand { get; }
+    public IRelayCommand<StudentViewModel?> RemoveFromRoomCommand { get; }
+    public IRelayCommand<StudentViewModel?> ViewStudentScreenCommand { get; }
+
+    // Phase 8.5: host assignment
+    public IRelayCommand<StudentViewModel?> SetAsHostCommand { get; }
+    public IRelayCommand<StudentViewModel?> RemoveHostCommand { get; }
+
+    // Phase 9.1: Student Demonstration
+    public IRelayCommand<StudentViewModel?> StartDemoCommand { get; }
+    public IRelayCommand StopDemoCommand { get; }
+
+    // Phase 9.2: Screen Pen
+    public IRelayCommand OpenScreenPenCommand { get; }
+
+    // Phase 9.3: Class Roster
+    public IRelayCommand OpenClassRosterCommand { get; }
+    public IRelayCommand MarkAttendanceCommand { get; }
+
+    // Phase 3.5: Sound effects toggle
+    public IRelayCommand ToggleSoundsCommand { get; }
+    [ObservableProperty] private string soundsButtonText = "";
+
+    // Phase 9.5: Camera Broadcast
+    public IRelayCommand ToggleCameraCommand { get; }
+    [ObservableProperty] private string cameraButtonText = "";
+
+    // Phase 9.6: Net Movie
+    public IRelayCommand OpenNetMovieCommand { get; }
+
+    // Phase 6.5: Remote Control + Phase 4.6: Mic Monitor + Multi-room
+    public IRelayCommand OpenMicMonitorCommand { get; }
+    public IRelayCommand OpenMultiRoomCommand { get; }
+    [ObservableProperty] private string activeClassName = "";
+    [ObservableProperty] private System.Windows.Visibility activeClassVisibility = System.Windows.Visibility.Collapsed;
+    [ObservableProperty] private StudentViewModel? activeDemoStudent;
+    [ObservableProperty] private System.Windows.Visibility demoBannerVisibility = System.Windows.Visibility.Collapsed;
+    [ObservableProperty] private string demoBannerText = "";
+
+    // Phase 5b: per-student recording
+    public IRelayCommand<StudentViewModel?> StartStudentRecordingCommand { get; }
+    public IRelayCommand<StudentViewModel?> StopStudentRecordingCommand { get; }
+    /// <summary>Single button toggle: start if not recording, stop if recording.</summary>
+    public IRelayCommand<StudentViewModel?> ToggleStudentRecordingCommand { get; }
+
+    // Phase 11.3: branding settings
+    public IRelayCommand OpenBrandingSettingsCommand { get; }
+
+    // Phase 5D: admin password settings
+    public IRelayCommand OpenAdminPasswordSettingsCommand { get; }
+
+    /// <summary>Phase 5b: set of student IDs currently viewed via StudentScreenWindow (REC enabled when present).</summary>
+    public readonly HashSet<System.Guid> ViewingStudents = new();
+
+    // Phase 6: Power-state commands
+    public IRelayCommand ShutdownAllCommand { get; }
+    public IRelayCommand RestartAllCommand { get; }
+    public IRelayCommand LogoffAllCommand { get; }
+    public IRelayCommand<StudentViewModel?> ShutdownOneCommand { get; }
+    public IRelayCommand<StudentViewModel?> RestartOneCommand { get; }
+    public IRelayCommand<StudentViewModel?> LogoffOneCommand { get; }
+
+    // Phase 13: Open Quiz Manager
+    public IRelayCommand OpenQuizManagerCommand { get; }
+
+    public IRelayCommand EndBreakoutCommand { get; }
+    public IRelayCommand AutoBalanceCommand { get; }
+    public IRelayCommand RenameRoomsCommand { get; }
+
+    public IRelayCommand<RoomViewModel?> AssignToRoomCommand { get; }
+
+    private StudentViewModel? _pendingAssignStudent;
+
+    public MainViewModel()
+    {
+        LockAllCommand = new RelayCommand(ToggleLockAll);
+        ShareScreenCommand = new RelayCommand(ToggleShareScreen);
+        ToggleMicCommand = new RelayCommand(ToggleMic);
+        ToggleSystemAudioCommand = new RelayCommand(ToggleSystemAudio);
+        MuteAllStudentsCommand = new RelayCommand(MuteAllStudents);
+        SendFileCommand = new RelayCommand(SendFile);
+        StartRecordingCommand = new RelayCommand(ToggleRecording);
+        OpenRecordingsFolderCommand = new RelayCommand(OpenRecordingsFolder);
+        OpenBreakoutCommand = new RelayCommand(CreateRooms);
+        ApplyPolicyCommand = new RelayCommand(OpenApplyPolicy);
+        OpenLanguageCommand = new RelayCommand(OpenLanguage);
+        SendChatCommand = new RelayCommand(SendChat);
+        LockOneCommand = new RelayCommand<StudentViewModel?>(s => LockOne(s, true));
+        UnlockOneCommand = new RelayCommand<StudentViewModel?>(s => LockOne(s, false));
+        ApplyPolicyToStudentCommand = new RelayCommand<StudentViewModel?>(OpenApplyPolicyForStudent);
+        RevertPolicyForStudentCommand = new RelayCommand<StudentViewModel?>(RevertPolicyForStudent);
+        SendDirectMessageCommand = new RelayCommand<StudentViewModel?>(SendDirectMessage);
+        RemoveFromRoomCommand = new RelayCommand<StudentViewModel?>(RemoveFromRoom);
+        ViewStudentScreenCommand = new RelayCommand<StudentViewModel?>(ViewStudentScreen);
+
+        SetAsHostCommand = new RelayCommand<StudentViewModel?>(SetAsHost);
+        RemoveHostCommand = new RelayCommand<StudentViewModel?>(RemoveHost);
+
+        StartDemoCommand = new RelayCommand<StudentViewModel?>(StartDemo);
+        StopDemoCommand = new RelayCommand(StopDemo);
+
+        OpenScreenPenCommand = new RelayCommand(OpenScreenPen);
+
+        OpenClassRosterCommand = new RelayCommand(OpenClassRoster);
+        MarkAttendanceCommand = new RelayCommand(MarkAttendance);
+
+        ToggleSoundsCommand = new RelayCommand(ToggleSounds);
+        UpdateSoundsButtonText();
+
+        ToggleCameraCommand = new RelayCommand(ToggleCamera);
+        UpdateCameraButtonText();
+        OpenNetMovieCommand = new RelayCommand(OpenNetMovie);
+        OpenMicMonitorCommand = new RelayCommand(OpenMicMonitor);
+        OpenMultiRoomCommand = new RelayCommand(OpenMultiRoom);
+        if (App.Roster != null)
+        {
+            App.Roster.ActiveRosterChanged += OnActiveRosterChanged;
+            OnActiveRosterChanged(this, App.Roster.ActiveRoster);
+        }
+
+        StartStudentRecordingCommand = new RelayCommand<StudentViewModel?>(StartStudentRecording);
+        StopStudentRecordingCommand = new RelayCommand<StudentViewModel?>(StopStudentRecording);
+        ToggleStudentRecordingCommand = new RelayCommand<StudentViewModel?>(ToggleStudentRecording);
+
+        OpenBrandingSettingsCommand = new RelayCommand(OpenBrandingSettings);
+        OpenAdminPasswordSettingsCommand = new RelayCommand(OpenAdminPasswordSettings);
+
+        ShutdownAllCommand = new RelayCommand(() => BroadcastPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType.ForceShutdown, "Confirm_ShutdownAll"));
+        RestartAllCommand = new RelayCommand(() => BroadcastPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType.ForceRestart, "Confirm_RestartAll"));
+        LogoffAllCommand = new RelayCommand(() => BroadcastPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType.ForceLogoff, "Confirm_LogoffAll"));
+        ShutdownOneCommand = new RelayCommand<StudentViewModel?>(s => PowerOneWithConfirm(s, ClassroomCtrl.Shared.Protocol.MessageType.ForceShutdown, "Confirm_ShutdownOne"));
+        RestartOneCommand = new RelayCommand<StudentViewModel?>(s => PowerOneWithConfirm(s, ClassroomCtrl.Shared.Protocol.MessageType.ForceRestart, "Confirm_RestartOne"));
+        LogoffOneCommand = new RelayCommand<StudentViewModel?>(s => PowerOneWithConfirm(s, ClassroomCtrl.Shared.Protocol.MessageType.ForceLogoff, "Confirm_LogoffOne"));
+
+        OpenQuizManagerCommand = new RelayCommand(OpenQuizManager);
+        EndBreakoutCommand = new RelayCommand(EndBreakout);
+        AutoBalanceCommand = new RelayCommand(AutoBalance);
+        RenameRoomsCommand = new RelayCommand(RenameRooms);
+        AssignToRoomCommand = new RelayCommand<RoomViewModel?>(r => AssignStudentToRoom(_pendingAssignStudent, r));
+
+        Loc.LanguageChanged += RefreshLocalizedTexts;
+        RefreshLocalizedTexts();
+
+        // Phase 8 (Bug D) — restore last-applied broadcast policy from disk so the dialog
+        // pre-checks the previously-set boxes after a Teacher restart. Per-student policy
+        // is intentionally skipped — only whole-class state is persisted.
+        LoadAppliedPolicyState();
+
+        if (App.Server != null)
+        {
+            App.Server.StudentJoined += OnStudentJoined;
+            App.Server.StudentLeft += OnStudentLeft;
+            App.Server.ChatReceived += OnChatReceived;
+            App.Server.HandRaiseReceived += OnHandRaiseReceived;
+            App.Server.ScreenshotReceived += OnScreenshotReceived;
+            App.Server.StudentAudioStreamStarted += OnStudentAudioStarted;
+            App.Server.StudentAudioStreamStopped += OnStudentAudioStopped;
+            App.Server.QualityReportReceived += OnQualityReportReceived;
+            App.Server.HostChanged += OnHostChanged;
+            App.Server.DemoStateChanged += OnDemoStateChanged;
+        }
+
+        if (App.AdaptiveBitrate != null)
+        {
+            App.AdaptiveBitrate.BitrateChanged += (_, e) => RefreshBitrateLabel(e.NewBitrateBps);
+            RefreshBitrateLabel(App.AdaptiveBitrate.CurrentBitrateBps);
+        }
+        else
+        {
+            RefreshBitrateLabel(500_000);
+        }
+
+        if (App.Recording != null)
+        {
+            App.Recording.RecordingStarted += OnRecordingStarted;
+            App.Recording.RecordingStopped += OnRecordingStopped;
+            App.Recording.RecordingError += OnRecordingError;
+        }
+
+        // Phase 1.5: live IP banner.
+        RefreshLocalIPDisplay();
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+        // Backup poll for missed events (some VPN clients trigger weirdly).
+        _ipRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _ipRefreshTimer.Tick += (_, _) => RefreshLocalIPDisplay();
+        _ipRefreshTimer.Start();
+    }
+
+    private void OnNetworkAddressChanged(object? sender, EventArgs e)
+    {
+        // Fires on a non-UI thread — marshal to UI thread for the property update.
+        System.Windows.Application.Current?.Dispatcher.Invoke(RefreshLocalIPDisplay);
+    }
+
+    private void RefreshLocalIPDisplay()
+    {
+        try { LocalIPDisplay = NetworkInfoService.GetFormattedIPInfo(); }
+        catch { LocalIPDisplay = "(error)"; }
+    }
+
+    private async void ToggleRecording()
+    {
+        if (App.Recording == null) return;
+
+        if (IsRecording)
+        {
+            // Stop tee BEFORE awaiting; ScreenBroadcaster sees the flag immediately on its next loop.
+            if (App.ScreenBroadcaster != null) App.ScreenBroadcaster.TeeRawFrames = false;
+            await App.Recording.StopAsync();
+            return;
+        }
+
+        // Phase 5 bug-fix: recording now uses raw-BGRA pipe to ffmpeg (no codec dependency on H.264).
+        // We still require an active broadcast — capture dimensions/FPS come from ScreenBroadcaster.
+        var bc = App.ScreenBroadcaster;
+        if (bc?.IsBroadcasting != true)
+        {
+            ChatMessages.Add(Loc.Get("Err_RecordingNoBroadcast"));
+            return;
+        }
+
+        if (App.Recording.Start(bc.TargetWidth, bc.TargetHeight, bc.FramesPerSecond))
+        {
+            // Tell ScreenBroadcaster to start teeing raw frames — only when this flag is set
+            // does it allocate the ~8 MB BGRA buffer per frame.
+            bc.TeeRawFrames = true;
+        }
+    }
+
+    private void OpenRecordingsFolder()
+    {
+        var folder = RecordingService.GetRecordingsFolder();
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = folder,
+                UseShellExecute = true,
+            });
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+        }
+    }
+
+    private void OnRecordingStarted(object? sender, string sessionId)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            IsRecording = true;
+            RecordingIndicatorVisibility = System.Windows.Visibility.Visible;
+            _recordingStartedAt = DateTimeOffset.Now;
+            UpdateRecordingTexts();
+
+            _recordingTimer?.Stop();
+            _recordingTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _recordingTimer.Tick += (_, _) => UpdateRecordingTexts();
+            _recordingTimer.Start();
+
+            ChatMessages.Add(Loc.Get("Chat_RecordingStarted"));
+        });
+    }
+
+    private void OnRecordingStopped(object? sender, string outputPath)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            IsRecording = false;
+            RecordingIndicatorVisibility = System.Windows.Visibility.Collapsed;
+            _recordingTimer?.Stop();
+            _recordingTimer = null;
+            UpdateRecordingTexts();
+            ChatMessages.Add(Loc.Format("Chat_RecordingStopped", System.IO.Path.GetFileName(outputPath)));
+        });
+    }
+
+    private void OnRecordingError(object? sender, string message)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            IsRecording = false;
+            RecordingIndicatorVisibility = System.Windows.Visibility.Collapsed;
+            _recordingTimer?.Stop();
+            _recordingTimer = null;
+            UpdateRecordingTexts();
+            ChatMessages.Add($"[Error] {message}");
+        });
+    }
+
+    private void UpdateRecordingTexts()
+    {
+        RecordingButtonText = Loc.Get(IsRecording ? "Btn_StopRecording" : "Btn_StartRecording");
+        if (IsRecording)
+        {
+            var elapsed = DateTimeOffset.Now - _recordingStartedAt;
+            RecordingElapsedText = Loc.Format("Lbl_RecordingIndicator", $"{(int)elapsed.TotalMinutes:D2}:{elapsed.Seconds:D2}");
+        }
+        else
+        {
+            RecordingElapsedText = "";
+        }
+    }
+
+    private void RefreshBitrateLabel(int bps)
+    {
+        var kbps = bps / 1000;
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            CurrentBitrateText = Loc.Format("Lbl_CurrentBitrate", kbps);
+        });
+    }
+
+    private void OnQualityReportReceived(object? sender, (System.Guid StudentId, ScreenStreamQualityReportMessage Report) e)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            var s = Students.FirstOrDefault(x => x.EndpointId == e.StudentId);
+            if (s != null) s.QualityScore = e.Report.QualityScore;
+        });
+    }
+
+    public void SetPendingAssignStudent(StudentViewModel? s) => _pendingAssignStudent = s;
+
+    private void RefreshLocalizedTexts()
+    {
+        LockButtonText = Loc.Get(ScreensLocked ? "Btn_UnlockAll" : "Btn_LockAll");
+        ConnectedCountText = Loc.Format("Lbl_StudentsConnected", ConnectedCount);
+        ShareScreenButtonText = Loc.Get(IsScreenSharing ? "Btn_StopSharing" : "Btn_ShareScreen");
+        MicButtonText = Loc.Get(IsMicOn ? "Btn_MuteMic" : "Btn_UnmuteMic");
+        SystemAudioButtonText = Loc.Get(IsSystemAudioOn ? "Btn_StopShareSystemAudio" : "Btn_ShareSystemAudio");
+        if (App.AdaptiveBitrate != null) RefreshBitrateLabel(App.AdaptiveBitrate.CurrentBitrateBps);
+        UpdateRecordingTexts();
+        UpdateSoundsButtonText();
+    }
+
+    partial void OnConnectedCountChanged(int value)
+    {
+        ConnectedCountText = Loc.Format("Lbl_StudentsConnected", value);
+    }
+
+    partial void OnScreensLockedChanged(bool value)
+    {
+        LockButtonText = Loc.Get(value ? "Btn_UnlockAll" : "Btn_LockAll");
+    }
+
+    partial void OnIsScreenSharingChanged(bool value)
+    {
+        ShareScreenButtonText = Loc.Get(value ? "Btn_StopSharing" : "Btn_ShareScreen");
+    }
+
+    partial void OnIsMicOnChanged(bool value)
+    {
+        MicButtonText = Loc.Get(value ? "Btn_MuteMic" : "Btn_UnmuteMic");
+        OnPropertyChanged(nameof(MicTooltipText));
+    }
+
+    partial void OnIsSystemAudioOnChanged(bool value)
+    {
+        SystemAudioButtonText = Loc.Get(value ? "Btn_StopShareSystemAudio" : "Btn_ShareSystemAudio");
+        OnPropertyChanged(nameof(SpeakerTooltipText));
+    }
+
+    partial void OnMasterVolumeChanged(double value)
+    {
+        if (App.StudentAudioMixer != null)
+            App.StudentAudioMixer.Volume = (float)value;
+    }
+
+    private async void MuteAllStudents()
+    {
+        if (App.Server == null) return;
+        try
+        {
+            await App.Server.BroadcastForceMuteAllAsync(System.Threading.CancellationToken.None);
+            foreach (var s in Students) s.IsTalking = false;
+            ChatMessages.Add(Loc.Get("Chat_TeacherMutedAll"));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+        }
+    }
+
+    private void ToggleMic()
+    {
+        if (App.AudioBroadcaster == null) return;
+
+        var newValue = !IsMicOn;
+        App.AudioBroadcaster.MicEnabled = newValue;
+        IsMicOn = newValue;
+        ChatMessages.Add(Loc.Get(newValue ? "Chat_AudioStarted" : "Chat_AudioStopped"));
+    }
+
+    private void ToggleSystemAudio()
+    {
+        if (App.AudioBroadcaster == null) return;
+
+        var newValue = !IsSystemAudioOn;
+        App.AudioBroadcaster.SystemAudioEnabled = newValue;
+        IsSystemAudioOn = newValue;
+        ChatMessages.Add(Loc.Get(newValue ? "Chat_SystemAudioStarted" : "Chat_SystemAudioStopped"));
+    }
+
+    private void ToggleShareScreen()
+    {
+        if (App.ScreenBroadcaster == null) return;
+
+        if (IsScreenSharing)
+        {
+            App.ScreenBroadcaster.Stop();
+            IsScreenSharing = false;
+            ChatMessages.Add(Loc.Get("Chat_ScreenShareStopped"));
+        }
+        else
+        {
+            App.ScreenBroadcaster.Start();
+            IsScreenSharing = true;
+            ChatMessages.Add(Loc.Get("Chat_ScreenShareStarted"));
+        }
+    }
+
+    private async void ToggleLockAll()
+    {
+        if (App.Server == null) return;
+
+        ScreensLocked = !ScreensLocked;
+
+        try
+        {
+            await App.Server.BroadcastLockAsync(ScreensLocked, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Get(ScreensLocked ? "Chat_AllScreensLocked" : "Chat_AllScreensUnlocked"));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add(Loc.Format("Err_LockFailed", ex.Message));
+        }
+    }
+
+    private async void LockOne(StudentViewModel? s, bool locked)
+    {
+        if (s == null || App.Server == null) return;
+        try
+        {
+            await App.Server.LockOneAsync(s.EndpointId, locked, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Format(
+                locked ? "Chat_LockedScreen" : "Chat_UnlockedScreen",
+                s.DisplayName));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+        }
+    }
+
+    private async void SendFile()
+    {
+        if (App.Server == null) return;
+
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = Loc.Get("Btn_SendFile"),
+            Filter = "All files (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        var name = Path.GetFileName(dlg.FileName);
+        ChatMessages.Add(Loc.Format("Chat_SendingFile", name));
+        try
+        {
+            await App.Server.BroadcastFileAsync(dlg.FileName, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Format("Chat_FileSent", name));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add(Loc.Format("Err_SendFileFailed", ex.Message));
+        }
+    }
+
+    // Phase 8 (Bug D) — applied-policy persistence helpers. Read on MainViewModel construction,
+    // written after every Apply / cleared on Revert. Best-effort: any IO failure leaves the
+    // in-memory Current* fields as the source of truth.
+    private void LoadAppliedPolicyState()
+    {
+        try
+        {
+            if (!File.Exists(AppliedPolicyJsonPath)) return;
+            var json = File.ReadAllText(AppliedPolicyJsonPath);
+            var s = System.Text.Json.JsonSerializer.Deserialize<AppliedPolicyState>(json);
+            if (s == null) return;
+            CurrentBlockUsbStorage = s.BlockUsbStorage;
+            CurrentBlockOpticalDrive = s.BlockOpticalDrive;
+            CurrentBlockPrinting = s.BlockPrinting;
+            CurrentBlockedProcessNames = s.BlockedProcessNames ?? new List<string>();
+            CurrentBlockedHostnames = s.BlockedHostnames ?? new List<string>();
+        }
+        catch { /* corrupt or unreadable — fall back to defaults */ }
+    }
+
+    private void SaveAppliedPolicyState()
+    {
+        try
+        {
+            var s = new AppliedPolicyState
+            {
+                BlockUsbStorage = CurrentBlockUsbStorage,
+                BlockOpticalDrive = CurrentBlockOpticalDrive,
+                BlockPrinting = CurrentBlockPrinting,
+                BlockedProcessNames = new List<string>(CurrentBlockedProcessNames),
+                BlockedHostnames = new List<string>(CurrentBlockedHostnames),
+            };
+            Directory.CreateDirectory(Path.GetDirectoryName(AppliedPolicyJsonPath)!);
+            File.WriteAllText(AppliedPolicyJsonPath,
+                System.Text.Json.JsonSerializer.Serialize(s,
+                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch { /* persistence is best-effort */ }
+    }
+
+    private static void ClearAppliedPolicyState()
+    {
+        try { File.Delete(AppliedPolicyJsonPath); } catch { }
+    }
+
+    private void OpenApplyPolicy()
+    {
+        var dlg = new Dialogs.ApplyPolicyDialog
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+            InitialBlockUsbStorage = CurrentBlockUsbStorage,
+            InitialBlockOpticalDrive = CurrentBlockOpticalDrive,
+            InitialBlockPrinting = CurrentBlockPrinting,
+            InitialBlockedProcessNames = new List<string>(CurrentBlockedProcessNames),
+            InitialBlockedHostnames = new List<string>(CurrentBlockedHostnames),
+        };
+        var result = dlg.ShowDialog();
+        if (result != true || App.Server == null) return;
+
+        if (dlg.RevertRequested)
+        {
+            CurrentBlockUsbStorage = false;
+            CurrentBlockOpticalDrive = false;
+            CurrentBlockPrinting = false;
+            CurrentBlockedProcessNames = new List<string>();
+            CurrentBlockedHostnames = new List<string>();
+            ClearAppliedPolicyState();
+            _ = App.Server.BroadcastPolicyRevertAsync(System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Get("Chat_PolicyReverted"));
+        }
+        else
+        {
+            CurrentBlockUsbStorage = dlg.BlockUsbStorage;
+            CurrentBlockOpticalDrive = dlg.BlockOpticalDrive;
+            CurrentBlockPrinting = dlg.BlockPrinting;
+            CurrentBlockedProcessNames = new List<string>(dlg.BlockedProcessNames);
+            CurrentBlockedHostnames = new List<string>(dlg.BlockedHostnames);
+            SaveAppliedPolicyState();
+
+            var expiresAt = dlg.DurationSeconds > 0
+                ? System.DateTimeOffset.UtcNow.AddSeconds(dlg.DurationSeconds).ToUnixTimeMilliseconds()
+                : 0L;
+
+            var msg = new ClassroomCtrl.Shared.Protocol.PolicyApplyMessage
+            {
+                BlockUsbStorage = dlg.BlockUsbStorage,
+                BlockOpticalDrive = dlg.BlockOpticalDrive,
+                BlockPrinting = dlg.BlockPrinting,
+                BlockedProcessNames = new List<string>(dlg.BlockedProcessNames),
+                BlockedHostnames = new List<string>(dlg.BlockedHostnames),
+                ExpiresAtUtcMs = expiresAt,
+            };
+            _ = App.Server.BroadcastPolicyAsync(msg, System.Threading.CancellationToken.None);
+
+            var summary = BuildPolicySummary(msg);
+            var durationLabel = dlg.DurationSeconds > 0
+                ? Loc.Format("Chat_PolicyExpiresIn", dlg.DurationSeconds / 60)
+                : "";
+            ChatMessages.Add(Loc.Format("Chat_PolicyApplied2", summary) + durationLabel);
+        }
+    }
+
+    private void OpenApplyPolicyForStudent(StudentViewModel? s)
+    {
+        if (s == null) return;
+
+        var dlg = new Dialogs.ApplyPolicyDialog
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+            InitialBlockUsbStorage = s.PerStudentBlockUsb,
+            InitialBlockOpticalDrive = s.PerStudentBlockOptical,
+            InitialBlockPrinting = s.PerStudentBlockPrint,
+            InitialBlockedProcessNames = new List<string>(s.PerStudentBlockedProcessNames),
+            InitialBlockedHostnames = new List<string>(s.PerStudentBlockedHostnames),
+            Title = $"{Loc.Get("Dlg_ApplyPolicyTitle")} — {s.DisplayName}",
+        };
+        var result = dlg.ShowDialog();
+        if (result != true || App.Server == null) return;
+
+        if (dlg.RevertRequested)
+        {
+            RevertPolicyForStudent(s);
+            return;
+        }
+
+        s.PerStudentBlockUsb = dlg.BlockUsbStorage;
+        s.PerStudentBlockOptical = dlg.BlockOpticalDrive;
+        s.PerStudentBlockPrint = dlg.BlockPrinting;
+        s.PerStudentBlockedProcessNames = new List<string>(dlg.BlockedProcessNames);
+        s.PerStudentBlockedHostnames = new List<string>(dlg.BlockedHostnames);
+
+        bool any = dlg.BlockUsbStorage || dlg.BlockOpticalDrive || dlg.BlockPrinting
+                || dlg.BlockedProcessNames.Count > 0 || dlg.BlockedHostnames.Count > 0;
+        s.HasPerStudentPolicy = any;
+        s.PerStudentPolicyBadgeVisibility = any
+            ? System.Windows.Visibility.Visible
+            : System.Windows.Visibility.Collapsed;
+
+        var expiresAt = dlg.DurationSeconds > 0
+            ? System.DateTimeOffset.UtcNow.AddSeconds(dlg.DurationSeconds).ToUnixTimeMilliseconds()
+            : 0L;
+
+        var msg = new ClassroomCtrl.Shared.Protocol.PolicyApplyMessage
+        {
+            BlockUsbStorage = dlg.BlockUsbStorage,
+            BlockOpticalDrive = dlg.BlockOpticalDrive,
+            BlockPrinting = dlg.BlockPrinting,
+            BlockedProcessNames = new List<string>(dlg.BlockedProcessNames),
+            BlockedHostnames = new List<string>(dlg.BlockedHostnames),
+            ExpiresAtUtcMs = expiresAt,
+        };
+        _ = App.Server.ApplyPolicyToOneAsync(s.EndpointId, msg, System.Threading.CancellationToken.None);
+
+        var summary = BuildPolicySummary(msg);
+        var durationLabel = dlg.DurationSeconds > 0
+            ? Loc.Format("Chat_PolicyExpiresIn", dlg.DurationSeconds / 60)
+            : "";
+        ChatMessages.Add(Loc.Format("Chat_PerStudentPolicyApplied", s.DisplayName, summary) + durationLabel);
+    }
+
+    private void RevertPolicyForStudent(StudentViewModel? s)
+    {
+        if (s == null || App.Server == null) return;
+
+        s.PerStudentBlockUsb = false;
+        s.PerStudentBlockOptical = false;
+        s.PerStudentBlockPrint = false;
+        s.PerStudentBlockedProcessNames = new List<string>();
+        s.PerStudentBlockedHostnames = new List<string>();
+        s.HasPerStudentPolicy = false;
+        s.PerStudentPolicyBadgeVisibility = System.Windows.Visibility.Collapsed;
+
+        _ = App.Server.RevertPolicyForOneAsync(s.EndpointId, System.Threading.CancellationToken.None);
+        ChatMessages.Add(Loc.Format("Chat_PerStudentPolicyReverted", s.DisplayName));
+    }
+
+    private async void ViewStudentScreen(StudentViewModel? s)
+    {
+        if (s == null || App.Server == null) return;
+
+        // Open viewer first so it's ready when frames arrive
+        var window = new StudentScreenWindow(s.EndpointId, s.DisplayName)
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
+        window.Show();
+
+        try
+        {
+            // BUG-001 (Phase 4 Part 4): Student→Teacher H.264 hangs at "Waiting for student to start streaming..."
+            // Bug 2 (bitrate) and Bug 3 (mutex) confirmed fixed via 2-machine test, but Bug 1 root cause not yet identified.
+            // Workaround: View Student always uses MJPEG codec until Bug 1 resolved.
+            // Investigation areas: StudentBroadcaster H.264 init lifecycle, IPC pipeline frame routing,
+            // or StudentScreenWindow decoder receiving frames but not rendering.
+            // TODO: Deferred to post-launch debugging session.
+            await App.Server.RequestStudentStreamAsync(s.EndpointId, ClassroomCtrl.Shared.Protocol.VideoCodec.Mjpeg, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Format("Chat_ViewingStudentScreen", s.DisplayName));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+            window.Close();
+        }
+    }
+
+    // ─────── Phase 6: Power commands ───────
+
+    private async void BroadcastPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType type, string confirmKey)
+    {
+        if (App.Server == null) return;
+        if (Students.Count == 0)
+        {
+            ChatMessages.Add(Loc.Get("Lbl_AppName") + ": no students connected");
+            return;
+        }
+
+        var prompt = Loc.Format(confirmKey, Students.Count);
+        var result = System.Windows.MessageBox.Show(prompt, Loc.Get("Lbl_AppName"),
+            System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
+        if (result != System.Windows.MessageBoxResult.Yes) return;
+
+        try
+        {
+            await App.Server.BroadcastPowerAsync(type, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Format(GetIssuedChatKey(type), Loc.Get("Lbl_AllStudentsTarget")));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+        }
+    }
+
+    private async void PowerOneWithConfirm(StudentViewModel? s, ClassroomCtrl.Shared.Protocol.MessageType type, string confirmKey)
+    {
+        if (s == null || App.Server == null) return;
+
+        var prompt = Loc.Format(confirmKey, s.DisplayName);
+        var result = System.Windows.MessageBox.Show(prompt, Loc.Get("Lbl_AppName"),
+            System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
+        if (result != System.Windows.MessageBoxResult.Yes) return;
+
+        try
+        {
+            await App.Server.PowerOneAsync(s.EndpointId, type, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Format(GetIssuedChatKey(type), s.DisplayName));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+        }
+    }
+
+    private static string GetIssuedChatKey(ClassroomCtrl.Shared.Protocol.MessageType type) => type switch
+    {
+        ClassroomCtrl.Shared.Protocol.MessageType.ForceShutdown => "Chat_ShutdownIssued",
+        ClassroomCtrl.Shared.Protocol.MessageType.ForceRestart => "Chat_RestartIssued",
+        ClassroomCtrl.Shared.Protocol.MessageType.ForceLogoff => "Chat_LogoffIssued",
+        _ => "",
+    };
+
+    private async void SendDirectMessage(StudentViewModel? s)
+    {
+        if (s == null || App.Server == null) return;
+
+        var input = Microsoft.VisualBasic.Interaction.InputBox(
+            Loc.Format("Dlg_DMHint", s.DisplayName),
+            Loc.Get("Dlg_DMTitle"),
+            "");
+        if (string.IsNullOrWhiteSpace(input)) return;
+
+        try
+        {
+            await App.Server.SendDirectMessageAsync(s.EndpointId, input, System.Threading.CancellationToken.None);
+            ChatMessages.Add($"[{Loc.Get("Chat_TeacherPrefix")} → {s.DisplayName}] {input}");
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add(Loc.Format("Err_SendFailed", ex.Message));
+        }
+    }
+
+    // ─────── Phase 8: Breakout Rooms ───────
+
+    private void CreateRooms()
+    {
+        if (App.Server == null) return;
+
+        var input = Microsoft.VisualBasic.Interaction.InputBox(
+            Loc.Get("Dlg_BreakoutCreateHint"),
+            Loc.Get("Dlg_BreakoutCreateTitle"),
+            "3");
+        if (string.IsNullOrWhiteSpace(input)) return;
+
+        var trimmed = input.Trim();
+        Rooms.Clear();
+
+        if (int.TryParse(trimmed, out int n))
+        {
+            if (n < 1 || n > 20)
+            {
+                ChatMessages.Add(Loc.Get("Err_BreakoutInvalidCount"));
+                return;
+            }
+            for (int i = 1; i <= n; i++)
+            {
+                Rooms.Add(new RoomViewModel
+                {
+                    RoomId = System.Guid.NewGuid(),
+                    RoomName = $"Room {i}",
+                    ColorHex = GetRoomColor(i - 1),
+                });
+            }
+        }
+        else
+        {
+            var names = trimmed
+                .Split(new[] { ',', ';', '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0)
+                .Take(20)
+                .ToList();
+
+            if (names.Count == 0)
+            {
+                ChatMessages.Add(Loc.Get("Err_BreakoutInvalidCount"));
+                return;
+            }
+
+            for (int i = 0; i < names.Count; i++)
+            {
+                Rooms.Add(new RoomViewModel
+                {
+                    RoomId = System.Guid.NewGuid(),
+                    RoomName = names[i],
+                    ColorHex = GetRoomColor(i),
+                });
+            }
+        }
+
+        ChatMessages.Add(Loc.Format("Chat_BreakoutRoomsCreated", Rooms.Count));
+    }
+
+    private async void AssignStudentToRoom(StudentViewModel? s, RoomViewModel? room)
+    {
+        if (s == null || room == null || App.Server == null) return;
+        try
+        {
+            await App.Server.AssignToRoomAsync(s.EndpointId, room.RoomId, room.RoomName,
+                System.Threading.CancellationToken.None);
+            s.RoomId = room.RoomId;
+            s.RoomName = room.RoomName;
+            s.RoomBadgeColorHex = room.ColorHex;
+            s.RoomBadgeVisibility = System.Windows.Visibility.Visible;
+            ChatMessages.Add(Loc.Format("Chat_StudentMovedToRoom", s.DisplayName, room.RoomName));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+        }
+    }
+
+    private async void RemoveFromRoom(StudentViewModel? s)
+    {
+        if (s == null || App.Server == null) return;
+        try
+        {
+            await App.Server.AssignToRoomAsync(s.EndpointId, null, "",
+                System.Threading.CancellationToken.None);
+            s.RoomId = null;
+            s.RoomName = "";
+            s.RoomBadgeVisibility = System.Windows.Visibility.Collapsed;
+            ChatMessages.Add(Loc.Format("Chat_StudentReturnedToMain", s.DisplayName));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+        }
+    }
+
+    private async void AutoBalance()
+    {
+        if (App.Server == null || Rooms.Count == 0)
+        {
+            ChatMessages.Add(Loc.Get("Err_BreakoutNoRooms"));
+            return;
+        }
+        if (Students.Count == 0) return;
+
+        int idx = 0;
+        foreach (var s in Students)
+        {
+            var room = Rooms[idx % Rooms.Count];
+            try
+            {
+                await App.Server.AssignToRoomAsync(s.EndpointId, room.RoomId, room.RoomName,
+                    System.Threading.CancellationToken.None);
+                s.RoomId = room.RoomId;
+                s.RoomName = room.RoomName;
+                s.RoomBadgeColorHex = room.ColorHex;
+                s.RoomBadgeVisibility = System.Windows.Visibility.Visible;
+            }
+            catch { }
+            idx++;
+        }
+        ChatMessages.Add(Loc.Format("Chat_AutoBalanced", Students.Count, Rooms.Count));
+    }
+
+    private async void RenameRooms()
+    {
+        if (Rooms.Count == 0)
+        {
+            ChatMessages.Add(Loc.Get("Err_BreakoutNoRooms"));
+            return;
+        }
+
+        foreach (var room in Rooms.ToList())
+        {
+            var newName = Microsoft.VisualBasic.Interaction.InputBox(
+                Loc.Format("Dlg_RenameRoomHint", room.RoomName),
+                Loc.Get("Dlg_RenameRoomTitle"),
+                room.RoomName);
+            if (string.IsNullOrWhiteSpace(newName)) continue;
+            newName = newName.Trim();
+            if (newName == room.RoomName) continue;
+
+            room.RoomName = newName;
+
+            foreach (var s in Students.Where(x => x.RoomId == room.RoomId))
+            {
+                try
+                {
+                    await App.Server!.AssignToRoomAsync(s.EndpointId, room.RoomId, newName,
+                        System.Threading.CancellationToken.None);
+                    s.RoomName = newName;
+                }
+                catch { }
+            }
+        }
+        ChatMessages.Add(Loc.Get("Chat_RoomsRenamed"));
+    }
+
+    private async void EndBreakout()
+    {
+        if (App.Server == null) return;
+        try
+        {
+            await App.Server.DissolveAllRoomsAsync(System.Threading.CancellationToken.None);
+            foreach (var st in Students)
+            {
+                st.RoomId = null;
+                st.RoomName = "";
+                st.RoomBadgeVisibility = System.Windows.Visibility.Collapsed;
+            }
+            Rooms.Clear();
+            ChatMessages.Add(Loc.Get("Chat_BreakoutEnded"));
+        }
+        catch (System.Exception ex)
+        {
+            ChatMessages.Add($"[Error] {ex.Message}");
+        }
+    }
+
+    private static string GetRoomColor(int index)
+    {
+        var palette = new[] { "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6",
+                              "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16" };
+        return palette[index % palette.Length];
+    }
+
+    private static string BuildPolicySummary(ClassroomCtrl.Shared.Protocol.PolicyApplyMessage p)
+    {
+        var parts = new List<string>();
+        if (p.BlockUsbStorage)   parts.Add("USB");
+        if (p.BlockOpticalDrive) parts.Add("CD/DVD");
+        if (p.BlockPrinting)     parts.Add("Print");
+        if (p.BlockedProcessNames.Count > 0) parts.Add($"Apps({p.BlockedProcessNames.Count})");
+        if (p.BlockedHostnames.Count > 0)    parts.Add($"Sites({p.BlockedHostnames.Count})");
+        return parts.Count == 0 ? "—" : string.Join(", ", parts);
+    }
+
+    private void OpenQuizManager()
+    {
+        // ShowDialog (modal) — Show() left the window owned-but-modeless, so clicking
+        // MainWindow stole focus and z-ordered Quiz Manager behind it. Users reported
+        // X being unreachable. Modal eliminates the focus race.
+        var win = new ClassroomCtrl.Teacher.Quiz.QuizManagerWindow
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
+        win.ShowDialog();
+    }
+
+    private void OpenLanguage()
+    {
+        var dlg = new Dialogs.LanguageDialog
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
+        if (dlg.ShowDialog() == true && !string.IsNullOrEmpty(dlg.SelectedLanguage))
+        {
+            Loc.SetLanguage(dlg.SelectedLanguage);
+            App.SavePreferredLanguage(dlg.SelectedLanguage);
+        }
+    }
+
+    private void OnStudentJoined(object? sender, ClassroomCtrl.Shared.Protocol.HelloMessage hello)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            Students.Add(new StudentViewModel
+            {
+                EndpointId = hello.EndpointId,
+                DisplayName = hello.DisplayName,
+                MachineName = hello.MachineName,
+            });
+            ConnectedCount = Students.Count;
+        });
+    }
+
+    private void OnStudentLeft(object? sender, System.Guid peerId)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var s = Students.FirstOrDefault(x => x.EndpointId == peerId);
+            if (s != null) s.IsTalking = false;
+
+            if (Students.Count > 0)
+            {
+                Students.RemoveAt(Students.Count - 1);
+                ConnectedCount = Students.Count;
+            }
+        });
+    }
+
+    private void OnStudentAudioStarted(object? sender, System.Guid peerId)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var s = Students.FirstOrDefault(x => x.EndpointId == peerId);
+            if (s != null) s.IsTalking = true;
+        });
+    }
+
+    private void OnStudentAudioStopped(object? sender, System.Guid peerId)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var s = Students.FirstOrDefault(x => x.EndpointId == peerId);
+            if (s != null) s.IsTalking = false;
+        });
+    }
+
+    private void OnChatReceived(object? sender, ClassroomCtrl.Shared.Protocol.ChatMessage chat)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var prefix = chat.RoomId.HasValue ? "[Room] " : "";
+            ChatMessages.Add($"{prefix}[{chat.SenderName}] {chat.Text}");
+        });
+    }
+
+    private void OnHandRaiseReceived(object? sender, ClassroomCtrl.Shared.Protocol.HandRaiseMessage hr)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var s = Students.FirstOrDefault(x => x.EndpointId == hr.StudentId);
+            if (s != null)
+            {
+                s.HandRaisedVisibility = hr.IsRaised
+                    ? System.Windows.Visibility.Visible
+                    : System.Windows.Visibility.Collapsed;
+            }
+            ChatMessages.Add(Loc.Format(
+                hr.IsRaised ? "Chat_HandRaisedBy" : "Chat_HandLoweredBy",
+                hr.StudentName));
+        });
+    }
+
+    private void OnScreenshotReceived(object? sender, ClassroomCtrl.Shared.Protocol.ScreenshotResponseMessage shot)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var student = Students.FirstOrDefault(x => x.EndpointId == shot.StudentId);
+            if (student == null) return;
+
+            try
+            {
+                var bmp = new BitmapImage();
+                using (var ms = new MemoryStream(shot.JpegData))
+                {
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.StreamSource = ms;
+                    bmp.EndInit();
+                    bmp.Freeze();
+                }
+                student.ThumbnailImage = bmp;
+            }
+            catch { }
+        });
+    }
+
+    // ─────── Phase 8.5: Host commands ───────
+
+    private async void SetAsHost(StudentViewModel? s)
+    {
+        if (s == null || App.Server == null) return;
+        if (s.RoomId == null)
+        {
+            ChatMessages.Add(Loc.Get("Err_HostNotInRoom"));
+            return;
+        }
+        try
+        {
+            await App.Server.SetRoomHostAsync(s.RoomId.Value, s.EndpointId, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Format("Chat_HostAssigned", s.DisplayName, s.RoomName));
+        }
+        catch (System.Exception ex) { ChatMessages.Add($"[Error] {ex.Message}"); }
+    }
+
+    private async void RemoveHost(StudentViewModel? s)
+    {
+        if (s == null || App.Server == null || s.RoomId == null) return;
+        try
+        {
+            await App.Server.SetRoomHostAsync(s.RoomId.Value, null, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Format("Chat_HostRemoved", s.RoomName));
+        }
+        catch (System.Exception ex) { ChatMessages.Add($"[Error] {ex.Message}"); }
+    }
+
+    // ─────── Phase 9.1: Student Demonstration ───────
+
+    private async void StartDemo(StudentViewModel? s)
+    {
+        if (s == null || App.Server == null) return;
+        try
+        {
+            await App.Server.BroadcastDemoStartAsync(s.EndpointId, s.DisplayName, System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Format("Chat_DemoStarted", s.DisplayName));
+        }
+        catch (System.Exception ex) { ChatMessages.Add($"[Error] {ex.Message}"); }
+    }
+
+    private async void StopDemo()
+    {
+        if (App.Server == null) return;
+        try
+        {
+            await App.Server.BroadcastDemoStopAsync(System.Threading.CancellationToken.None);
+            ChatMessages.Add(Loc.Get("Chat_DemoStopped"));
+        }
+        catch (System.Exception ex) { ChatMessages.Add($"[Error] {ex.Message}"); }
+    }
+
+    // ─────── Phase 9.2: Screen Pen ───────
+
+    private void OpenScreenPen()
+    {
+        var w = new ScreenPenWindow { Owner = System.Windows.Application.Current.MainWindow };
+        w.Show();
+    }
+
+    // ─────── Phase 3.5: Sound effects ───────
+
+    private void ToggleSounds()
+    {
+        SoundService.SetEnabled(!SoundService.IsEnabled);
+        UpdateSoundsButtonText();
+    }
+
+    private void UpdateSoundsButtonText()
+    {
+        SoundsButtonText = SoundService.IsEnabled
+            ? Loc.Get("Btn_SoundsOn")
+            : Loc.Get("Btn_SoundsOff");
+    }
+
+    // ─────── Phase 9.5: Camera Broadcast ───────
+
+    private void ToggleCamera()
+    {
+        if (App.Camera == null) return;
+        if (App.Camera.IsActive)
+        {
+            App.Camera.Stop();
+            ChatMessages.Add(Loc.Get("Chat_CameraStopped"));
+        }
+        else
+        {
+            var dlg = new CameraSelectorDialog { Owner = System.Windows.Application.Current.MainWindow };
+            if (dlg.ShowDialog() == true)
+                ChatMessages.Add(Loc.Get("Chat_CameraStarted"));
+        }
+        UpdateCameraButtonText();
+    }
+
+    private void UpdateCameraButtonText()
+    {
+        CameraButtonText = (App.Camera?.IsActive ?? false)
+            ? Loc.Get("Btn_StopCamera")
+            : Loc.Get("Btn_Camera");
+    }
+
+    // ─────── Phase 9.6: Net Movie ───────
+
+    private void OpenNetMovie()
+    {
+        var w = new NetMoviePlaylistWindow { Owner = System.Windows.Application.Current.MainWindow };
+        w.Show();
+    }
+
+    // ─────── Phase 4.6: Mic Monitor ───────
+
+    private void OpenMicMonitor()
+    {
+        var w = new MicMonitorWindow { Owner = System.Windows.Application.Current.MainWindow };
+        w.Show();
+    }
+
+    // ─────── Multi-room teaching ───────
+
+    private void OpenMultiRoom()
+    {
+        var w = new MultiRoomTeacherView { Owner = System.Windows.Application.Current.MainWindow };
+        w.Show();
+    }
+
+    // ─────── Phase 9.3: Class Roster ───────
+
+    private void OpenClassRoster()
+    {
+        var w = new ClassRosterManagerWindow { Owner = System.Windows.Application.Current.MainWindow };
+        w.ShowDialog();
+    }
+
+    private void MarkAttendance()
+    {
+        if (App.Roster == null || App.Roster.ActiveRoster == null)
+        {
+            ChatMessages.Add(Loc.Get("Err_NoActiveRoster"));
+            return;
+        }
+        var connected = Students.Select(s => s.MachineName).ToList();
+        var present = App.Roster.MarkAttendance(connected);
+        ChatMessages.Add(Loc.Format("Chat_AttendanceMarked", present, App.Roster.ActiveRoster.Students.Count));
+    }
+
+    private void OnActiveRosterChanged(object? sender, ClassroomCtrl.Shared.Models.Roster.ClassRoster? roster)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            if (roster == null)
+            {
+                ActiveClassName = "";
+                ActiveClassVisibility = System.Windows.Visibility.Collapsed;
+            }
+            else
+            {
+                ActiveClassName = $"📚 {roster.ClassName}";
+                ActiveClassVisibility = System.Windows.Visibility.Visible;
+            }
+        });
+    }
+
+    private void OnDemoStateChanged(object? sender, (System.Guid? SourceId, string SourceName) e)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            if (e.SourceId.HasValue)
+            {
+                ActiveDemoStudent = Students.FirstOrDefault(x => x.EndpointId == e.SourceId.Value);
+                DemoBannerText = Loc.Format("Lbl_DemoActive", e.SourceName);
+                DemoBannerVisibility = System.Windows.Visibility.Visible;
+            }
+            else
+            {
+                ActiveDemoStudent = null;
+                DemoBannerText = "";
+                DemoBannerVisibility = System.Windows.Visibility.Collapsed;
+            }
+        });
+    }
+
+    private void OnHostChanged(object? sender, (System.Guid RoomId, System.Guid? NewHostId) e)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            // Clear host flag from anyone in this room, then set on the new host.
+            foreach (var s in Students.Where(x => x.RoomId == e.RoomId))
+                s.IsHost = false;
+            if (e.NewHostId.HasValue)
+            {
+                var newHost = Students.FirstOrDefault(x => x.EndpointId == e.NewHostId.Value);
+                if (newHost != null) newHost.IsHost = true;
+            }
+        });
+    }
+
+    // ─────── Phase 5b: Per-student recording commands ───────
+
+    private async void StartStudentRecording(StudentViewModel? s)
+    {
+        if (s == null || App.PerStudentRecording == null) return;
+        if (!ViewingStudents.Contains(s.EndpointId))
+        {
+            ChatMessages.Add(Loc.Get("Err_RecordingRequiresView"));
+            return;
+        }
+        if (App.PerStudentRecording.IsRecording(s.EndpointId)) return;
+
+        // Use a default 1280×720 @ 4 fps until first frame arrives — service ignores
+        // mismatched dimensions on first frame and re-inits to actual size.
+        if (App.PerStudentRecording.Start(s.EndpointId, s.DisplayName, 1280, 720, 4))
+        {
+            s.IsBeingRecorded = true;
+            try
+            {
+                if (App.Server != null)
+                    await App.Server.NotifyStudentRecordingAsync(s.EndpointId, true, System.Threading.CancellationToken.None);
+            }
+            catch { }
+            ChatMessages.Add(Loc.Format("Toast_RecordingStarted", s.DisplayName));
+        }
+    }
+
+    /// <summary>Toggle helper: 1 button on tile, dispatches to Start or Stop based on state.</summary>
+    private void ToggleStudentRecording(StudentViewModel? s)
+    {
+        if (s == null) return;
+        if (s.IsBeingRecorded) StopStudentRecording(s);
+        else StartStudentRecording(s);
+    }
+
+    /// <summary>
+    /// Refresh CanRecord flag on every StudentVM based on the live ViewingStudents set.
+    /// Called by StudentScreenWindow on Loaded/Closed so the REC button dims/lights up immediately.
+    /// </summary>
+    public void NotifyViewingStudentsChanged()
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            foreach (var s in Students)
+                s.CanRecord = ViewingStudents.Contains(s.EndpointId);
+        });
+    }
+
+    private async void StopStudentRecording(StudentViewModel? s)
+    {
+        if (s == null || App.PerStudentRecording == null) return;
+        if (!App.PerStudentRecording.IsRecording(s.EndpointId)) return;
+
+        var path = await App.PerStudentRecording.StopAsync(s.EndpointId);
+        s.IsBeingRecorded = false;
+        try
+        {
+            if (App.Server != null)
+                await App.Server.NotifyStudentRecordingAsync(s.EndpointId, false, System.Threading.CancellationToken.None);
+        }
+        catch { }
+        ChatMessages.Add(Loc.Format("Toast_RecordingStopped", s.DisplayName, path ?? ""));
+    }
+
+    // ─────── Phase 11.3: Branding settings dialog ───────
+
+    private void OpenBrandingSettings()
+    {
+        var win = new ClassroomCtrl.Teacher.Branding.BrandingSettingsWindow
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
+        win.ShowDialog();
+    }
+
+    private void OpenAdminPasswordSettings()
+    {
+        var win = new ClassroomCtrl.Teacher.Settings.AdminPasswordSettingsDialog
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
+        win.ShowDialog();
+    }
+
+    private async void SendChat()
+    {
+        var text = ChatInputText;
+        if (string.IsNullOrWhiteSpace(text)) return;
+        ChatMessages.Add($"[{Loc.Get("Chat_TeacherPrefix")}] {text}");
+        ChatInputText = "";
+
+        if (App.Server != null)
+        {
+            try
+            {
+                await App.Server.BroadcastChatAsync(text, System.Threading.CancellationToken.None);
+            }
+            catch (System.Exception ex)
+            {
+                ChatMessages.Add(Loc.Format("Err_SendFailed", ex.Message));
+            }
+        }
+    }
+}
+
+public partial class StudentViewModel : ObservableObject
+{
+    [ObservableProperty] private System.Guid endpointId;
+    [ObservableProperty] private string displayName = "";
+    [ObservableProperty] private string machineName = "";
+    [ObservableProperty] private object? thumbnailImage;
+    [ObservableProperty] private System.Windows.Visibility handRaisedVisibility = System.Windows.Visibility.Collapsed;
+
+    [ObservableProperty] private bool hasPerStudentPolicy;
+    [ObservableProperty] private bool perStudentBlockUsb;
+    [ObservableProperty] private bool perStudentBlockOptical;
+    [ObservableProperty] private bool perStudentBlockPrint;
+    [ObservableProperty] private System.Collections.Generic.List<string> perStudentBlockedProcessNames = new();
+    [ObservableProperty] private System.Collections.Generic.List<string> perStudentBlockedHostnames = new();
+    [ObservableProperty] private System.Windows.Visibility perStudentPolicyBadgeVisibility = System.Windows.Visibility.Collapsed;
+
+    [ObservableProperty] private System.Guid? roomId;
+    [ObservableProperty] private string roomName = "";
+    [ObservableProperty] private string roomBadgeColorHex = "#3B82F6";
+    [ObservableProperty] private System.Windows.Visibility roomBadgeVisibility = System.Windows.Visibility.Collapsed;
+
+    // Phase 4 Part 3c: Talking badge
+    [ObservableProperty] private bool isTalking;
+    [ObservableProperty] private System.Windows.Visibility talkingBadgeVisibility = System.Windows.Visibility.Collapsed;
+
+    partial void OnIsTalkingChanged(bool value)
+    {
+        TalkingBadgeVisibility = value
+            ? System.Windows.Visibility.Visible
+            : System.Windows.Visibility.Collapsed;
+    }
+
+    // Phase 8.5: Host of a breakout room
+    [ObservableProperty] private bool isHost;
+    [ObservableProperty] private System.Windows.Visibility hostBadgeVisibility = System.Windows.Visibility.Collapsed;
+    partial void OnIsHostChanged(bool value)
+    {
+        HostBadgeVisibility = value ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+    }
+
+    // Phase 5b: Per-student recording active
+    [ObservableProperty] private bool isBeingRecorded;
+    [ObservableProperty] private System.Windows.Visibility recordingDotVisibility = System.Windows.Visibility.Collapsed;
+    /// <summary>True if a StudentScreenWindow is currently open for this student (REC requires it).</summary>
+    [ObservableProperty] private bool canRecord;
+    /// <summary>Opacity for the REC button — full when CanRecord, dim otherwise.</summary>
+    [ObservableProperty] private double recOpacity = 0.4;
+    /// <summary>Display label for the REC button toggle.</summary>
+    [ObservableProperty] private string recButtonText = "🔴 REC";
+    /// <summary>Background brush hex for REC button (red when recording, dark grey otherwise).</summary>
+    [ObservableProperty] private string recButtonColorHex = "#475569";
+
+    partial void OnIsBeingRecordedChanged(bool value)
+    {
+        RecordingDotVisibility = value ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        RecButtonText = value ? "● REC" : "🔴 REC";
+        RecButtonColorHex = value ? "#DC2626" : "#475569";
+    }
+    partial void OnCanRecordChanged(bool value)
+    {
+        RecOpacity = value ? 1.0 : 0.4;
+    }
+
+    // Phase 4 Part 5: Reception quality (0-100). 100 = no data yet (assume good).
+    [ObservableProperty] private int qualityScore = 100;
+    [ObservableProperty] private string qualityDotColorHex = "#10B981"; // green
+
+    partial void OnQualityScoreChanged(int value)
+    {
+        QualityDotColorHex = value >= 90 ? "#10B981"   // green
+                           : value >= 70 ? "#F59E0B"   // amber
+                                         : "#EF4444"; // red
+    }
+}
+
+public partial class RoomViewModel : ObservableObject
+{
+    [ObservableProperty] private System.Guid roomId;
+    [ObservableProperty] private string roomName = "";
+    [ObservableProperty] private string colorHex = "#3B82F6";
+}
+
+// Phase 8 (Bug D) — JSON-persisted shape of the broadcast policy. Mirrors the Current*
+// fields on MainViewModel and the public getters on ApplyPolicyDialog so on-disk schema
+// matches the in-memory model 1:1; deliberate non-MessagePack since this is local-only
+// (no IPC) and System.Text.Json gives readable diffs for support.
+internal class AppliedPolicyState
+{
+    public bool BlockUsbStorage { get; set; }
+    public bool BlockOpticalDrive { get; set; }
+    public bool BlockPrinting { get; set; }
+    public List<string> BlockedProcessNames { get; set; } = new();
+    public List<string> BlockedHostnames { get; set; } = new();
+}

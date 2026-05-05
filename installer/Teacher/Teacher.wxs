@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX v4 Teacher installer skeleton.
+  Build: wix build Teacher.wxs -o Teacher.msi
+  Sign:  signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a Teacher.msi
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Classroom Control — Teacher" Manufacturer="Your Company"
+           Version="1.0.0" UpgradeCode="11111111-2222-3333-4444-555555555555"
+           Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="Main" Title="Teacher Console" Level="1">
+      <ComponentGroupRef Id="TeacherFiles" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="ClassroomCtrl">
+        <!-- TODO: Add file components for ClassroomCtrl.Teacher.exe + dependencies -->
+      </Directory>
+    </StandardDirectory>
+
+    <ComponentGroup Id="TeacherFiles" Directory="INSTALLFOLDER">
+      <!-- TODO: <File Source="$(var.PublishDir)\ClassroomCtrl.Teacher.exe" /> etc. -->
+    </ComponentGroup>
+
+    <!-- Firewall rule -->
+    <!-- TODO: <fw:FirewallException Name="ClassroomCtrl Teacher" Port="7777" Protocol="tcp" /> -->
+  </Package>
+</Wix>

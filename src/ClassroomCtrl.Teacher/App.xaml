@@ -1,0 +1,31 @@
+<Application x:Class="ClassroomCtrl.Teacher.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <materialDesign:BundledTheme xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+                                             BaseTheme="Light"
+                                             PrimaryColor="Indigo"
+                                             SecondaryColor="Cyan" />
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign3.Defaults.xaml" />
+
+                <!-- Phase 1 — Premium Dark Design System foundation.
+                     Phase 4 — Themes live in ClassroomCtrl.Shared so Student.Agent uses the same brushes.
+                     Phase 8 — Dark is now the only shipping theme (the Light/Dark UI toggle was
+                               removed; user-Primary brand color drives the surface tint instead).
+                               Colors.Light.xaml is retained as a back-compat baseline for legacy
+                               branding.json files that still record ThemeMode="Light"; ApplyTheme
+                               at startup will swap this entry to Dark for new installs.
+                     Order matters: Colors first (others reference its brushes). -->
+                <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/Colors.Light.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/Spacing.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/Typography.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/Effects.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/Buttons.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/Inputs.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/DataDisplay.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

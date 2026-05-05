@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Wildcard harvest of every file in publish\student\.
+
+  The Service.exe is NOT in this folder — the build wrapper moved it to a
+  sibling staging folder (publish\student-svc\) before this MSI was built.
+  That staging move is required because:
+    1. WiX 6 <Files> element does not support an Exclude attribute, and
+    2. <ServiceInstall> needs the Service.exe to be in its own component
+       (it cannot share a component with wildcard-harvested siblings).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <ComponentGroup Id="StudentFiles" Directory="INSTALLFOLDER">
+      <Files Include="..\..\publish\student\**"/>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

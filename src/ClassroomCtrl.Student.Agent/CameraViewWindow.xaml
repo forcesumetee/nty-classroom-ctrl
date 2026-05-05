@@ -1,0 +1,15 @@
+<Window x:Class="ClassroomCtrl.Student.Agent.CameraViewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource Lbl_TeacherCameraTitle}"
+        Width="480" Height="380"
+        Topmost="True"
+        WindowStartupLocation="Manual"
+        Background="Black">
+    <Border BorderBrush="{DynamicResource Surface.Border}"
+            BorderThickness="1"
+            CornerRadius="{DynamicResource CornerRadius.MD}"
+            Background="{DynamicResource Surface.Elevated}">
+        <Image x:Name="CamImage" Stretch="Uniform" Margin="2"/>
+    </Border>
+</Window>

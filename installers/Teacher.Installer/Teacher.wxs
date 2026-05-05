@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package Name="NTY Classroom Control - Teacher"
+           Manufacturer="NTY MULTIMEDIA CO.,LTD"
+           Version="1.0.0.0"
+           UpgradeCode="A7E83F92-4B61-4D7C-9E5A-3F1B2D8C7E91"
+           Scope="perMachine"
+           Compressed="yes"
+           InstallerVersion="500">
+
+    <SummaryInformation Description="NTY Classroom Control Teacher Console"
+                        Manufacturer="NTY MULTIMEDIA CO.,LTD"/>
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed."/>
+
+    <MediaTemplate EmbedCab="yes"/>
+
+    <Icon Id="AppIcon.ico" SourceFile="..\..\publish\teacher\ClassroomCtrl.Teacher.exe"/>
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico"/>
+    <Property Id="ARPHELPLINK" Value="https://www.nty.co.th"/>
+    <Property Id="ARPNOMODIFY" Value="1"/>
+    <Property Id="ARPNOREPAIR" Value="1"/>
+
+    <Feature Id="Main" Title="Teacher Console" Level="1">
+      <ComponentGroupRef Id="TeacherFiles"/>
+      <ComponentRef Id="StartMenuShortcut"/>
+      <ComponentRef Id="FirewallRule"/>
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="NtyFolder" Name="NTY">
+        <Directory Id="ProductFolder" Name="ClassroomCtrl">
+          <Directory Id="INSTALLFOLDER" Name="Teacher"/>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProductMenuFolder" Name="NTY Classroom Control"/>
+    </StandardDirectory>
+
+    <Component Id="StartMenuShortcut" Directory="ProductMenuFolder" Guid="C9D72E81-5A4B-4F8C-B6E1-2D3F4A5B6C7D">
+      <Shortcut Id="TeacherShortcut"
+                Name="Classroom Control - Teacher"
+                Description="Launch the Teacher Console"
+                Target="[INSTALLFOLDER]ClassroomCtrl.Teacher.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="AppIcon.ico"/>
+      <RemoveFolder Id="RemoveProductMenuFolder" Directory="ProductMenuFolder" On="uninstall"/>
+      <RegistryValue Root="HKCU"
+                     Key="Software\NTY\ClassroomCtrl\Teacher"
+                     Name="installed"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes"/>
+    </Component>
+
+    <Component Id="FirewallRule" Directory="INSTALLFOLDER" Guid="E3B8F5A2-7C91-4D6F-A284-B5E9F1D3C8A4">
+      <RegistryValue Root="HKLM"
+                     Key="Software\NTY\ClassroomCtrl\Firewall"
+                     Name="rule_installed"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes"/>
+      <fw:FirewallException Id="ClassroomTcpIn"
+                            Name="NTY Classroom Control (TCP 7777)"
+                            Port="7777"
+                            Protocol="tcp"
+                            Scope="any"
+                            Profile="all"
+                            Description="Allows incoming connections from student machines."/>
+    </Component>
+
+  </Package>
+</Wix>

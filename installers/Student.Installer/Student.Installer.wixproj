@@ -1,0 +1,15 @@
+<Project Sdk="WixToolset.Sdk/6.0.0">
+  <PropertyGroup>
+    <OutputName>NTY-ClassroomCtrl-Student-1.0.0</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="6.0.0"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Resolves $(PublishDir)-style file references at harvest time. -->
+    <BindPath Include="..\..\publish\student" Name="PublishDir"/>
+  </ItemGroup>
+</Project>

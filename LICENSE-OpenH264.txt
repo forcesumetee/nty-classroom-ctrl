@@ -1,0 +1,79 @@
+================================================================================
+  Third-Party Software Acknowledgement — OpenH264
+================================================================================
+
+This product includes software developed by Cisco Systems, Inc. — specifically
+the OpenH264 codec library, an implementation of the H.264 (AVC) video standard.
+
+Project URL:   https://www.openh264.org/
+Source code:   https://github.com/cisco/openh264
+.NET wrapper:  https://github.com/ReferenceType/H264Sharp  (H264Sharp NuGet 1.6.0)
+
+
+--------------------------------------------------------------------------------
+  OpenH264 — BSD-2-Clause License
+--------------------------------------------------------------------------------
+
+Copyright (c) 2013, Cisco Systems
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+  * Redistributions of source code must retain the above copyright notice, this
+    list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+--------------------------------------------------------------------------------
+  Patent / Royalty Notice (MPEG-LA AVC pool)
+--------------------------------------------------------------------------------
+
+H.264 / AVC is a patented technology pooled by MPEG-LA. Cisco's pre-paid royalty
+coverage applies only when the OpenH264 binary is downloaded by the end user
+directly from `http://ciscobinary.openh264.org` at install or first run.
+
+This product BUNDLES the OpenH264 native library inside the installer package.
+Per Cisco's openh264.org FAQ, bundled binaries are NOT covered by Cisco's
+royalty pre-payment.
+
+Distribution scope (current):
+  * Below 100,000 units / year of distributed product → no royalty fee under
+    MPEG-LA AVC pool's free tier (encoder & decoder).
+  * Distribution counted per ClassroomCtrl install (Teacher + Student combined
+    is one product).
+
+Action items if shipping volume exceeds the free tier:
+  1. Purchase MPEG-LA AVC license directly, OR
+  2. Migrate to runtime download of OpenH264 from Cisco-hosted URL
+     (Firefox model — see https://www.openh264.org/faq.html for details).
+  3. Consult legal counsel before scaling production distribution beyond
+     pilot programs.
+
+
+--------------------------------------------------------------------------------
+  H264Sharp .NET Wrapper — MIT License
+--------------------------------------------------------------------------------
+
+The .NET binding around OpenH264 used by this product is H264Sharp by
+ReferenceType. Source: https://github.com/ReferenceType/H264Sharp
+
+MIT License - see https://github.com/ReferenceType/H264Sharp/blob/master/LICENSE
+for full terms.
+
+
+================================================================================

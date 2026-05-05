@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NTY Classroom Control — Student installer.
+
+  Installs to:   C:\Program Files\NTY\ClassroomCtrl\Student
+  Components:    1. Student.Service.exe registered as Windows Service "ClassroomService"
+                    (LocalSystem, auto-start, restart-on-fail recovery).
+                 2. Student.Agent.exe + supporting DLLs (NAudio, etc.) — same folder.
+                 3. HKLM Run registry value so the Agent auto-launches on every user logon.
+                 4. Start-menu shortcut for manual Agent launch.
+
+  Note: no firewall rules — the Student is an outbound-only TCP client (no listener).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package Name="NTY Classroom Control - Student"
+           Manufacturer="NTY MULTIMEDIA CO.,LTD"
+           Version="1.0.0.0"
+           UpgradeCode="B5F92E73-3C82-4E8F-A6D4-1E5B7C9D2F84"
+           Scope="perMachine"
+           Compressed="yes"
+           InstallerVersion="500">
+
+    <SummaryInformation Description="NTY Classroom Control Student endpoint"
+                        Manufacturer="NTY MULTIMEDIA CO.,LTD"/>
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed."/>
+    <MediaTemplate EmbedCab="yes"/>
+
+    <Icon Id="AppIcon.ico" SourceFile="..\..\publish\student\ClassroomCtrl.Student.Agent.exe"/>
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico"/>
+    <Property Id="ARPHELPLINK" Value="https://www.nty.co.th"/>
+    <Property Id="ARPNOMODIFY" Value="1"/>
+    <Property Id="ARPNOREPAIR" Value="1"/>
+
+    <Feature Id="Main" Title="Student Endpoint" Level="1">
+      <ComponentGroupRef Id="StudentFiles"/>
+      <ComponentRef Id="ServiceExe"/>
+      <ComponentRef Id="AgentAutoStart"/>
+      <ComponentRef Id="StartMenuShortcut"/>
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="NtyFolder" Name="NTY">
+        <Directory Id="ProductFolder" Name="ClassroomCtrl">
+          <Directory Id="INSTALLFOLDER" Name="Student"/>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProductMenuFolder" Name="NTY Classroom Control"/>
+    </StandardDirectory>
+
+    <!-- ─────────────── Service: explicit File + ServiceInstall ─────────────── -->
+    <!--
+      The Service.exe is in its own component because <ServiceInstall> attaches to
+      a single keyed file. The wildcard <Files> in StudentFiles.wxs excludes this
+      file to avoid double-harvest.
+    -->
+    <Component Id="ServiceExe" Directory="INSTALLFOLDER"
+               Guid="6F4D8C2A-5B1E-4F73-A8E5-C2D3E4F5A6B7"
+               Bitness="always64">
+      <!--
+        The .exe is sourced from a staging sibling folder (publish\student-svc\)
+        so the wildcard <Files> in StudentFiles.wxs (which scans publish\student\)
+        doesn't double-harvest it. The build wrapper installers\build-student-msi.ps1
+        moves the file there after publish.
+      -->
+      <File Id="ServiceExeFile"
+            Source="..\..\publish\student-svc\ClassroomCtrl.Student.Service.exe"
+            KeyPath="yes"/>
+
+      <!-- Matches Program.cs: AddWindowsService(o => o.ServiceName = "ClassroomService") -->
+      <ServiceInstall Id="ClassroomServiceInstall"
+                      Name="ClassroomService"
+                      DisplayName="NTY Classroom Control - Student Service"
+                      Description="Listens for teacher commands and bridges them to the user-session Agent over IPC."
+                      Start="auto"
+                      Type="ownProcess"
+                      ErrorControl="normal"
+                      Account="LocalSystem"
+                      Vital="yes"/>
+
+      <!-- Restart-on-failure policy: WixToolset.Util provides the modern
+           ServiceConfig with FirstFailureActionType. The MSI core ServiceConfig
+           was deprecated in Windows Installer for these attributes. -->
+      <util:ServiceConfig ServiceName="ClassroomService"
+                          FirstFailureActionType="restart"
+                          SecondFailureActionType="restart"
+                          ThirdFailureActionType="restart"
+                          RestartServiceDelayInSeconds="5"/>
+
+      <ServiceControl Id="ClassroomServiceControl"
+                      Name="ClassroomService"
+                      Start="install"
+                      Stop="both"
+                      Remove="uninstall"
+                      Wait="yes"/>
+    </Component>
+
+    <!-- ─────────────── Agent auto-start on every user logon ─────────────── -->
+    <!--
+      HKLM\Run runs once per user logon for ALL users on the machine. Per-user
+      HKCU\Run from a per-machine MSI would only persist for the install user
+      (admin/IT staff), which isn't what classroom deployment wants.
+      The Agent's single-instance mutex prevents conflicts when both this Run
+      entry AND the Service's ProcessSupervisor try to spawn it.
+    -->
+    <Component Id="AgentAutoStart" Directory="INSTALLFOLDER"
+               Guid="7E5D9C3B-6C2F-5A84-B9F6-D3E4F5A6B7C8">
+      <RegistryValue Root="HKLM"
+                     Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                     Name="NTYClassroomAgent"
+                     Value="[INSTALLFOLDER]ClassroomCtrl.Student.Agent.exe"
+                     Type="string"
+                     KeyPath="yes"/>
+    </Component>
+
+    <!-- ─────────────── Start-menu shortcut (manual launch) ─────────────── -->
+    <Component Id="StartMenuShortcut" Directory="ProductMenuFolder"
+               Guid="8F6E0D4C-7D3F-6B95-CAE7-E4F5A6B7C8D9">
+      <Shortcut Id="StudentAgentShortcut"
+                Name="Classroom Control - Student"
+                Description="Launch the Classroom Control Student Agent"
+                Target="[INSTALLFOLDER]ClassroomCtrl.Student.Agent.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="AppIcon.ico"/>
+      <RemoveFolder Id="RemoveProductMenuFolder" Directory="ProductMenuFolder" On="uninstall"/>
+      <RegistryValue Root="HKLM"
+                     Key="Software\NTY\ClassroomCtrl\Student"
+                     Name="installed"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes"/>
+    </Component>
+
+  </Package>
+</Wix>

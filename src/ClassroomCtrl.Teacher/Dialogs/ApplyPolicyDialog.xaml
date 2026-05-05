@@ -1,0 +1,108 @@
+<Window x:Class="ClassroomCtrl.Teacher.Dialogs.ApplyPolicyDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="{DynamicResource Dlg_ApplyPolicyTitle}"
+        Height="720" Width="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource Surface.Background}"
+        TextElement.Foreground="{DynamicResource Text.Primary}"
+        FontFamily="Segoe UI">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="{DynamicResource Dlg_ClassroomPolicy}"
+                   Style="{DynamicResource Text.H2}"/>
+        <TextBlock Grid.Row="1" Text="{DynamicResource Dlg_PolicyHint}"
+                   Style="{DynamicResource Text.Caption}"
+                   Margin="0,4,0,16"/>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical">
+
+                <CheckBox x:Name="UsbCheck" Style="{DynamicResource CheckBox.Default}"
+                          Content="{DynamicResource Dlg_BlockUSB}" Margin="0,8" FontSize="14"/>
+                <TextBlock Text="{DynamicResource Dlg_BlockUSBDesc}"
+                           Style="{DynamicResource Text.Caption}"
+                           Margin="22,0,0,8"/>
+
+                <CheckBox x:Name="OpticalCheck" Style="{DynamicResource CheckBox.Default}"
+                          Content="{DynamicResource Dlg_BlockCD}" Margin="0,8" FontSize="14"/>
+                <TextBlock Text="{DynamicResource Dlg_BlockCDDesc}"
+                           Style="{DynamicResource Text.Caption}"
+                           Margin="22,0,0,8"/>
+
+                <CheckBox x:Name="PrintCheck" Style="{DynamicResource CheckBox.Default}"
+                          Content="{DynamicResource Dlg_BlockPrint}" Margin="0,8" FontSize="14"/>
+                <TextBlock Text="{DynamicResource Dlg_BlockPrintDesc}"
+                           Style="{DynamicResource Text.Caption}"
+                           Margin="22,0,0,8"/>
+
+                <CheckBox x:Name="AppsCheck" Style="{DynamicResource CheckBox.Default}"
+                          Content="{DynamicResource Dlg_BlockApps}" Margin="0,8" FontSize="14"/>
+                <TextBlock Text="{DynamicResource Dlg_BlockAppsDesc}"
+                           Style="{DynamicResource Text.Caption}"
+                           Margin="22,0,0,4"/>
+                <TextBox x:Name="AppsList"
+                         Style="{DynamicResource TextBox.Default}"
+                         Margin="22,0,0,8"
+                         FontSize="12"
+                         Height="60"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         materialDesign:HintAssist.Hint="chrome.exe, notepad.exe, game.exe"/>
+
+                <CheckBox x:Name="HostsCheck" Style="{DynamicResource CheckBox.Default}"
+                          Content="{DynamicResource Dlg_BlockSites}" Margin="0,8" FontSize="14"/>
+                <TextBlock Text="{DynamicResource Dlg_BlockSitesDesc}"
+                           Style="{DynamicResource Text.Caption}"
+                           Margin="22,0,0,4"/>
+                <TextBox x:Name="HostsList"
+                         Style="{DynamicResource TextBox.Default}"
+                         Margin="22,0,0,8"
+                         FontSize="12"
+                         Height="60"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         materialDesign:HintAssist.Hint="facebook.com, youtube.com, tiktok.com"/>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Duration row -->
+        <DockPanel Grid.Row="3" Margin="0,12,0,0">
+            <TextBlock Text="{DynamicResource Dlg_PolicyDuration}"
+                       Style="{DynamicResource Text.Body}"
+                       VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <ComboBox x:Name="DurationCombo" Style="{DynamicResource ComboBox.Default}"
+                      SelectedIndex="0" Width="200">
+                <ComboBoxItem Content="{DynamicResource Dlg_DurationNoLimit}" Tag="0"/>
+                <ComboBoxItem Content="{DynamicResource Dlg_Duration15min}" Tag="900"/>
+                <ComboBoxItem Content="{DynamicResource Dlg_Duration30min}" Tag="1800"/>
+                <ComboBoxItem Content="{DynamicResource Dlg_Duration1hr}" Tag="3600"/>
+                <ComboBoxItem Content="{DynamicResource Dlg_Duration2hr}" Tag="7200"/>
+            </ComboBox>
+        </DockPanel>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="{DynamicResource Btn_RevertAll}"
+                    Style="{DynamicResource Button.Secondary}"
+                    Margin="0,0,8,0" Click="Revert_Click"/>
+            <Button Content="{DynamicResource Btn_Cancel}"
+                    Style="{DynamicResource Button.Secondary}"
+                    Margin="0,0,8,0" Click="Cancel_Click"/>
+            <Button Content="{DynamicResource Btn_Apply}"
+                    Style="{DynamicResource Button.Primary}"
+                    Click="Apply_Click" IsDefault="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

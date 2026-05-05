@@ -1,0 +1,73 @@
+<Window x:Class="ClassroomCtrl.Teacher.Activation.ActivationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="{DynamicResource Lbl_ActivationWindowTitle}"
+        Height="500" Width="520"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{DynamicResource Surface.Background}"
+        TextElement.Foreground="{DynamicResource Text.Primary}"
+        FontFamily="Segoe UI">
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" LastChildFill="False">
+            <ComboBox x:Name="LanguageBox" DockPanel.Dock="Right"
+                      Style="{DynamicResource ComboBox.Default}"
+                      Width="120"
+                      SelectionChanged="LanguageBox_SelectionChanged"/>
+            <TextBlock Text="{DynamicResource Lbl_ActivationHeading}"
+                       Style="{DynamicResource Text.H1}"
+                       Foreground="{DynamicResource Accent.Primary}"
+                       VerticalAlignment="Center"/>
+        </DockPanel>
+
+        <TextBlock Grid.Row="1" Margin="0,8,0,24"
+                   Text="{DynamicResource Lbl_ActivationInstruction}"
+                   Style="{DynamicResource Text.Body}"
+                   Foreground="{DynamicResource Text.Secondary}"/>
+
+        <StackPanel Grid.Row="2" Margin="0,0,0,16">
+            <TextBlock Text="{DynamicResource Lbl_MachineCodeLabel}"
+                       Style="{DynamicResource Text.Caption}"/>
+            <TextBox x:Name="MachineCodeBox"
+                     Style="{DynamicResource TextBox.Default}"
+                     IsReadOnly="True" FontFamily="Consolas" FontSize="16"
+                     FontWeight="Bold"/>
+            <Button Content="{DynamicResource Btn_Copy}" Click="Copy_Click"
+                    Style="{DynamicResource Button.Secondary}"
+                    HorizontalAlignment="Right"
+                    Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3">
+            <TextBlock Text="{DynamicResource Lbl_LicenseKeyLabel}"
+                       Style="{DynamicResource Text.Caption}"/>
+            <TextBox x:Name="KeyBox"
+                     Style="{DynamicResource TextBox.Default}"
+                     FontFamily="Consolas" FontSize="16"
+                     CharacterCasing="Upper"
+                     materialDesign:HintAssist.Hint="XXXX-XXXX-XXXX-XXXX"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="4" x:Name="StatusText" Margin="0,16"
+                   Style="{DynamicResource Text.Body}"
+                   Foreground="{DynamicResource Accent.Danger}"/>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="{DynamicResource Btn_Cancel}" Click="Cancel_Click"
+                    Style="{DynamicResource Button.Secondary}"
+                    Margin="0,0,8,0"/>
+            <Button Content="{DynamicResource Btn_Activate}" Click="Activate_Click"
+                    Style="{DynamicResource Button.Primary}"/>
+        </StackPanel>
+    </Grid>
+</Window>

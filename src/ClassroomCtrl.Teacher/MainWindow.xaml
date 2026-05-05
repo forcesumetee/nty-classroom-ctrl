@@ -1,0 +1,441 @@
+<Window x:Class="ClassroomCtrl.Teacher.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:vm="clr-namespace:ClassroomCtrl.Teacher.ViewModels"
+        xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+        Title="{DynamicResource Lbl_AppTitle}"
+        Height="800" Width="1280"
+        WindowStartupLocation="CenterScreen"
+        TextElement.Foreground="{DynamicResource Text.Primary}"
+        Background="{DynamicResource Surface.Background}"
+        FontFamily="Segoe UI">
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+    <Window.Resources>
+        <conv:HexToBrushConverter x:Key="HexToBrush"/>
+        <conv:VideoCodecLabelConverter x:Key="VideoCodecLabel"/>
+
+        <!-- Phase 8 (Bug C) — sidebar refactored from collapsible Expanders to a flat
+             always-visible layout. Earlier attempts to fix the missing-header bug via
+             TemplateBinding chains in nested ControlTemplates (Phase 6B.1, Phase 7) were
+             unreliable across theme swaps. A flat layout sidesteps the ControlTemplate
+             plumbing entirely; the customer feedback (Image 2 mock-up) also preferred
+             always-visible sections — collapsibility was never a requested feature. -->
+        <Style x:Key="SidebarSectionHeader" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="14,16,14,8"/>
+            <Setter Property="Opacity" Value="0.7"/>
+        </Style>
+
+        <Style x:Key="SidebarHint" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="14,6,14,2"/>
+        </Style>
+    </Window.Resources>
+    <DockPanel>
+        <!-- Phase 1.5: Live local-IP banner. Phase 14.4: Premium Dark migration. -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Surface.Elevated}" Height="56">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Image Source="{DynamicResource BrandLogoSource}" Height="28" Margin="0,0,12,0"
+                       VerticalAlignment="Center" Stretch="Uniform"/>
+                <TextBlock Text="🌐  " FontSize="16" Foreground="{DynamicResource Text.Secondary}" VerticalAlignment="Center"/>
+                <TextBlock Text="{DynamicResource Lbl_ConnectTo}"
+                           Style="{DynamicResource Text.Body}"
+                           Foreground="{DynamicResource Text.Secondary}"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding LocalIPDisplay}"
+                           Style="{DynamicResource Text.H3}"
+                           Foreground="{DynamicResource Text.Primary}"
+                           VerticalAlignment="Center" Margin="0,0,16,0"/>
+                <Button Content="{DynamicResource Btn_CopyIP}" Click="CopyIP_Click"
+                        Style="{DynamicResource Button.Secondary}"
+                        VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Phase 9.1: Demo banner (visible when a student demo is active) -->
+        <Border DockPanel.Dock="Top" Background="#7C3AED" Padding="12,6"
+                Visibility="{Binding DemoBannerVisibility}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Command="{Binding StopDemoCommand}"
+                        Content="{DynamicResource Btn_StopDemo}"
+                        Background="#1F2937" Foreground="White"
+                        BorderThickness="0" Padding="10,4" Cursor="Hand"/>
+                <TextBlock Text="{Binding DemoBannerText}"
+                           Foreground="White" FontSize="14" FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+
+    <Grid Background="{DynamicResource Surface.Background}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="300" MinWidth="280"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Phase 13 / UI redesign: sidebar wrapped in DockPanel — header pinned at top,
+             ScrollViewer below contains grouped Expanders so all 18+ commands stay reachable
+             at any window height. -->
+        <DockPanel Grid.Column="0" Background="{DynamicResource Surface.Elevated}" LastChildFill="True">
+            <StackPanel DockPanel.Dock="Top" Margin="14,14,14,8">
+                <TextBlock Text="{DynamicResource BrandTitleBar}"
+                           Style="{DynamicResource Text.H2}"
+                           TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding ConnectedCountText}"
+                           Style="{DynamicResource Text.Caption}"
+                           Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          PanningMode="VerticalOnly">
+                <StackPanel Margin="0,0,0,12">
+
+                    <!-- ── Class Control ───────────────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="🔒  CLASS CONTROL"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{Binding LockButtonText}" Command="{Binding LockAllCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_ApplyPolicy}" Command="{Binding ApplyPolicyCommand}"/>
+                    </StackPanel>
+
+                    <!-- ── Screen Sharing ──────────────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="🖥️  SCREEN SHARING"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{Binding ShareScreenButtonText}" Command="{Binding ShareScreenCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_ScreenPen}" Command="{Binding OpenScreenPenCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{Binding CameraButtonText}" Command="{Binding ToggleCameraCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_NetMovie}" Command="{Binding OpenNetMovieCommand}"/>
+                        <TextBlock Style="{StaticResource SidebarHint}" Text="{DynamicResource Lbl_VideoCodec}"/>
+                        <ComboBox ItemsSource="{Binding CodecOptions}"
+                                  SelectedItem="{Binding SelectedCodec, Mode=TwoWay}"
+                                  Margin="10,0,10,4">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource VideoCodecLabel}}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Style="{StaticResource SidebarHint}" Text="{Binding CurrentBitrateText}"/>
+                    </StackPanel>
+
+                    <!-- ── Audio ────────────────────────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="🎤  AUDIO"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{Binding MicButtonText}" Command="{Binding ToggleMicCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{Binding SystemAudioButtonText}" Command="{Binding ToggleSystemAudioCommand}"/>
+                        <Button Style="{DynamicResource Button.Danger}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_MuteAllStudents}" Command="{Binding MuteAllStudentsCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_MicMonitor}" Command="{Binding OpenMicMonitorCommand}"/>
+                        <TextBlock Style="{StaticResource SidebarHint}" Text="{DynamicResource Lbl_MasterVolume}"/>
+                        <Slider Minimum="0" Maximum="2" Value="{Binding MasterVolume, Mode=TwoWay}"
+                                TickFrequency="0.25" IsSnapToTickEnabled="False"
+                                Margin="14,0,14,4"
+                                ToolTip="{DynamicResource Lbl_MasterVolume}"/>
+                    </StackPanel>
+
+                    <!-- ── Files & Recording ───────────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="📁  FILES &amp; RECORDING"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_SendFile}" Command="{Binding SendFileCommand}"/>
+                        <Button Style="{DynamicResource Button.Danger}" Margin="10,0,10,8"
+                                Content="{Binding RecordingButtonText}" Command="{Binding StartRecordingCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_OpenRecordingsFolder}" Command="{Binding OpenRecordingsFolderCommand}"/>
+                    </StackPanel>
+
+                    <!-- ── Breakout Rooms ──────────────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="👥  BREAKOUT ROOMS"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_BreakoutRooms}" Command="{Binding OpenBreakoutCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_AutoBalance}" Command="{Binding AutoBalanceCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_RenameRooms}" Command="{Binding RenameRoomsCommand}"/>
+                        <Button Style="{DynamicResource Button.Danger}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_EndBreakout}" Command="{Binding EndBreakoutCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_MultiRoom}" Command="{Binding OpenMultiRoomCommand}"/>
+                    </StackPanel>
+
+                    <!-- ── Phase 13 Exam System ─────────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="📝  EXAM SYSTEM"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_QuizManager}" Command="{Binding OpenQuizManagerCommand}"/>
+                    </StackPanel>
+
+                    <!-- ── Phase 9.3 Class Roster ───────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="📚  ROSTER"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_ClassRosters}" Command="{Binding OpenClassRosterCommand}"/>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_MarkAttendance}" Command="{Binding MarkAttendanceCommand}"/>
+                        <TextBlock Style="{StaticResource SidebarHint}"
+                                   Text="{Binding ActiveClassName}"
+                                   Visibility="{Binding ActiveClassVisibility}"/>
+                    </StackPanel>
+
+                    <!-- ── Power (destructive) ──────────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="⚡  POWER"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Primary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_LogoffAll}" Command="{Binding LogoffAllCommand}"/>
+                        <Button Style="{DynamicResource Button.Danger}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_RestartAll}" Command="{Binding RestartAllCommand}"/>
+                        <Button Style="{DynamicResource Button.Danger}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_ShutdownAll}" Command="{Binding ShutdownAllCommand}"/>
+                    </StackPanel>
+
+                    <!-- ── Settings ─────────────────────────────────────── -->
+                    <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="⚙️  SETTINGS"/>
+                    <StackPanel>
+                        <Button Style="{DynamicResource Button.Secondary}" Margin="10,0,10,8"
+                                Content="{Binding SoundsButtonText}" Command="{Binding ToggleSoundsCommand}"/>
+                        <Button Style="{DynamicResource Button.Secondary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_Language}" Command="{Binding OpenLanguageCommand}"/>
+                        <Button Style="{DynamicResource Button.Secondary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_BrandingSettings}" Command="{Binding OpenBrandingSettingsCommand}"/>
+                        <Button Style="{DynamicResource Button.Secondary}" Margin="10,0,10,8"
+                                Content="{DynamicResource Btn_AdminPasswordSettings}"
+                                Command="{Binding OpenAdminPasswordSettingsCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+
+        <ItemsControl x:Name="StudentList" Grid.Column="1" ItemsSource="{Binding Students}" Margin="16">
+            <ItemsControl.Template>
+                <ControlTemplate TargetType="ItemsControl">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsPresenter/>
+                    </ScrollViewer>
+                </ControlTemplate>
+            </ItemsControl.Template>
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <!-- WrapPanel with explicit ItemWidth/ItemHeight: cards keep a stable size
+                         even when 0–3 status badges stack on top. Phase 6B.2 trims 180×240→160×200
+                         so a typical 6-tile row fits without horizontal pressure on the chat panel. -->
+                    <WrapPanel ItemWidth="160" ItemHeight="200"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <materialDesign:Card Margin="4" Padding="0" Width="160" Height="192">
+                        <Border Background="Transparent"
+                                PreviewMouseRightButtonDown="StudentTile_RightClick">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="{DynamicResource Menu_ViewStudentScreen}"
+                                              Command="{Binding DataContext.ViewStudentScreenCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <Separator/>
+                                    <MenuItem Header="{DynamicResource Menu_LockScreen}"
+                                              Command="{Binding DataContext.LockOneCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="{DynamicResource Menu_UnlockScreen}"
+                                              Command="{Binding DataContext.UnlockOneCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <Separator/>
+                                    <MenuItem Header="{DynamicResource Menu_ApplyPolicyToStudent}"
+                                              Command="{Binding DataContext.ApplyPolicyToStudentCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="{DynamicResource Menu_RevertPolicyForStudent}"
+                                              Command="{Binding DataContext.RevertPolicyForStudentCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <Separator/>
+                                    <MenuItem Header="{DynamicResource Menu_SendDM}"
+                                              Command="{Binding DataContext.SendDirectMessageCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <Separator/>
+                                    <MenuItem Header="{DynamicResource Menu_SetAsHost}"
+                                              Command="{Binding DataContext.SetAsHostCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="{DynamicResource Menu_RemoveHost}"
+                                              Command="{Binding DataContext.RemoveHostCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <Separator/>
+                                    <MenuItem Header="{DynamicResource Menu_StartDemo}"
+                                              Command="{Binding DataContext.StartDemoCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="{DynamicResource Menu_StopDemo}"
+                                              Command="{Binding DataContext.StopDemoCommand, Source={x:Reference StudentList}}"/>
+                                    <Separator/>
+                                    <!-- Recording controls now live in the StudentScreenWindow Control Panel. -->
+
+                                    <MenuItem Header="{DynamicResource Menu_AssignToRoom}"
+                                              ItemsSource="{Binding DataContext.Rooms, Source={x:Reference StudentList}}">
+                                        <MenuItem.ItemContainerStyle>
+                                            <Style TargetType="MenuItem">
+                                                <Setter Property="Header" Value="{Binding RoomName}"/>
+                                                <Setter Property="Command" Value="{Binding DataContext.AssignToRoomCommand, Source={x:Reference StudentList}}"/>
+                                                <Setter Property="CommandParameter" Value="{Binding}"/>
+                                            </Style>
+                                        </MenuItem.ItemContainerStyle>
+                                    </MenuItem>
+                                    <MenuItem Header="{DynamicResource Menu_RemoveFromRoom}"
+                                              Command="{Binding DataContext.RemoveFromRoomCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <Separator/>
+                                    <MenuItem Header="{DynamicResource Menu_Logoff}"
+                                              Command="{Binding DataContext.LogoffOneCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="{DynamicResource Menu_Restart}"
+                                              Command="{Binding DataContext.RestartOneCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="{DynamicResource Menu_Shutdown}"
+                                              Command="{Binding DataContext.ShutdownOneCommand, Source={x:Reference StudentList}}"
+                                              CommandParameter="{Binding}"/>
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <DockPanel>
+                                <Border DockPanel.Dock="Top"
+                                        Visibility="{Binding HandRaisedVisibility}"
+                                        Background="#F59E0B" Padding="4">
+                                    <TextBlock Text="{DynamicResource Lbl_HandRaised}" Foreground="White"
+                                               FontWeight="Bold" FontSize="11"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
+                                <Border DockPanel.Dock="Top"
+                                        Visibility="{Binding PerStudentPolicyBadgeVisibility}"
+                                        Background="#7C3AED" Padding="4">
+                                    <TextBlock Text="{DynamicResource Lbl_PolicySet}" Foreground="White"
+                                               FontWeight="Bold" FontSize="10"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
+                                <Border DockPanel.Dock="Top"
+                                        Visibility="{Binding RoomBadgeVisibility}"
+                                        Background="{Binding RoomBadgeColorHex, Converter={StaticResource HexToBrush}}"
+                                        Padding="4">
+                                    <TextBlock Text="{Binding RoomName}" Foreground="White"
+                                               FontWeight="Bold" FontSize="10"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Margin="8">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding MachineName}" FontSize="10" Foreground="Gray"/>
+                                    <Border Margin="0,4,0,0" Background="#E5E7EB" Height="80">
+                                        <Grid>
+                                            <Image Stretch="Uniform" Source="{Binding ThumbnailImage}"/>
+                                            <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                    Margin="4" Padding="4,2" CornerRadius="3"
+                                                    Background="#10B981"
+                                                    Visibility="{Binding TalkingBadgeVisibility}"
+                                                    ToolTip="{DynamicResource Lbl_Talking}">
+                                                <TextBlock Text="🎤" Foreground="White" FontSize="11"/>
+                                            </Border>
+                                            <!-- Phase 8.5: 👑 Host badge (top-center) -->
+                                            <Border HorizontalAlignment="Center" VerticalAlignment="Top"
+                                                    Margin="4" Padding="6,2" CornerRadius="3"
+                                                    Background="#F59E0B"
+                                                    Visibility="{Binding HostBadgeVisibility}"
+                                                    ToolTip="{DynamicResource Lbl_Host}">
+                                                <TextBlock Text="👑 HOST" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                            </Border>
+                                            <!-- Phase 5b: 🔴 REC button (bottom-right). Visible always, dimmed when no
+                                                 StudentScreenWindow is open for this student. Toggles Start/Stop on click. -->
+                                            <Button HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                    Margin="4" Width="48" Height="22"
+                                                    Background="{Binding RecButtonColorHex, Converter={StaticResource HexToBrush}}"
+                                                    Foreground="White" BorderBrush="White" BorderThickness="1"
+                                                    FontSize="9" FontWeight="Bold"
+                                                    Content="{Binding RecButtonText}"
+                                                    Opacity="{Binding RecOpacity}"
+                                                    IsEnabled="{Binding CanRecord}"
+                                                    Cursor="Hand" Padding="0"
+                                                    ToolTip="{DynamicResource Tooltip_RecButton}"
+                                                    Command="{Binding DataContext.ToggleStudentRecordingCommand, Source={x:Reference StudentList}}"
+                                                    CommandParameter="{Binding}"
+                                                    Panel.ZIndex="100"/>
+                                            <Border HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                    Margin="4" Width="10" Height="10" CornerRadius="5"
+                                                    Background="{Binding QualityDotColorHex, Converter={StaticResource HexToBrush}}"
+                                                    ToolTip="{DynamicResource Lbl_QualityScore}"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </materialDesign:Card>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <DockPanel Grid.Column="2" Background="{DynamicResource Surface.Elevated}">
+            <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Hdr_ClassChat}"
+                       Style="{DynamicResource Text.H3}"
+                       Margin="16,16,16,8"/>
+            <Grid DockPanel.Dock="Bottom" Margin="12,8,12,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Style="{DynamicResource TextBox.Default}"
+                         Text="{Binding ChatInputText, UpdateSourceTrigger=PropertyChanged}"/>
+                <Button Grid.Column="1" Content="{DynamicResource Btn_Send}"
+                        Style="{DynamicResource Button.Primary}"
+                        Command="{Binding SendChatCommand}" Margin="8,0,0,0"/>
+            </Grid>
+            <!-- Chat history. Backing model is ObservableCollection<string> so we can't
+                 break out sender/timestamp into fields without changing the VM — bubble
+                 the whole message in a card instead. -->
+            <ListBox Style="{DynamicResource ListBox.Default}"
+                     ItemsSource="{Binding ChatMessages}"
+                     HorizontalContentAlignment="Stretch"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     Margin="8,0">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,0,4" Padding="12,8"
+                                Background="{DynamicResource Surface.Overlay}"
+                                CornerRadius="{DynamicResource CornerRadius.SM}">
+                            <TextBlock Text="{Binding}"
+                                       Style="{DynamicResource Text.Body}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+
+        <!-- Phase 5a: Recording indicator overlay (top-right, spans columns) -->
+        <Border Grid.Column="0" Grid.ColumnSpan="3"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                Margin="0,12,340,0"
+                Background="#DC2626" Padding="12,6" CornerRadius="4"
+                Visibility="{Binding RecordingIndicatorVisibility}"
+                IsHitTestVisible="False">
+            <TextBlock Text="{Binding RecordingElapsedText}" Foreground="White"
+                       FontWeight="Bold" FontSize="13"/>
+        </Border>
+
+        <!-- Copyright (bottom-center, span all columns).
+             Aligned center so it sits over the StudentList area, not over the chat Send button. -->
+        <TextBlock Grid.Column="0" Grid.ColumnSpan="3"
+                   Text="© NTY MULTIMEDIA CO.,LTD"
+                   Style="{DynamicResource Text.Footer}"
+                   HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                   Margin="0,0,0,8"
+                   IsHitTestVisible="False"/>
+    </Grid>
+    </DockPanel>
+</Window>

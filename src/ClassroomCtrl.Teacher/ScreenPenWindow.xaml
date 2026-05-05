@@ -1,0 +1,75 @@
+<Window x:Class="ClassroomCtrl.Teacher.ScreenPenWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Screen Pen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="#01000000"
+        WindowState="Maximized"
+        ResizeMode="NoResize"
+        Topmost="True"
+        ShowInTaskbar="False"
+        KeyDown="Window_KeyDown">
+    <Grid>
+        <!-- Drawing surface — InkCanvas captures stylus / mouse strokes -->
+        <InkCanvas x:Name="InkSurface"
+                   Background="Transparent"
+                   EditingMode="Ink"
+                   StrokeCollected="InkSurface_StrokeCollected"/>
+
+        <!-- Floating tool palette: themed surface, but color swatches keep their literal colors
+             since each one is a semantic pick that the user is selecting. -->
+        <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,40"
+                Background="{DynamicResource Surface.Elevated}"
+                CornerRadius="{DynamicResource CornerRadius.LG}"
+                Padding="10"
+                BorderBrush="{DynamicResource Surface.Border}" BorderThickness="1"
+                Effect="{DynamicResource DropShadow.Floating}">
+            <StackPanel Orientation="Horizontal">
+                <!-- Color swatches (literal — user is picking that color) -->
+                <Button Click="Color_Click" Tag="#FFDC2626" Background="#DC2626" Width="32" Height="32" Margin="2" BorderThickness="0" Cursor="Hand"/>
+                <Button Click="Color_Click" Tag="#FF10B981" Background="#10B981" Width="32" Height="32" Margin="2" BorderThickness="0" Cursor="Hand"/>
+                <Button Click="Color_Click" Tag="#FF3B82F6" Background="#3B82F6" Width="32" Height="32" Margin="2" BorderThickness="0" Cursor="Hand"/>
+                <Button Click="Color_Click" Tag="#FFFBBF24" Background="#FBBF24" Width="32" Height="32" Margin="2" BorderThickness="0" Cursor="Hand"/>
+                <Button Click="Color_Click" Tag="#FFFFFFFF" Background="White" Width="32" Height="32" Margin="2" BorderThickness="0" Cursor="Hand"/>
+                <Button Click="Color_Click" Tag="#FF000000" Background="Black" Width="32" Height="32" Margin="2" BorderThickness="1" BorderBrush="{DynamicResource Surface.Border}" Cursor="Hand"/>
+
+                <Border Width="1" Background="{DynamicResource Surface.Border}" Margin="6,4"/>
+
+                <!-- Thickness -->
+                <Button Click="Thickness_Click" Tag="3"  Content="●"
+                        Style="{DynamicResource Button.Icon}"
+                        Width="32" Height="32" Margin="2" FontSize="10"/>
+                <Button Click="Thickness_Click" Tag="6"  Content="●"
+                        Style="{DynamicResource Button.Icon}"
+                        Width="32" Height="32" Margin="2" FontSize="16"/>
+                <Button Click="Thickness_Click" Tag="12" Content="●"
+                        Style="{DynamicResource Button.Icon}"
+                        Width="32" Height="32" Margin="2" FontSize="22"/>
+
+                <Border Width="1" Background="{DynamicResource Surface.Border}" Margin="6,4"/>
+
+                <!-- Tools -->
+                <Button x:Name="EraserBtn" Click="Eraser_Click" Content="🧹"
+                        Style="{DynamicResource Button.Icon}"
+                        Width="40" Height="32" Margin="2"
+                        ToolTip="Eraser"/>
+                <Button Click="Undo_Click" Content="↩️"
+                        Style="{DynamicResource Button.Icon}"
+                        Width="40" Height="32" Margin="2"
+                        ToolTip="Undo"/>
+                <Button Click="Clear_Click" Content="🗑️"
+                        Style="{DynamicResource Button.Icon}"
+                        Width="40" Height="32" Margin="2"
+                        ToolTip="Clear all"/>
+
+                <Border Width="1" Background="{DynamicResource Surface.Border}" Margin="6,4"/>
+
+                <Button Click="Close_Click" Content="✕ ESC"
+                        Style="{DynamicResource Button.Danger}"
+                        Padding="10,4" Margin="2"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

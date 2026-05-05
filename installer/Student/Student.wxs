@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX v4 Student installer skeleton.
+  Installs the Service (LocalSystem, auto-start) + Agent + Watchdog.
+  Build: wix build Student.wxs -o Student.msi
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Classroom Control — Student" Manufacturer="Your Company"
+           Version="1.0.0" UpgradeCode="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+           Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="Main" Title="Classroom Student Endpoint" Level="1">
+      <ComponentGroupRef Id="StudentFiles" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="ClassroomCtrl">
+        <!-- TODO: file components -->
+      </Directory>
+    </StandardDirectory>
+
+    <ComponentGroup Id="StudentFiles" Directory="INSTALLFOLDER">
+      <!-- Service component -->
+      <Component Id="ClassroomServiceExe" Guid="*">
+        <!-- TODO: <File Source="$(var.PublishDir)\ClassroomCtrl.Student.Service.exe" KeyPath="yes" /> -->
+
+        <!-- Install + configure the Windows Service (Spec §7.1) -->
+        <ServiceInstall Id="ClassroomService" Name="ClassroomService"
+                        DisplayName="Classroom Control endpoint service"
+                        Description="Provides classroom-management features for school computer-lab supervision."
+                        Start="auto" Type="ownProcess" ErrorControl="normal"
+                        Account="LocalSystem">
+          <!-- Recovery: restart on failure -->
+          <ServiceConfig FirstFailureActionType="restart"
+                         SecondFailureActionType="restart"
+                         ThirdFailureActionType="restart"
+                         RestartServiceDelayInSeconds="5" />
+        </ServiceInstall>
+        <ServiceControl Id="StartClassroomService" Name="ClassroomService"
+                        Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+
+      <!-- TODO: components for Agent.exe, Watchdog.exe, dependencies -->
+    </ComponentGroup>
+
+    <!-- Firewall rules -->
+    <!-- TODO: TCP 7777, UDP 7778-7799 -->
+
+    <!-- Custom action: ask for admin uninstall password -->
+    <!-- TODO: store hashed password in HKLM\Software\ClassroomCtrl, gate uninstall -->
+  </Package>
+</Wix>

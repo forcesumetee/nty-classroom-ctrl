@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>ClassroomCtrl.Student.Agent</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- DPI awareness: Windows Forms requires the project property, not manifest tags (WFO0003). -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ClassroomCtrl.Shared\ClassroomCtrl.Shared.csproj" />
+    <ProjectReference Include="..\ClassroomCtrl.Networking\ClassroomCtrl.Networking.csproj" />
+    <ProjectReference Include="..\ClassroomCtrl.Licensing\ClassroomCtrl.Licensing.csproj" />
+    <ProjectReference Include="..\ClassroomCtrl.Exam.Shared\ClassroomCtrl.Exam.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MaterialDesignThemes" Version="5.0.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.0.131" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,110 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ControlTemplate x:Key="Button.RoundedTemplate" TargetType="ButtonBase">
+        <Border x:Name="Bd"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="6"
+                Padding="{TemplateBinding Padding}"
+                SnapsToDevicePixels="True">
+            <ContentPresenter HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              RecognizesAccessKey="True"
+                              SnapsToDevicePixels="True"
+                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style x:Key="Button.Base" TargetType="Button">
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="MinHeight" Value="40"/>
+        <Setter Property="Padding" Value="20,10"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template" Value="{StaticResource Button.RoundedTemplate}"/>
+    </Style>
+
+    <Style x:Key="Button.Primary" TargetType="Button" BasedOn="{StaticResource Button.Base}">
+        <Setter Property="Background" Value="{DynamicResource Accent.Primary}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text.OnAccent}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Accent.PrimaryHover}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Accent.PrimaryPressed}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Button.Secondary" TargetType="Button" BasedOn="{StaticResource Button.Base}">
+        <Setter Property="Background" Value="{DynamicResource Surface.Overlay}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface.Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Surface.Border}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Button.Danger" TargetType="Button" BasedOn="{StaticResource Button.Base}">
+        <Setter Property="Background" Value="{DynamicResource Accent.Danger}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text.OnAccent}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Accent.DangerHover}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Button.Success" TargetType="Button" BasedOn="{StaticResource Button.Base}">
+        <Setter Property="Background" Value="{DynamicResource Accent.Success}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text.OnAccent}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Accent.SuccessHover}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Button.Ghost" TargetType="Button" BasedOn="{StaticResource Button.Base}">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+        <Setter Property="Padding" Value="16,8"/>
+        <Setter Property="MinHeight" Value="36"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Surface.Overlay}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Button.Icon" TargetType="Button" BasedOn="{StaticResource Button.Base}">
+        <Setter Property="Width" Value="36"/>
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="MinHeight" Value="36"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Surface.Overlay}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>
