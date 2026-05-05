@@ -1,19 +1,20 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- All sizes use Segoe UI (Windows native — no external font shipped). -->
+    <!-- All sizes use Segoe UI (Windows native — no external font shipped).
+         Phase UI-Rewrite (Phase 1): tightened scale to match mockup; added Small + SectionHeader. -->
 
     <Style x:Key="Text.H1" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="24"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="22"/>
+        <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
     <Style x:Key="Text.H2" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="18"/>
+        <Setter Property="FontSize" Value="16"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
@@ -22,7 +23,7 @@
     <Style x:Key="Text.H3" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
@@ -32,6 +33,14 @@
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontWeight" Value="Regular"/>
         <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <Style x:Key="Text.Small" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Regular"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
@@ -49,6 +58,15 @@
         <Setter Property="FontWeight" Value="Regular"/>
         <Setter Property="Foreground" Value="{DynamicResource Text.Tertiary}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <!-- Sidebar section heading (uppercase mini, used in MainWindow sidebar) -->
+    <Style x:Key="Text.SectionHeader" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text.Muted}"/>
+        <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
     </Style>
 
 </ResourceDictionary>

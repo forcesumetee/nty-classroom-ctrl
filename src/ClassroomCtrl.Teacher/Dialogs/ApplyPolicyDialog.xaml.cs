@@ -34,6 +34,12 @@ public partial class ApplyPolicyDialog : Window
             PrintCheck.IsChecked = InitialBlockPrinting;
             AppsList.Text = string.Join(", ", InitialBlockedProcessNames);
             HostsList.Text = string.Join(", ", InitialBlockedHostnames);
+            // Phase 1.1 fix-up — also restore the master toggle for Apps/Hosts. Apply_Click reads
+            // these as the gate for whether to send the lists, so without this on reopen the user
+            // would see the list text but a CLEARED checkbox, and clicking Apply again would broadcast
+            // empty lists (effectively unblocking everything previously locked).
+            AppsCheck.IsChecked = InitialBlockedProcessNames.Count > 0;
+            HostsCheck.IsChecked = InitialBlockedHostnames.Count > 0;
         };
     }
 

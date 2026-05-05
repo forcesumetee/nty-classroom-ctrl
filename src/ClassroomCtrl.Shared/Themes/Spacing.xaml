@@ -11,8 +11,13 @@
 
     <!-- ─────────── Corner radius scale ─────────── -->
     <CornerRadius x:Key="CornerRadius.SM">6</CornerRadius>
-    <CornerRadius x:Key="CornerRadius.MD">10</CornerRadius>
-    <CornerRadius x:Key="CornerRadius.LG">14</CornerRadius>
+    <CornerRadius x:Key="CornerRadius.MD">8</CornerRadius>
+    <CornerRadius x:Key="CornerRadius.LG">12</CornerRadius>
     <CornerRadius x:Key="CornerRadius.Pill">999</CornerRadius>
+
+    <!-- ─────────── Layout tokens (mockup) ─────────── -->
+    <sys:Double x:Key="Layout.SidebarWidth">240</sys:Double>
+    <sys:Double x:Key="Layout.RightRailWidth">320</sys:Double>
+    <sys:Double x:Key="Layout.HeaderHeight">56</sys:Double>
 
 </ResourceDictionary>
