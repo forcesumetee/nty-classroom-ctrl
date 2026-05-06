@@ -1,7 +1,9 @@
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Student.Agent.Dialogs;
+using ClassroomCtrl.Student.Agent.Models;
 using ClassroomCtrl.Student.Agent.Setup;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
@@ -48,9 +50,14 @@ public partial class MainWindow : Window
     private MoviePlayerWindow? _movieWindow;
     private RemoteControlBanner? _remoteBanner;
 
-    // Phase 9 Section B — unread system-message counter for the header Bell.
-    // Incremented whenever any new entry lands in ChatList and the window is
-    // hidden (tray-only) or unfocused; reset on Bell click or window activate.
+    // Phase 9 Section B / Phase 9.1 Section B+C — Bell + Notifications.
+    // The bell tracks unread NOTIFICATIONS (system events), not chat — chat
+    // and system events are now separated: chat lives in the body ChatList,
+    // system events route through Notifications and surface via the popup
+    // anchored to the bell.  Unread counter only bumps when the window is
+    // hidden / unfocused (so users actively reading don't see a counter for
+    // events they just saw); resets on bell click + on window activate.
+    public ObservableCollection<StudentNotification> Notifications { get; } = new();
     private int _unreadBellCount;
 
     public MainWindow()
@@ -69,21 +76,50 @@ public partial class MainWindow : Window
         Loc.LanguageChanged += UpdateMicButtonText;
         UpdateMicButtonText();
 
-        // Phase 9 Section B — wire Bell badge to ChatList growth.  Ignore
-        // additions while the window is visible+active so the user doesn't
-        // see a counter for messages they're already reading.
-        ((System.Collections.Specialized.INotifyCollectionChanged)ChatList.Items)
-            .CollectionChanged += OnChatListChanged;
+        // Phase 9.1 Section B — bind ItemsControl to Notifications, watch for
+        // additions to bump the bell badge.  Empty-state placeholder visibility
+        // also tracks the collection so the popup never shows a blank scroller.
+        NotificationsItems.ItemsSource = Notifications;
+        Notifications.CollectionChanged += OnNotificationsChanged;
         Activated += (_, _) => ResetBellBadge();
+        UpdateNoNotificationsPlaceholder();
     }
 
-    private void OnChatListChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    /// <summary>Phase 9.1 Section C — single entry point for system events.
+    /// Routes to the bell-popup Notifications list instead of the body chat.
+    /// Newest-first (Insert at 0); caps the list at 50 to avoid unbounded
+    /// growth across long sessions.</summary>
+    private void AddSystemNotification(string message, string icon = "ℹ️")
     {
+        Dispatcher.Invoke(() =>
+        {
+            Notifications.Insert(0, new StudentNotification
+            {
+                Message = message,
+                Icon = icon,
+                Timestamp = System.DateTime.Now,
+            });
+            while (Notifications.Count > 50) Notifications.RemoveAt(Notifications.Count - 1);
+        });
+    }
+
+    private void OnNotificationsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        UpdateNoNotificationsPlaceholder();
         if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add) return;
-        // Don't bump the bell while the user is actively looking at the chat.
+        // Don't bump the bell while the user is actively looking at the window.
         if (IsActive && IsVisible) return;
         _unreadBellCount += e.NewItems?.Count ?? 0;
         UpdateBellBadge();
+    }
+
+    private void UpdateNoNotificationsPlaceholder()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            NoNotificationsText.Visibility =
+                Notifications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        });
     }
 
     private void UpdateBellBadge()
@@ -109,10 +145,10 @@ public partial class MainWindow : Window
 
     private void Bell_Click(object sender, RoutedEventArgs e)
     {
-        // For now, clicking the bell just acknowledges all unread.  A future
-        // phase can add a popup list of recent system messages here.  The
-        // chat list itself is always visible in the body so the user has
-        // already-seen-it parity once they look at the window.
+        // Phase 9.1 Section B — toggle popup + clear unread.  StaysOpen=False
+        // on the Popup also handles outside-clicks, so manual close-on-second-
+        // click is purely a convenience.
+        NotificationsPopup.IsOpen = !NotificationsPopup.IsOpen;
         ResetBellBadge();
     }
 
@@ -181,12 +217,13 @@ public partial class MainWindow : Window
                                   && _myEndpointId.HasValue
                                   && assign.HostStudentId.Value == _myEndpointId.Value;
 
+                    AddSystemNotification(
+                        newRoom.HasValue
+                            ? Loc.Format("Chat_MovedToRoom", assign.RoomName)
+                            : Loc.Get("Chat_ReturnedToMain"),
+                        "👥");
                     Dispatcher.Invoke(() =>
                     {
-                        ChatList.Items.Add(newRoom.HasValue
-                            ? Loc.Format("Chat_MovedToRoom", assign.RoomName)
-                            : Loc.Get("Chat_ReturnedToMain"));
-
                         if (iAmHost)
                         {
                             if (_hostToolbar == null)
@@ -195,7 +232,7 @@ public partial class MainWindow : Window
                                 _hostToolbar.Show();
                                 App.Tray?.ShowBalloon(Loc.Get("Lbl_AppName"),
                                     Loc.Format("Toast_YouAreHost", assign.RoomName));
-                                ChatList.Items.Add(Loc.Format("Toast_YouAreHost", assign.RoomName));
+                                AddSystemNotification(Loc.Format("Toast_YouAreHost", assign.RoomName), "👑");
                             }
                         }
                         else
@@ -305,7 +342,7 @@ public partial class MainWindow : Window
                         if (_myEndpointId.HasValue && _myEndpointId.Value == ds.SourceStudentId)
                         {
                             App.Tray?.ShowBalloon(Loc.Get("Lbl_AppName"), Loc.Get("Toast_YouAreDemoing"));
-                            ChatList.Items.Add(Loc.Get("Toast_YouAreDemoing"));
+                            AddSystemNotification(Loc.Get("Toast_YouAreDemoing"), "🎤");
                             return;
                         }
                         if (_demoPeerWindow == null)
@@ -313,7 +350,7 @@ public partial class MainWindow : Window
                             _demoPeerWindow = new PeerScreenViewWindow(ds.SourceName);
                             _demoPeerWindow.Closed += (_, _) => _demoPeerWindow = null;
                             _demoPeerWindow.Show();
-                            ChatList.Items.Add(Loc.Format("Lbl_DemoActive", ds.SourceName));
+                            AddSystemNotification(Loc.Format("Lbl_DemoActive", ds.SourceName), "🎤");
                         }
                     });
                 }
@@ -552,7 +589,7 @@ public partial class MainWindow : Window
                         {
                             _studentBroadcaster = new StudentBroadcaster { Codec = codec };
                             _studentBroadcaster.Start();
-                            ChatList.Items.Add(Loc.Get("Chat_TeacherViewingScreen"));
+                            AddSystemNotification(Loc.Get("Chat_TeacherViewingScreen"), "👁");
                         }
                     });
                 }
@@ -567,7 +604,7 @@ public partial class MainWindow : Window
                         _studentBroadcaster.Stop();
                         _studentBroadcaster.Dispose();
                         _studentBroadcaster = null;
-                        ChatList.Items.Add(Loc.Get("Chat_TeacherStoppedViewing"));
+                        AddSystemNotification(Loc.Get("Chat_TeacherStoppedViewing"), "👁");
                     }
                 });
                 break;
@@ -579,7 +616,7 @@ public partial class MainWindow : Window
                 Dispatcher.Invoke(() =>
                 {
                     _audioPlayer ??= new AudioPlayer();
-                    ChatList.Items.Add(Loc.Get("Chat_AudioStarted"));
+                    AddSystemNotification(Loc.Get("Chat_AudioStarted"), "🔊");
                 });
                 break;
 
@@ -601,7 +638,7 @@ public partial class MainWindow : Window
                     _audioPlayer?.Stop();
                     _audioPlayer?.Dispose();
                     _audioPlayer = null;
-                    ChatList.Items.Add(Loc.Get("Chat_AudioStopped"));
+                    AddSystemNotification(Loc.Get("Chat_AudioStopped"), "🔇");
                 });
                 break;
 
@@ -656,7 +693,7 @@ public partial class MainWindow : Window
                         _micOn = false;
                         UpdateMicButtonText();
                     }
-                    ChatList.Items.Add(Loc.Get("Chat_TeacherForcedMute"));
+                    AddSystemNotification(Loc.Get("Chat_TeacherForcedMute"), "🔇");
                 });
                 break;
         }
@@ -758,7 +795,7 @@ public partial class MainWindow : Window
             await App.Ipc.SendAsync(env);
         }
 
-        ChatList.Items.Add(Loc.Get(_handRaised ? "Chat_YouRaisedHand" : "Chat_YouLoweredHand"));
+        AddSystemNotification(Loc.Get(_handRaised ? "Chat_YouRaisedHand" : "Chat_YouLoweredHand"), "✋");
     }
 
     private void ToggleMic_Click(object sender, RoutedEventArgs e) => ToggleMicrophone();
@@ -777,19 +814,19 @@ public partial class MainWindow : Window
             _studentAudio?.Dispose();
             _studentAudio = null;
             _micOn = false;
-            ChatList.Items.Add(Loc.Get("Chat_StudentMicOff"));
+            AddSystemNotification(Loc.Get("Chat_StudentMicOff"), "🔇");
         }
         else
         {
             if (!StudentAudioBroadcaster.HasMicrophone())
             {
-                ChatList.Items.Add(Loc.Get("Err_NoMicrophone"));
+                AddSystemNotification(Loc.Get("Err_NoMicrophone"), "⚠️");
                 return;
             }
             _studentAudio = new StudentAudioBroadcaster();
             _studentAudio.Start();
             _micOn = true;
-            ChatList.Items.Add(Loc.Get("Chat_StudentMicOn"));
+            AddSystemNotification(Loc.Get("Chat_StudentMicOn"), "🎤");
         }
         UpdateMicButtonText();
         MicStateChanged?.Invoke(this, _micOn);
@@ -809,29 +846,16 @@ public partial class MainWindow : Window
         SendChat();
     }
 
-    // Phase 9.7: Voice Chat — toggle membership in breakout-room voice channel.
-    private bool _voiceJoined;
-
-    private async void ToggleVoice_Click(object sender, RoutedEventArgs e)
-    {
-        if (App.Ipc == null) return;
-        _voiceJoined = !_voiceJoined;
-
-        var env = Envelope.Create(
-            _voiceJoined ? MessageType.RoomVoiceJoin : MessageType.RoomVoiceLeave,
-            System.Array.Empty<byte>(), System.Guid.Empty);
-        await App.Ipc.SendAsync(env);
-
-        if (_voiceJoined && _studentAudio == null && StudentAudioBroadcaster.HasMicrophone())
-        {
-            _studentAudio = new StudentAudioBroadcaster();
-            _studentAudio.Start();
-            _micOn = true;
-            UpdateMicButtonText();
-        }
-        VoiceButton.Content = Loc.Get(_voiceJoined ? "Btn_LeaveVoice" : "Btn_JoinVoice");
-        ChatList.Items.Add(Loc.Get(_voiceJoined ? "Chat_VoiceJoined" : "Chat_VoiceLeft"));
-    }
+    // Phase 9.1 Section D — Voice button removed.  The 3-button action grid
+    // collapsed to 2 columns (Raise Hand + Mic).  The breakout-room voice
+    // channel was always coupled to the mic broadcaster anyway (Phase 9 C
+    // analysis: ToggleVoice auto-started _studentAudio if not running), so
+    // the simplification doesn't lose talkback in breakout rooms — the same
+    // mic stream reaches peers in the same room.  RoomVoiceJoin /
+    // RoomVoiceLeave protocol messages remain in MessageType.cs but are no
+    // longer driven from the Agent UI; if a future phase wants per-student
+    // breakout voice opt-in, a different mechanism (auto-on-room-assign or
+    // breakout-toolbar) can re-introduce them.
 
     // Phase 8 Section A — Settings_Click removed at customer request.  The
     // first-run TeacherIPDialog is still launched from App startup when no

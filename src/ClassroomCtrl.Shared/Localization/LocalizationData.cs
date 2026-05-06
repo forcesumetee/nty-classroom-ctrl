@@ -547,6 +547,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "Teacher's IP address",
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "Notifications",
+        ["Tooltip_Notifications"] = "Recent system messages",
     };
 
     private static Dictionary<string, string> Th() => new()
@@ -1048,6 +1052,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "IP เครื่องครู",
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "การแจ้งเตือน",
+        ["Tooltip_Notifications"] = "ข้อความระบบล่าสุด",
     };
 
     private static Dictionary<string, string> Zh() => new()
@@ -1503,6 +1511,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "教师电脑 IP", // TODO: review Lbl_TeacherIP
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "通知", // TODO: review Hdr_Notifications
+        ["Tooltip_Notifications"] = "最近的系统消息", // TODO: review Tooltip_Notifications
     };
 
     private static Dictionary<string, string> Ja() => new()
@@ -1958,6 +1970,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "先生のPC IPアドレス", // TODO: review Lbl_TeacherIP
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "通知", // TODO: review Hdr_Notifications
+        ["Tooltip_Notifications"] = "最近のシステムメッセージ", // TODO: review Tooltip_Notifications
     };
 
     private static Dictionary<string, string> Ko() => new()
@@ -2413,6 +2429,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "교사 PC IP", // TODO: review Lbl_TeacherIP
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "알림", // TODO: review Hdr_Notifications
+        ["Tooltip_Notifications"] = "최근 시스템 메시지", // TODO: review Tooltip_Notifications
     };
 
     private static Dictionary<string, string> Es() => new()
@@ -2868,6 +2888,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "IP del profesor", // TODO: review Lbl_TeacherIP
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "Notificaciones", // TODO: review Hdr_Notifications
+        ["Tooltip_Notifications"] = "Mensajes del sistema recientes", // TODO: review Tooltip_Notifications
     };
 
     private static Dictionary<string, string> Fr() => new()
@@ -3323,6 +3347,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "IP de l'enseignant", // TODO: review Lbl_TeacherIP
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "Notifications", // TODO: review Hdr_Notifications
+        ["Tooltip_Notifications"] = "Messages système récents", // TODO: review Tooltip_Notifications
     };
 
     private static Dictionary<string, string> De() => new()
@@ -3778,6 +3806,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "Lehrer-IP", // TODO: review Lbl_TeacherIP
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "Benachrichtigungen", // TODO: review Hdr_Notifications
+        ["Tooltip_Notifications"] = "Letzte Systemnachrichten", // TODO: review Tooltip_Notifications
     };
 
     private static Dictionary<string, string> Ru() => new()
@@ -4233,6 +4265,10 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "IP-адрес учителя", // TODO: review Lbl_TeacherIP
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "Уведомления", // TODO: review Hdr_Notifications
+        ["Tooltip_Notifications"] = "Последние системные сообщения", // TODO: review Tooltip_Notifications
     };
 
     private static Dictionary<string, string> Vi() => new()
@@ -4688,5 +4724,9 @@ internal static class LocalizationData
 
         // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
         ["Lbl_TeacherIP"] = "IP của giáo viên", // TODO: review Lbl_TeacherIP
+
+        // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
+        ["Hdr_Notifications"] = "Thông báo", // TODO: review Hdr_Notifications
+        ["Tooltip_Notifications"] = "Tin nhắn hệ thống gần đây", // TODO: review Tooltip_Notifications
     };
 }

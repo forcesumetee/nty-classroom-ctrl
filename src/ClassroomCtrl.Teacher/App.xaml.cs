@@ -56,6 +56,13 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        // Phase 9.1 Section A — auto-add Windows Firewall inbound rules so a
+        // fresh install on a Public-profile network doesn't silently block
+        // student connections.  Fire-and-forget on a worker thread; the main
+        // startup path mustn't wait for the (potential) UAC prompt.  Idempotent
+        // — netsh skips re-adding rules that already exist.
+        System.Threading.Tasks.Task.Run(() => FirewallService.EnsureRules());
+
         var preferred = ReadPreferredLanguage();
         Loc.Initialize(preferred);
         Loc.LanguageChanged += ApplyLocToResources;

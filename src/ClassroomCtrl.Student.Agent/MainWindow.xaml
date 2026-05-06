@@ -45,11 +45,17 @@
                         Click="Language_Click"
                         Style="{DynamicResource Button.Secondary}"
                         VerticalAlignment="Center"/>
+                <!-- Phase 9.1 Section B — Bell with Popup of system notifications.
+                     Click the button → toggles NotificationsPopup, which lists
+                     every system event from this session (teacher viewing,
+                     mic mute, hand raised, etc.) routed via AddSystemNotification.
+                     The body ChatList no longer carries system messages — only
+                     real chat from teacher / DM / room peers. -->
                 <Grid DockPanel.Dock="Right" Margin="0,0,8,0" VerticalAlignment="Center">
                     <Button x:Name="BellButton"
                             Click="Bell_Click"
                             Style="{DynamicResource Button.Icon}"
-                            ToolTip="Recent system messages"
+                            ToolTip="{DynamicResource Tooltip_Notifications}"
                             Width="36" Height="36"
                             Padding="0">
                         <TextBlock Text="🔔" FontSize="16"/>
@@ -70,6 +76,77 @@
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"/>
                     </Border>
+                    <Popup x:Name="NotificationsPopup"
+                           StaysOpen="False"
+                           Placement="Bottom"
+                           PlacementTarget="{Binding ElementName=BellButton}"
+                           AllowsTransparency="True"
+                           PopupAnimation="Fade">
+                        <Border Background="{DynamicResource Surface.Card}"
+                                BorderBrush="{DynamicResource Border.Default}"
+                                BorderThickness="1" CornerRadius="8"
+                                Margin="0,4,8,8">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12" Direction="270"
+                                                  ShadowDepth="2" Opacity="0.18"/>
+                            </Border.Effect>
+                            <Grid Width="320" MaxHeight="400">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Border Grid.Row="0" Padding="14,10"
+                                        BorderBrush="{DynamicResource Border.Soft}"
+                                        BorderThickness="0,0,0,1">
+                                    <TextBlock Text="{DynamicResource Hdr_Notifications}"
+                                               FontWeight="SemiBold"
+                                               FontSize="13"/>
+                                </Border>
+                                <ScrollViewer Grid.Row="1"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <Grid>
+                                        <TextBlock x:Name="NoNotificationsText"
+                                                   Text="—"
+                                                   Foreground="{DynamicResource Text.Muted}"
+                                                   FontSize="12"
+                                                   Padding="14,16"
+                                                   HorizontalAlignment="Center"/>
+                                        <ItemsControl x:Name="NotificationsItems">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Padding="14,10"
+                                                            BorderBrush="{DynamicResource Border.Soft}"
+                                                            BorderThickness="0,0,0,1">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0"
+                                                                       Text="{Binding Icon}"
+                                                                       FontSize="14"
+                                                                       Margin="0,1,10,0"
+                                                                       VerticalAlignment="Top"/>
+                                                            <StackPanel Grid.Column="1">
+                                                                <TextBlock Text="{Binding Message}"
+                                                                           FontSize="12"
+                                                                           TextWrapping="Wrap"/>
+                                                                <TextBlock Text="{Binding TimeAgoText}"
+                                                                           FontSize="10"
+                                                                           Foreground="{DynamicResource Text.Muted}"
+                                                                           Margin="0,2,0,0"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Popup>
                 </Grid>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="{DynamicResource Lbl_ClassroomConnected}"
@@ -84,10 +161,15 @@
             </DockPanel>
         </Border>
 
-        <!-- Action buttons -->
+        <!-- Action buttons — Phase 9.1 Section D: Voice button removed.
+             Customer feedback: Zoom-style is just a single mic toggle; the
+             distinction between "broadcast mic to teacher" (was MicButton)
+             and "join breakout room voice channel" (was VoiceButton) was
+             confusing.  Mic always-on-when-unmuted suffices for both
+             scenarios — peers in the same breakout room hear the mic stream
+             through the same broadcaster pipeline. -->
         <Grid Grid.Row="1" Margin="16,12,16,8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
@@ -96,11 +178,7 @@
                     Margin="0,0,4,0" Click="RaiseHand_Click"/>
             <Button x:Name="MicButton" Grid.Column="1"
                     Style="{DynamicResource Button.Secondary}"
-                    Margin="4,0" Click="ToggleMic_Click"/>
-            <Button x:Name="VoiceButton" Grid.Column="2"
-                    Style="{DynamicResource Button.Secondary}"
-                    Margin="4,0,0,0" Click="ToggleVoice_Click"
-                    Content="{DynamicResource Btn_JoinVoice}"/>
+                    Margin="4,0,0,0" Click="ToggleMic_Click"/>
         </Grid>
 
         <!-- Chat / system messages — wrapped in Surface.Card per Phase 4-7 design -->
