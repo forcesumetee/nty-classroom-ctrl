@@ -48,6 +48,11 @@ public partial class MainWindow : Window
     private MoviePlayerWindow? _movieWindow;
     private RemoteControlBanner? _remoteBanner;
 
+    // Phase 9 Section B — unread system-message counter for the header Bell.
+    // Incremented whenever any new entry lands in ChatList and the window is
+    // hidden (tray-only) or unfocused; reset on Bell click or window activate.
+    private int _unreadBellCount;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -63,6 +68,52 @@ public partial class MainWindow : Window
 
         Loc.LanguageChanged += UpdateMicButtonText;
         UpdateMicButtonText();
+
+        // Phase 9 Section B — wire Bell badge to ChatList growth.  Ignore
+        // additions while the window is visible+active so the user doesn't
+        // see a counter for messages they're already reading.
+        ((System.Collections.Specialized.INotifyCollectionChanged)ChatList.Items)
+            .CollectionChanged += OnChatListChanged;
+        Activated += (_, _) => ResetBellBadge();
+    }
+
+    private void OnChatListChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add) return;
+        // Don't bump the bell while the user is actively looking at the chat.
+        if (IsActive && IsVisible) return;
+        _unreadBellCount += e.NewItems?.Count ?? 0;
+        UpdateBellBadge();
+    }
+
+    private void UpdateBellBadge()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (_unreadBellCount <= 0)
+            {
+                BellBadge.Visibility = Visibility.Collapsed;
+                return;
+            }
+            BellBadgeText.Text = _unreadBellCount > 99 ? "99+" : _unreadBellCount.ToString();
+            BellBadge.Visibility = Visibility.Visible;
+        });
+    }
+
+    private void ResetBellBadge()
+    {
+        if (_unreadBellCount == 0) return;
+        _unreadBellCount = 0;
+        UpdateBellBadge();
+    }
+
+    private void Bell_Click(object sender, RoutedEventArgs e)
+    {
+        // For now, clicking the bell just acknowledges all unread.  A future
+        // phase can add a popup list of recent system messages here.  The
+        // chat list itself is always visible in the body so the user has
+        // already-seen-it parity once they look at the window.
+        ResetBellBadge();
     }
 
     private void UpdateMicButtonText()
@@ -710,7 +761,15 @@ public partial class MainWindow : Window
         ChatList.Items.Add(Loc.Get(_handRaised ? "Chat_YouRaisedHand" : "Chat_YouLoweredHand"));
     }
 
-    private void ToggleMic_Click(object sender, RoutedEventArgs e)
+    private void ToggleMic_Click(object sender, RoutedEventArgs e) => ToggleMicrophone();
+
+    /// <summary>Phase 9 Section A — public so ScreenViewWindow's bottom overlay
+    /// can drive the same mic toggle without holding its own audio pipeline.</summary>
+    public bool IsMicOn => _micOn;
+
+    /// <summary>Phase 9 Section A — single source of truth for mic on/off,
+    /// callable from MainWindow's button OR from the screen-share overlay.</summary>
+    public void ToggleMicrophone()
     {
         if (_micOn)
         {
@@ -733,6 +792,21 @@ public partial class MainWindow : Window
             ChatList.Items.Add(Loc.Get("Chat_StudentMicOn"));
         }
         UpdateMicButtonText();
+        MicStateChanged?.Invoke(this, _micOn);
+    }
+
+    /// <summary>Phase 9 Section A — fires after every mic-state transition so
+    /// the screen-share overlay can refresh its own button label icon.</summary>
+    public event EventHandler<bool>? MicStateChanged;
+
+    /// <summary>Phase 9 Section A — sends a chat line as if it were typed in
+    /// the MainWindow input box, so the overlay can short-circuit straight to
+    /// SendChat() without reproducing the envelope-construction logic.</summary>
+    public void SendChatExternal(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        ChatInput.Text = text;
+        SendChat();
     }
 
     // Phase 9.7: Voice Chat — toggle membership in breakout-room voice channel.
@@ -759,26 +833,12 @@ public partial class MainWindow : Window
         ChatList.Items.Add(Loc.Get(_voiceJoined ? "Chat_VoiceJoined" : "Chat_VoiceLeft"));
     }
 
-    private void Settings_Click(object sender, RoutedEventArgs e)
-    {
-        // Phase 14.2: gate connection settings behind an admin password so students
-        // can't wipe the configured Teacher IP.
-        var auth = new ClassroomCtrl.Student.Agent.Setup.AdminPasswordDialog { Owner = this };
-        if (auth.ShowDialog() != true || !auth.Authenticated) return;
-
-        var dlg = new TeacherIPDialog { Owner = this };
-        dlg.ShowDialog();
-
-        if (dlg.Saved)
-        {
-            ChatList.Items.Add(Loc.Get("Chat_TeacherIPUpdated"));
-            MessageBox.Show(
-                Loc.Get("Dlg_TeacherIPSavedMsg"),
-                Loc.Get("Dlg_SettingsSaved"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-        }
-    }
+    // Phase 8 Section A — Settings_Click removed at customer request.  The
+    // first-run TeacherIPDialog is still launched from App startup when no
+    // config.txt exists; once configured, students cannot rewipe the IP from
+    // the Agent UI.  Teacher's matching Phase 4 G AdminPasswordSettingsDialog
+    // is also deleted in Phase 8 Section D so the password-gate machinery is
+    // dead-code-only.
 
     private void Language_Click(object sender, RoutedEventArgs e)
     {

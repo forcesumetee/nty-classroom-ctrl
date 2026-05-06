@@ -61,5 +61,53 @@
                    Foreground="{DynamicResource Text.Secondary}"
                    FontSize="18"
                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+        <!-- Phase 9 Section A — bottom overlay control bar.
+             ScreenViewWindow is fullscreen+Topmost (so the teacher's broadcast
+             actually fills the student screen), which means the MainWindow chat
+             input and mic button sit BEHIND it and are unreachable.  This bar
+             gives the student the two essentials — mic toggle + chat — without
+             closing the broadcast view.  Semi-transparent so it overlays the
+             video without blocking the bottom strip too aggressively. -->
+        <Border VerticalAlignment="Bottom"
+                Background="#D91E3A8A"
+                Padding="16,10">
+            <DockPanel>
+                <Button x:Name="OverlayMicButton" DockPanel.Dock="Left"
+                        Content="🎤"
+                        Background="Transparent"
+                        Foreground="White"
+                        BorderBrush="#80FFFFFF"
+                        BorderThickness="1"
+                        FontSize="16"
+                        Padding="10,6"
+                        MinWidth="48"
+                        Margin="0,0,8,0"
+                        Cursor="Hand"
+                        ToolTip="Toggle microphone"
+                        Click="OverlayMic_Click"/>
+                <Button x:Name="OverlaySendButton" DockPanel.Dock="Right"
+                        Content="📤"
+                        Background="#3B82F6"
+                        Foreground="White"
+                        BorderThickness="0"
+                        FontSize="14" FontWeight="Bold"
+                        Padding="14,6"
+                        MinWidth="48"
+                        Margin="8,0,0,0"
+                        Cursor="Hand"
+                        Click="OverlaySend_Click"/>
+                <TextBox x:Name="OverlayChatInput"
+                         Background="#22000000"
+                         Foreground="White"
+                         CaretBrush="White"
+                         BorderBrush="#80FFFFFF"
+                         BorderThickness="1"
+                         FontSize="13"
+                         Padding="10,6"
+                         VerticalContentAlignment="Center"
+                         KeyDown="OverlayChatInput_KeyDown"/>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

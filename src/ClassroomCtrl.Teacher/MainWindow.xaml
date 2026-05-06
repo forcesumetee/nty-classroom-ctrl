@@ -501,12 +501,10 @@
                                     <TextBlock Text="{DynamicResource Btn_Language}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding OpenAdminPasswordSettingsCommand}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🔑" FontSize="14" Width="22" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Btn_AdminPasswordSettings}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
+                            <!-- Phase 8 Section D — Admin Password Settings entry point removed
+                                 along with the matching dialog file.  Phase 8 also cuts the
+                                 Student.Agent Settings button that the password gated, so the
+                                 entire mechanism is dead. -->
                         </StackPanel>
 
                     </StackPanel>

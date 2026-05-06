@@ -46,6 +46,46 @@ public partial class ScreenViewWindow : Window
         InitializeComponent();
         Closed += OnWindowClosed;
         Loaded += OnWindowLoaded;
+
+        // Phase 9 Section A — wire overlay state to MainWindow so the bottom
+        // bar's mic icon stays in sync with the actual broadcaster lifecycle.
+        // The button label flips between "🎤" (off) and "🔊" (on) to match the
+        // mute-mic UX in the rest of the app.
+        if (App.MainWindowInstance != null)
+        {
+            RefreshOverlayMicGlyph(App.MainWindowInstance.IsMicOn);
+            App.MainWindowInstance.MicStateChanged += (_, on) =>
+                Dispatcher.Invoke(() => RefreshOverlayMicGlyph(on));
+        }
+    }
+
+    private void RefreshOverlayMicGlyph(bool on)
+    {
+        OverlayMicButton.Content = on ? "🔊" : "🎤";
+        OverlayMicButton.ToolTip = on ? "Mute microphone" : "Unmute microphone";
+    }
+
+    // ───── Phase 9 Section A: overlay control handlers ─────
+    // Routes through App.MainWindowInstance so audio + IPC paths stay single-
+    // sourced; ScreenViewWindow does not own any broadcaster state of its own.
+
+    private void OverlayMic_Click(object sender, RoutedEventArgs e)
+        => App.MainWindowInstance?.ToggleMicrophone();
+
+    private void OverlaySend_Click(object sender, RoutedEventArgs e)
+        => SubmitOverlayChat();
+
+    private void OverlayChatInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) SubmitOverlayChat();
+    }
+
+    private void SubmitOverlayChat()
+    {
+        var text = OverlayChatInput.Text?.Trim() ?? "";
+        if (string.IsNullOrEmpty(text)) return;
+        App.MainWindowInstance?.SendChatExternal(text);
+        OverlayChatInput.Clear();
     }
 
     private void OnWindowLoaded(object sender, RoutedEventArgs e)

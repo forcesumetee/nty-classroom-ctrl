@@ -325,7 +325,8 @@ public partial class MainViewModel : ObservableObject
     public IRelayCommand OpenBrandingSettingsCommand { get; }
 
     // Phase 5D: admin password settings
-    public IRelayCommand OpenAdminPasswordSettingsCommand { get; }
+    // Phase 8 Section D — OpenAdminPasswordSettingsCommand + OpenAdminPasswordSettings()
+    // removed along with the AdminPasswordSettingsDialog file.
 
     /// <summary>Phase 5b: set of student IDs currently viewed via StudentScreenWindow (REC enabled when present).</summary>
     public readonly HashSet<System.Guid> ViewingStudents = new();
@@ -419,7 +420,7 @@ public partial class MainViewModel : ObservableObject
         ToggleStudentRecordingCommand = new RelayCommand<StudentViewModel?>(ToggleStudentRecording);
 
         OpenBrandingSettingsCommand = new RelayCommand(OpenBrandingSettings);
-        OpenAdminPasswordSettingsCommand = new RelayCommand(OpenAdminPasswordSettings);
+        // Phase 8 Section D — OpenAdminPasswordSettingsCommand wiring removed.
 
         ShutdownAllCommand = new RelayCommand(() => BroadcastPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType.ForceShutdown, "Confirm_ShutdownAll"));
         RestartAllCommand = new RelayCommand(() => BroadcastPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType.ForceRestart, "Confirm_RestartAll"));
@@ -1782,14 +1783,7 @@ public partial class MainViewModel : ObservableObject
         win.ShowDialog();
     }
 
-    private void OpenAdminPasswordSettings()
-    {
-        var win = new ClassroomCtrl.Teacher.Settings.AdminPasswordSettingsDialog
-        {
-            Owner = System.Windows.Application.Current.MainWindow,
-        };
-        win.ShowDialog();
-    }
+    // Phase 8 Section D — OpenAdminPasswordSettings() removed.
 
     private async void SendChat()
     {

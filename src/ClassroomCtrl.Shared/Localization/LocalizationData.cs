@@ -544,6 +544,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "Activate a roster first",
         ["Msg_AttendanceExported"] = "Attendance saved to: {0}",
         ["Lbl_Success"] = "Success",
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "Teacher's IP address",
     };
 
     private static Dictionary<string, string> Th() => new()
@@ -580,7 +583,7 @@ internal static class LocalizationData
         ["Hdr_Notifications"] = "การแจ้งเตือน",
         ["Lbl_NoNotifications"] = "ไม่มีการแจ้งเตือน",
         ["Tooltip_Notifications"] = "การแจ้งเตือน",
-        ["Time_JustNow"] = "เพิ่งนี้",
+        ["Time_JustNow"] = "เมื่อซักครู่",
         ["Time_MinAgo"] = "{0} นาทีที่แล้ว",
         ["Time_HourAgo"] = "{0} ชั่วโมงที่แล้ว",
         ["Hdr_ClassTools"] = "เครื่องมือชั้นเรียน",
@@ -1042,6 +1045,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "เปิดใช้งานคลาสก่อน",
         ["Msg_AttendanceExported"] = "บันทึกการเช็คชื่อที่: {0}",
         ["Lbl_Success"] = "สำเร็จ",
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "IP เครื่องครู",
     };
 
     private static Dictionary<string, string> Zh() => new()
@@ -1494,6 +1500,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "请先激活班级名单", // TODO: review Tooltip_NoActiveRoster
         ["Msg_AttendanceExported"] = "考勤已保存至: {0}", // TODO: review Msg_AttendanceExported
         ["Lbl_Success"] = "成功", // TODO: review Lbl_Success
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "教师电脑 IP", // TODO: review Lbl_TeacherIP
     };
 
     private static Dictionary<string, string> Ja() => new()
@@ -1946,6 +1955,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "クラス名簿を先に有効化してください", // TODO: review Tooltip_NoActiveRoster
         ["Msg_AttendanceExported"] = "出席を保存しました: {0}", // TODO: review Msg_AttendanceExported
         ["Lbl_Success"] = "成功", // TODO: review Lbl_Success
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "先生のPC IPアドレス", // TODO: review Lbl_TeacherIP
     };
 
     private static Dictionary<string, string> Ko() => new()
@@ -2398,6 +2410,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "학급 명단을 먼저 활성화하세요", // TODO: review Tooltip_NoActiveRoster
         ["Msg_AttendanceExported"] = "출석부 저장됨: {0}", // TODO: review Msg_AttendanceExported
         ["Lbl_Success"] = "성공", // TODO: review Lbl_Success
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "교사 PC IP", // TODO: review Lbl_TeacherIP
     };
 
     private static Dictionary<string, string> Es() => new()
@@ -2850,6 +2865,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "Activa primero una lista de clase", // TODO: review Tooltip_NoActiveRoster
         ["Msg_AttendanceExported"] = "Asistencia guardada en: {0}", // TODO: review Msg_AttendanceExported
         ["Lbl_Success"] = "Listo", // TODO: review Lbl_Success
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "IP del profesor", // TODO: review Lbl_TeacherIP
     };
 
     private static Dictionary<string, string> Fr() => new()
@@ -3302,6 +3320,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "Activez d'abord une liste de classe", // TODO: review Tooltip_NoActiveRoster
         ["Msg_AttendanceExported"] = "Présences enregistrées : {0}", // TODO: review Msg_AttendanceExported
         ["Lbl_Success"] = "Réussi", // TODO: review Lbl_Success
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "IP de l'enseignant", // TODO: review Lbl_TeacherIP
     };
 
     private static Dictionary<string, string> De() => new()
@@ -3754,6 +3775,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "Aktivieren Sie zuerst eine Klassenliste", // TODO: review Tooltip_NoActiveRoster
         ["Msg_AttendanceExported"] = "Anwesenheit gespeichert: {0}", // TODO: review Msg_AttendanceExported
         ["Lbl_Success"] = "Erfolg", // TODO: review Lbl_Success
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "Lehrer-IP", // TODO: review Lbl_TeacherIP
     };
 
     private static Dictionary<string, string> Ru() => new()
@@ -4206,6 +4230,9 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "Сначала активируйте список класса", // TODO: review Tooltip_NoActiveRoster
         ["Msg_AttendanceExported"] = "Журнал сохранён: {0}", // TODO: review Msg_AttendanceExported
         ["Lbl_Success"] = "Готово", // TODO: review Lbl_Success
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "IP-адрес учителя", // TODO: review Lbl_TeacherIP
     };
 
     private static Dictionary<string, string> Vi() => new()
@@ -4658,5 +4685,8 @@ internal static class LocalizationData
         ["Tooltip_NoActiveRoster"] = "Hãy kích hoạt danh sách lớp trước", // TODO: review Tooltip_NoActiveRoster
         ["Msg_AttendanceExported"] = "Đã lưu điểm danh: {0}", // TODO: review Msg_AttendanceExported
         ["Lbl_Success"] = "Thành công", // TODO: review Lbl_Success
+
+        // Phase 8 — Student.Agent first-run TeacherIPDialog redesign
+        ["Lbl_TeacherIP"] = "IP của giáo viên", // TODO: review Lbl_TeacherIP
     };
 }
