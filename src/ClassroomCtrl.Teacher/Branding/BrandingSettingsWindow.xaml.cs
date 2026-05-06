@@ -152,16 +152,28 @@ public partial class BrandingSettingsWindow : Window
 
     private void Browse(TextBox target)
     {
+        // Phase 4.2 — Owner pins the picker modally to the Branding window so it
+        // doesn't get stranded behind MainWindow when MainWindow steals focus.
         var dlg = new OpenFileDialog
         {
             Title = Loc.Get("Btn_BrowseImage"),
             Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp",
             CheckFileExists = true,
         };
-        if (dlg.ShowDialog() != true) return;
+        var result = dlg.ShowDialog(this);
+        if (result != true) return;
+
+        // Phase 4.2 — set the user's chosen path FIRST so the field reflects the click
+        // even if the AssetsFolder copy fails (no-admin write to %ProgramData%, file
+        // already in use by the source app, etc.).  Previously a copy failure left the
+        // catch block to set the same path, but if anything threw earlier (Path.Combine
+        // on a weird filename, Guid creation) the field stayed empty with no feedback.
+        target.Text = dlg.FileName;
+
         try
         {
-            // Copy into branding folder so user can delete the original.
+            // Best-effort: copy into the branded assets folder so the user can delete
+            // their original file.  On success, swap to the copied path.
             Directory.CreateDirectory(BrandingService.AssetsFolder);
             var dest = Path.Combine(BrandingService.AssetsFolder,
                 Guid.NewGuid().ToString("N").Substring(0, 8) + Path.GetExtension(dlg.FileName));
@@ -170,8 +182,9 @@ public partial class BrandingSettingsWindow : Window
         }
         catch
         {
-            target.Text = dlg.FileName; // fall back to original path
+            // Stay on dlg.FileName — already set above.
         }
+
         UpdatePreview();
     }
 
@@ -186,13 +199,13 @@ public partial class BrandingSettingsWindow : Window
             AccentColor = NormalizeHex(AccentHexBox.Text, "#0EA5E9"),
             LogoPath = LogoPathBox.Text ?? "",
             WallpaperPath = WallpaperPathBox.Text ?? "",
-            // Phase 8 (Bug E) — Dark is now the only shipping theme. Hardcoded so any
-            // legacy branding.json that still says "Light" gets coerced on next save.
-            ThemeMode = "Dark",
+            // Phase 4 Section D — Light is now the default theme.  Hardcoded so any legacy
+            // branding.json that still says "Dark" gets coerced on next save.
+            ThemeMode = "Light",
         };
-        // Ensure the Dark Colors dictionary is the active baseline before BrandingService
+        // Ensure the Light Colors dictionary is the active baseline before BrandingService
         // overlays the brand-tinted Surface.* / Accent.* keys via Save → Changed.
-        BrandingService.ApplyTheme(ClassroomCtrl.Shared.Branding.ThemeMode.Dark);
+        BrandingService.ApplyTheme(ClassroomCtrl.Shared.Branding.ThemeMode.Light);
         BrandingService.Save(cfg);  // raises Changed → live re-apply across all windows
         DialogResult = true;
         Close();
@@ -200,7 +213,15 @@ public partial class BrandingSettingsWindow : Window
 
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
-        BrandingService.ResetToDefault();
+        // Phase 4.2 — BrandingConfig.Default() returns ThemeMode = "Dark" (Phase 6C
+        // legacy default).  Plain ResetToDefault() therefore flipped the app back to
+        // Dark even after Phase 4 made Light the shipping baseline.  Force Light here
+        // so Reset matches the new design language; the rest of BrandingConfig.Default
+        // (#1E40AF primary, #0EA5E9 accent, no logo, no wallpaper) stays untouched.
+        var defaults = BrandingConfig.Default();
+        defaults.ThemeMode = "Light";
+        BrandingService.ApplyTheme(ClassroomCtrl.Shared.Branding.ThemeMode.Light);
+        BrandingService.Save(defaults);  // raises Changed → live re-apply across windows
         LoadIntoFields(BrandingService.Current);
         UpdatePreview();
     }

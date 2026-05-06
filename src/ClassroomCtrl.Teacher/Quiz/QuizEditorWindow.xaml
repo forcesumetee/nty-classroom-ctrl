@@ -7,72 +7,117 @@
         Background="{DynamicResource Surface.Background}"
         TextElement.Foreground="{DynamicResource Text.Primary}"
         FontFamily="Segoe UI">
-    <Grid Margin="16">
+    <!-- Phase 5 Section B — restructured to match the Phase 4 dialog design language:
+         pinned header / body (form fields + question list) / pinned footer.
+         List controls (Add/Edit/Remove) live above the question list as a toolbar so
+         the footer can stay focused on Cancel / Save. -->
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Row 0: header fields -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="120"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="120"/>
-                    <ColumnDefinition Width="100"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{DynamicResource Lbl_QuizTitle}"
-                           Style="{DynamicResource Text.Body}" VerticalAlignment="Center"/>
-                <TextBox Grid.Column="1" x:Name="TitleBox"
-                         Style="{DynamicResource TextBox.Default}" Margin="8,0"/>
-                <TextBlock Grid.Column="2" Text="{DynamicResource Lbl_Duration}"
-                           Style="{DynamicResource Text.Body}"
-                           VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="3" x:Name="DurationBox"
-                         Style="{DynamicResource TextBox.Default}" Margin="8,0,0,0"/>
-            </Grid>
-            <Grid Margin="0,8,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="120"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{DynamicResource Lbl_Description}"
-                           Style="{DynamicResource Text.Body}"
-                           VerticalAlignment="Top" Margin="0,8,0,0"/>
-                <TextBox Grid.Column="1" x:Name="DescriptionBox"
-                         Style="{DynamicResource TextBox.Default}"
-                         TextWrapping="Wrap" AcceptsReturn="True"
-                         Height="56" Margin="8,0,0,0"/>
-            </Grid>
-            <CheckBox x:Name="ShowScoreBox"
-                      Style="{DynamicResource CheckBox.Default}"
-                      Margin="0,12,0,0"
-                      Content="{DynamicResource Lbl_ShowScore}"/>
-        </StackPanel>
+        <!-- Header -->
+        <Border Grid.Row="0" Padding="20,16"
+                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1"
+                Background="{DynamicResource Surface.Elevated}">
+            <DockPanel>
+                <Border DockPanel.Dock="Left" Width="36" Height="36"
+                        Background="{DynamicResource Accent.PrimarySubtle}"
+                        CornerRadius="8" Margin="0,0,12,0">
+                    <TextBlock Text="📝" FontSize="18"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource Lbl_QuizEditor}"
+                               Style="{DynamicResource Text.H2}"/>
+                    <TextBlock Text="{DynamicResource Hint_QuizEditor}"
+                               FontSize="12"
+                               Foreground="{DynamicResource Text.Secondary}"
+                               Margin="0,2,0,0"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
 
-        <!-- Row 1: Question list (fills available space) -->
-        <Border Grid.Row="1"
-                Background="{DynamicResource Surface.Elevated}"
-                BorderBrush="{DynamicResource Surface.Border}"
-                BorderThickness="1"
-                CornerRadius="{DynamicResource CornerRadius.MD}"
-                Padding="16">
-            <Grid>
+        <!-- Body -->
+        <Grid Grid.Row="1" Margin="20,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Form fields -->
+            <Grid Grid.Row="0" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="160"/>
+                </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Text="Questions"
+
+                <StackPanel Grid.Column="0" Grid.Row="0" Margin="0,0,16,8">
+                    <TextBlock Text="{DynamicResource Lbl_QuizTitle}"
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+                    <TextBox x:Name="TitleBox" Style="{DynamicResource TextBox.Default}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Grid.Row="0" Margin="0,0,0,8">
+                    <TextBlock Text="{DynamicResource Lbl_Duration}"
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+                    <TextBox x:Name="DurationBox" Style="{DynamicResource TextBox.Default}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1" Margin="0,0,0,8">
+                    <TextBlock Text="{DynamicResource Lbl_Description}"
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+                    <TextBox x:Name="DescriptionBox"
+                             Style="{DynamicResource TextBox.Default}"
+                             TextWrapping="Wrap" AcceptsReturn="True" Height="56"/>
+                </StackPanel>
+
+                <CheckBox Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="2"
+                          x:Name="ShowScoreBox"
+                          Style="{DynamicResource CheckBox.Default}"
+                          Content="{DynamicResource Lbl_ShowScore}" Margin="0,4,0,0"/>
+            </Grid>
+
+            <!-- Questions section header + per-row toolbar -->
+            <DockPanel Grid.Row="1" Margin="0,0,0,8">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button Style="{DynamicResource Button.Secondary}"
+                            Content="{DynamicResource Btn_AddQuestion}"
+                            Click="AddQuestion_Click" Margin="0,0,8,0"/>
+                    <Button Style="{DynamicResource Button.Secondary}"
+                            Content="{DynamicResource Btn_EditQuestion}"
+                            Click="EditQuestion_Click" Margin="0,0,8,0"/>
+                    <Button Style="{DynamicResource Button.Danger}"
+                            Content="{DynamicResource Btn_RemoveQuestion}"
+                            Click="RemoveQuestion_Click"/>
+                </StackPanel>
+                <TextBlock Text="{DynamicResource Lbl_Questions}"
                            Style="{DynamicResource Text.H3}"
-                           Margin="0,0,0,8"/>
-                <ListBox Grid.Row="1" x:Name="QuestionListBox"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+
+            <!-- Questions list -->
+            <Border Grid.Row="2"
+                    Background="{DynamicResource Surface.Card}"
+                    BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
+                    CornerRadius="8">
+                <ListBox x:Name="QuestionListBox"
                          Style="{DynamicResource ListBox.Default}"
+                         Background="Transparent"
+                         BorderThickness="0"
                          MouseDoubleClick="QuestionListBox_MouseDoubleClick">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel>
+                            <StackPanel Margin="8,6">
                                 <TextBlock Text="{Binding Text}"
                                            Style="{DynamicResource Text.H3}"
                                            TextWrapping="Wrap"/>
@@ -88,21 +133,23 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-            </Grid>
-        </Border>
+            </Border>
+        </Grid>
 
-        <!-- Row 2: button bar -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="{DynamicResource Btn_AddQuestion}" Click="AddQuestion_Click"
-                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
-            <Button Content="{DynamicResource Btn_EditQuestion}" Click="EditQuestion_Click"
-                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
-            <Button Content="{DynamicResource Btn_RemoveQuestion}" Click="RemoveQuestion_Click"
-                    Style="{DynamicResource Button.Danger}" Margin="0,0,16,0"/>
-            <Button Content="{DynamicResource Btn_Save}" Click="Save_Click"
-                    Style="{DynamicResource Button.Success}" Margin="0,0,8,0"/>
-            <Button Content="{DynamicResource Btn_Cancel}" Click="Cancel_Click"
-                    Style="{DynamicResource Button.Secondary}"/>
-        </StackPanel>
+        <!-- Footer -->
+        <Border Grid.Row="2" Padding="20,12"
+                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,1,0,0"
+                Background="{DynamicResource Surface.Elevated}">
+            <DockPanel LastChildFill="False">
+                <Button DockPanel.Dock="Right"
+                        Style="{DynamicResource Button.Primary}"
+                        Content="{DynamicResource Btn_Save}"
+                        Click="Save_Click" IsDefault="True"/>
+                <Button DockPanel.Dock="Right"
+                        Style="{DynamicResource Button.Ghost}"
+                        Content="{DynamicResource Btn_Cancel}"
+                        Click="Cancel_Click" Margin="0,0,8,0"/>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

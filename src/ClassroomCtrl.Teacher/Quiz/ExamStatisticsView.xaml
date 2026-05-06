@@ -5,24 +5,28 @@
              Background="{DynamicResource Surface.Background}"
              TextElement.Foreground="{DynamicResource Text.Primary}"
              FontFamily="Segoe UI">
+    <!-- Phase 5.1 Section A — compact charts.  Histogram dropped from 240/300 to
+         160/200; Avg-Min-Max + Per-question dropped from 220/300 to 140/180.  Card
+         padding shrunk from 16 to 12 and inter-block gaps from 16 to 10 so the full
+         stats tab fits a 640px window without scroll. -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="16">
+        <StackPanel Margin="16,12">
             <TextBlock x:Name="SummaryText"
                        Style="{DynamicResource Text.Body}"
                        FontWeight="SemiBold"
-                       Margin="0,0,0,12"/>
+                       Margin="0,0,0,10"/>
 
             <!-- Histogram -->
             <Border Background="{DynamicResource Surface.Elevated}"
                     BorderBrush="{DynamicResource Surface.Border}"
                     BorderThickness="1"
                     CornerRadius="{DynamicResource CornerRadius.MD}"
-                    Padding="16" Margin="0,0,0,16">
+                    Padding="12" Margin="0,0,0,10">
                 <StackPanel>
                     <TextBlock Text="{DynamicResource Lbl_ScoreHistogram}"
                                Style="{DynamicResource Text.H3}"
-                               Margin="0,0,0,8"/>
-                    <lvc:CartesianChart x:Name="HistogramChart" Height="240" MaxHeight="300"/>
+                               Margin="0,0,0,6"/>
+                    <lvc:CartesianChart x:Name="HistogramChart" Height="160" MaxHeight="200"/>
                 </StackPanel>
             </Border>
 
@@ -38,12 +42,12 @@
                         BorderBrush="{DynamicResource Surface.Border}"
                         BorderThickness="1"
                         CornerRadius="{DynamicResource CornerRadius.MD}"
-                        Padding="16" Margin="0,0,8,0">
+                        Padding="12" Margin="0,0,5,0">
                     <StackPanel>
                         <TextBlock Text="{DynamicResource Lbl_AvgMinMax}"
                                    Style="{DynamicResource Text.H3}"
-                                   Margin="0,0,0,8"/>
-                        <lvc:CartesianChart x:Name="StatsSummaryChart" Height="220" MaxHeight="300"/>
+                                   Margin="0,0,0,6"/>
+                        <lvc:CartesianChart x:Name="StatsSummaryChart" Height="140" MaxHeight="180"/>
                     </StackPanel>
                 </Border>
 
@@ -52,12 +56,12 @@
                         BorderBrush="{DynamicResource Surface.Border}"
                         BorderThickness="1"
                         CornerRadius="{DynamicResource CornerRadius.MD}"
-                        Padding="16" Margin="8,0,0,0">
+                        Padding="12" Margin="5,0,0,0">
                     <StackPanel>
                         <TextBlock Text="{DynamicResource Lbl_PerQuestionStats}"
                                    Style="{DynamicResource Text.H3}"
-                                   Margin="0,0,0,8"/>
-                        <lvc:CartesianChart x:Name="PerQuestionChart" Height="220" MaxHeight="300"/>
+                                   Margin="0,0,0,6"/>
+                        <lvc:CartesianChart x:Name="PerQuestionChart" Height="140" MaxHeight="180"/>
                     </StackPanel>
                 </Border>
             </Grid>

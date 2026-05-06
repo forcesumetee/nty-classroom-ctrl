@@ -2,55 +2,73 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{DynamicResource Btn_BrandingSettings}"
-        Height="640" Width="820"
+        Height="720" Width="980"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Surface.Background}"
         TextElement.Foreground="{DynamicResource Text.Primary}"
         FontFamily="Segoe UI">
-    <DockPanel Margin="16">
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="{DynamicResource Btn_ResetBranding}" Click="Reset_Click"
-                    Style="{DynamicResource Button.Secondary}" Margin="0,0,8,0"/>
-            <Button Content="{DynamicResource Btn_Apply}" Click="Apply_Click"
-                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
-            <Button Content="{DynamicResource Btn_Cancel}" Click="Cancel_Click"
-                    Style="{DynamicResource Button.Secondary}"/>
-        </StackPanel>
+    <!-- Phase 4 Section F — restructured: 2-column body (settings | live preview),
+         pinned header / footer.  Live preview adapts to theme tokens; the in-preview
+         hardcodes are runtime-replaced by the user's brand colors via code-behind. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <Grid>
+        <!-- Header -->
+        <Border Grid.Row="0" Padding="20,16"
+                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1"
+                Background="{DynamicResource Surface.Elevated}">
+            <DockPanel>
+                <Border DockPanel.Dock="Left" Width="36" Height="36"
+                        Background="{DynamicResource Accent.PrimarySubtle}"
+                        CornerRadius="8" Margin="0,0,12,0">
+                    <TextBlock Text="🎨" FontSize="18"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource Btn_BrandingSettings}"
+                               Style="{DynamicResource Text.H2}"/>
+                    <TextBlock Text="{DynamicResource Lbl_BrandingHint}"
+                               FontSize="12"
+                               Foreground="{DynamicResource Text.Secondary}"
+                               Margin="0,2,0,0"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Body -->
+        <Grid Grid.Row="1" Margin="20,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="380"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Form -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="0,0,16,0">
-
-                    <!-- Phase 8 (Bug E) — Theme Mode toggle removed. Customer feedback:
-                         the user-Primary brand color now drives the surface theme via
-                         BrandingService (Bug B reversal), so a separate Light/Dark toggle
-                         is redundant and was producing near-white "broken" UI on Light.
-                         Dark is the single shipping theme; the ThemeMode property and
-                         ApplyTheme infrastructure remain in place for back-compat with
-                         existing branding.json files and for any future reactivation. -->
-
+            <!-- Left: settings -->
+            <ScrollViewer Grid.Column="0" Margin="0,0,20,0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
                     <TextBlock Text="{DynamicResource Lbl_AppName_Branding}"
-                               Style="{DynamicResource Text.H3}" Margin="0,0,0,4"/>
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
                     <TextBox x:Name="AppNameBox"
                              Style="{DynamicResource TextBox.Default}" Margin="0,0,0,12"/>
 
                     <TextBlock Text="{DynamicResource Lbl_OrgName}"
-                               Style="{DynamicResource Text.H3}" Margin="0,0,0,4"/>
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
                     <TextBox x:Name="OrgNameBox"
                              Style="{DynamicResource TextBox.Default}" Margin="0,0,0,4"/>
                     <CheckBox x:Name="ShowOrgInTitleBox"
                               Style="{DynamicResource CheckBox.Default}"
-                              Content="{DynamicResource Lbl_ShowOrgInTitle}" Margin="0,0,0,12"/>
+                              Content="{DynamicResource Lbl_ShowOrgInTitle}"
+                              FontSize="12" Margin="0,0,0,16"/>
 
                     <TextBlock Text="{DynamicResource Lbl_PrimaryColor}"
-                               Style="{DynamicResource Text.H3}" Margin="0,4,0,4"/>
-                    <Grid Margin="0,0,0,12">
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+                    <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="140"/>
                             <ColumnDefinition Width="*"/>
@@ -58,12 +76,13 @@
                         <TextBox Grid.Column="0" x:Name="PrimaryHexBox"
                                  Style="{DynamicResource TextBox.Default}"
                                  TextChanged="PrimaryHexBox_TextChanged"/>
-                        <WrapPanel Grid.Column="1" Margin="8,0,0,0" x:Name="PrimarySwatches"/>
+                        <WrapPanel Grid.Column="1" Margin="8,0,0,0" x:Name="PrimarySwatches"
+                                   VerticalAlignment="Center"/>
                     </Grid>
 
                     <TextBlock Text="{DynamicResource Lbl_AccentColor}"
-                               Style="{DynamicResource Text.H3}" Margin="0,4,0,4"/>
-                    <Grid Margin="0,0,0,12">
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+                    <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="140"/>
                             <ColumnDefinition Width="*"/>
@@ -71,12 +90,13 @@
                         <TextBox Grid.Column="0" x:Name="AccentHexBox"
                                  Style="{DynamicResource TextBox.Default}"
                                  TextChanged="AccentHexBox_TextChanged"/>
-                        <WrapPanel Grid.Column="1" Margin="8,0,0,0" x:Name="AccentSwatches"/>
+                        <WrapPanel Grid.Column="1" Margin="8,0,0,0" x:Name="AccentSwatches"
+                                   VerticalAlignment="Center"/>
                     </Grid>
 
                     <TextBlock Text="{DynamicResource Lbl_Logo}"
-                               Style="{DynamicResource Text.H3}" Margin="0,4,0,4"/>
-                    <Grid Margin="0,0,0,12">
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+                    <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -94,9 +114,9 @@
                                 ToolTip="{DynamicResource Btn_ClearImage}"/>
                     </Grid>
 
-                    <TextBlock Text="{DynamicResource Lbl_Wallpaper}"
-                               Style="{DynamicResource Text.H3}" Margin="0,4,0,4"/>
-                    <Grid Margin="0,0,0,12">
+                    <TextBlock Text="{DynamicResource Lbl_AppBackground}"
+                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+                    <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -114,37 +134,99 @@
                                 ToolTip="{DynamicResource Btn_ClearImage}"/>
                     </Grid>
 
+                    <!-- Phase 4.3 — App Background scope clarification.  Phase 4 F mistakenly
+                         framed this field as the student lock-screen wallpaper, which implied a
+                         student-PC deployment story.  In reality the field paints the Teacher
+                         app's main content area (behind the student grid) and never touches
+                         student PCs. -->
+                    <Border Background="{DynamicResource Accent.PrimarySubtle}"
+                            BorderBrush="{DynamicResource Accent.Primary}" BorderThickness="1"
+                            CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Left" Text="ℹ️" FontSize="14"
+                                       VerticalAlignment="Top" Margin="0,1,8,0"/>
+                            <TextBlock Text="{DynamicResource Lbl_AppBackgroundHint}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource Text.Secondary}"
+                                       TextWrapping="Wrap"/>
+                        </DockPanel>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Live preview — Background colors here are set by code-behind to demo brand choices,
-                 so we leave them as-is. Only the wrapping Border BorderBrush is themed. -->
+            <!-- Right: live preview -->
             <Border Grid.Column="1"
-                    BorderBrush="{DynamicResource Surface.Border}"
-                    BorderThickness="1"
-                    CornerRadius="{DynamicResource CornerRadius.MD}"
-                    Padding="0">
+                    Background="{DynamicResource Surface.Card}"
+                    BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
+                    CornerRadius="12" Padding="16">
                 <DockPanel>
-                    <Border DockPanel.Dock="Top" x:Name="PreviewBanner" Background="#1E40AF" Padding="10,8">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Image x:Name="PreviewLogo" Height="24" Margin="0,0,8,0" Stretch="Uniform"/>
-                            <TextBlock x:Name="PreviewBannerText" Foreground="White" FontWeight="Bold"/>
-                        </StackPanel>
-                    </Border>
-                    <Border x:Name="PreviewSidebar" Background="#1E3A8A" Width="120" DockPanel.Dock="Left">
-                        <StackPanel Margin="8,12">
-                            <TextBlock x:Name="PreviewSideText" Foreground="White" FontWeight="Bold" Margin="0,0,0,8"/>
-                            <Border x:Name="PreviewBtn" Background="#3B82F6" Padding="6,4" CornerRadius="4">
-                                <TextBlock x:Name="PreviewBtnText" Foreground="White" FontSize="11" Text="Sample Button"/>
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="{DynamicResource Lbl_LivePreview}"
+                               Style="{DynamicResource Text.H3}" Margin="0,0,0,12"/>
+
+                    <!-- Mini app shell -->
+                    <Border BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
+                            CornerRadius="8" ClipToBounds="True">
+                        <DockPanel>
+                            <!-- Title banner — runtime-tinted with PrimaryColor -->
+                            <Border DockPanel.Dock="Top" x:Name="PreviewBanner"
+                                    Background="#1E40AF" Padding="10,8">
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center">
+                                    <Image x:Name="PreviewLogo" Height="24"
+                                           Margin="0,0,8,0" Stretch="Uniform"/>
+                                    <TextBlock x:Name="PreviewBannerText"
+                                               Foreground="White" FontWeight="Bold"/>
+                                </StackPanel>
                             </Border>
-                        </StackPanel>
-                    </Border>
-                    <Border x:Name="PreviewWallpaper" Background="#1A1A1A">
-                        <TextBlock Text="🔒" FontSize="48" Foreground="White"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <!-- Sidebar — runtime-shaded -->
+                            <Border x:Name="PreviewSidebar"
+                                    Background="#1E3A8A" Width="120"
+                                    DockPanel.Dock="Left">
+                                <StackPanel Margin="8,12">
+                                    <TextBlock x:Name="PreviewSideText"
+                                               Foreground="White" FontWeight="Bold"
+                                               Margin="0,0,0,8"/>
+                                    <Border x:Name="PreviewBtn" Background="#3B82F6"
+                                            Padding="6,4" CornerRadius="4">
+                                        <TextBlock x:Name="PreviewBtnText"
+                                                   Foreground="White" FontSize="11"
+                                                   Text="Sample Button"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                            <!-- Lock-screen wallpaper preview -->
+                            <Border x:Name="PreviewWallpaper"
+                                    Background="#1A1A1A" MinHeight="220">
+                                <TextBlock Text="🔒" FontSize="48" Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </DockPanel>
                     </Border>
                 </DockPanel>
             </Border>
         </Grid>
-    </DockPanel>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" Padding="20,12"
+                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,1,0,0"
+                Background="{DynamicResource Surface.Elevated}">
+            <DockPanel LastChildFill="False">
+                <Button DockPanel.Dock="Left"
+                        Style="{DynamicResource Button.Danger}"
+                        Content="{DynamicResource Btn_ResetBranding}"
+                        Click="Reset_Click"/>
+                <Button DockPanel.Dock="Right"
+                        Style="{DynamicResource Button.Primary}"
+                        Content="{DynamicResource Btn_Apply}"
+                        Click="Apply_Click" IsDefault="True"/>
+                <Button DockPanel.Dock="Right"
+                        Style="{DynamicResource Button.Ghost}"
+                        Content="{DynamicResource Btn_Cancel}"
+                        Click="Cancel_Click"
+                        Margin="0,0,8,0"/>
+            </DockPanel>
+        </Border>
+    </Grid>
 </Window>

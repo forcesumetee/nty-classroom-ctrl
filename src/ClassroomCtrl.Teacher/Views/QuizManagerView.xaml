@@ -30,23 +30,42 @@
                        VerticalAlignment="Center"/>
         </DockPanel>
 
-        <!-- Toolbar -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
+        <!-- Toolbar — Phase 5.1 Section B.  WrapPanel so the row breaks to a second
+             line on narrow windows instead of overflowing under the chat panel; local
+             ToolbarBtn / ToolbarBtnDanger styles drop Padding+FontSize+MinHeight so all
+             7 buttons typically fit on one row at the design width. -->
+        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
+            <WrapPanel.Resources>
+                <Style x:Key="ToolbarBtn" TargetType="Button" BasedOn="{StaticResource Button.Primary}">
+                    <Setter Property="Padding" Value="10,6"/>
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="MinHeight" Value="30"/>
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="Margin" Value="0,0,6,6"/>
+                </Style>
+                <Style x:Key="ToolbarBtnDanger" TargetType="Button" BasedOn="{StaticResource Button.Danger}">
+                    <Setter Property="Padding" Value="10,6"/>
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="MinHeight" Value="30"/>
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="Margin" Value="0,0,6,6"/>
+                </Style>
+            </WrapPanel.Resources>
             <Button Content="{DynamicResource Btn_NewQuiz}" Click="NewQuiz_Click"
-                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+                    Style="{StaticResource ToolbarBtn}"/>
             <Button Content="{DynamicResource Btn_EditQuiz}" Click="EditQuiz_Click"
-                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+                    Style="{StaticResource ToolbarBtn}"/>
             <Button Content="{DynamicResource Btn_DeleteQuiz}" Click="DeleteQuiz_Click"
-                    Style="{DynamicResource Button.Danger}" Margin="0,0,8,0"/>
+                    Style="{StaticResource ToolbarBtnDanger}"/>
             <Button Content="{DynamicResource Btn_ImportWord}" Click="ImportWord_Click"
-                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+                    Style="{StaticResource ToolbarBtn}"/>
             <Button Content="{DynamicResource Btn_SendQuiz}" Click="SendQuiz_Click"
-                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+                    Style="{StaticResource ToolbarBtn}"/>
             <Button Content="{DynamicResource Btn_ViewResults}" Click="ViewResults_Click"
-                    Style="{DynamicResource Button.Primary}" Margin="0,0,8,0"/>
+                    Style="{StaticResource ToolbarBtn}"/>
             <Button Content="{DynamicResource Btn_EndExam}" Click="EndExam_Click"
-                    Style="{DynamicResource Button.Danger}"/>
-        </StackPanel>
+                    Style="{StaticResource ToolbarBtnDanger}"/>
+        </WrapPanel>
 
         <!-- Body: 2-column layout (320 list / * preview) -->
         <Grid Grid.Row="2">

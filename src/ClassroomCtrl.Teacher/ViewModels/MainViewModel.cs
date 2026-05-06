@@ -288,6 +288,12 @@ public partial class MainViewModel : ObservableObject
     // Phase 9.3: Class Roster
     public IRelayCommand OpenClassRosterCommand { get; }
     public IRelayCommand MarkAttendanceCommand { get; }
+    // Phase 7 Section D — let the teacher exit attendance mode without
+    // routing through the Roster Manager; HasActiveRoster mirrors the
+    // visibility flag so sidebar can disable Mark Attendance + show its
+    // tooltip when nothing is active.
+    public IRelayCommand DeactivateRosterCommand { get; }
+    [ObservableProperty] private bool hasActiveRoster;
 
     // Phase 3.5: Sound effects toggle
     public IRelayCommand ToggleSoundsCommand { get; }
@@ -392,6 +398,7 @@ public partial class MainViewModel : ObservableObject
 
         OpenClassRosterCommand = new RelayCommand(OpenClassRoster);
         MarkAttendanceCommand = new RelayCommand(MarkAttendance);
+        DeactivateRosterCommand = new RelayCommand(DeactivateRoster);
 
         ToggleSoundsCommand = new RelayCommand(ToggleSounds);
         UpdateSoundsButtonText();
@@ -656,6 +663,10 @@ public partial class MainViewModel : ObservableObject
         if (App.AdaptiveBitrate != null) RefreshBitrateLabel(App.AdaptiveBitrate.CurrentBitrateBps);
         UpdateRecordingTexts();
         UpdateSoundsButtonText();
+        // Phase 4 Section A — camera button text was set once at startup via
+        // UpdateCameraButtonText() but never refreshed on language switch, so it stuck
+        // in the boot-time language (often Thai).  Drive it through the same pump.
+        UpdateCameraButtonText();
         // Phase 3 Section E — Everyone tab label follows the active language.
         EveryoneConversation.DisplayName = Loc.Get("Hdr_Everyone");
     }
@@ -1592,6 +1603,14 @@ public partial class MainViewModel : ObservableObject
         w.ShowDialog();
     }
 
+    /// <summary>
+    /// Phase 7 Section D — opens the manual Attendance dialog so the teacher
+    /// can mark per-student status (Present/Absent/Late/Excused) and export
+    /// to .xlsx.  Pre-marks each student Present if their MachineName is in
+    /// the currently-connected set, otherwise Absent — replaces the old
+    /// auto-mark-only flow which logged a Chat_AttendanceMarked summary
+    /// without giving the teacher a chance to override per-student.
+    /// </summary>
     private void MarkAttendance()
     {
         if (App.Roster == null || App.Roster.ActiveRoster == null)
@@ -1599,9 +1618,40 @@ public partial class MainViewModel : ObservableObject
             AppendSystemChat(Loc.Get("Err_NoActiveRoster"));
             return;
         }
-        var connected = Students.Select(s => s.MachineName).ToList();
-        var present = App.Roster.MarkAttendance(connected);
-        AppendSystemChat(Loc.Format("Chat_AttendanceMarked", present, App.Roster.ActiveRoster.Students.Count));
+        var connected = new HashSet<string>(
+            Students.Select(s => s.MachineName ?? "")
+                    .Where(m => !string.IsNullOrWhiteSpace(m)),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Phase 7.3 diagnostic — log the ActiveRoster reference and each
+        // EnrolledStudent's HasBeenMarked + AttendanceStatus before opening
+        // the dialog, so we can verify mutations made by Save_Click survive
+        // until the next dialog open within the same session.
+        var ar = App.Roster.ActiveRoster;
+        System.Diagnostics.Debug.WriteLine(
+            $"[ATTENDANCE INVOKE] ActiveRoster='{ar.ClassName}' " +
+            $"hash={ar.GetHashCode()} students={ar.Students.Count} " +
+            $"connectedCount={connected.Count}");
+        for (int i = 0; i < ar.Students.Count; i++)
+        {
+            var s = ar.Students[i];
+            System.Diagnostics.Debug.WriteLine(
+                $"[ATTENDANCE INVOKE] idx={i} name='{s.FullName}' " +
+                $"marked={s.HasBeenMarked} status={s.AttendanceStatus} " +
+                $"machine='{s.MachineName}' studentHash={s.GetHashCode()}");
+        }
+
+        var win = new AttendanceWindow(ar, connected)
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
+        win.ShowDialog();
+    }
+
+    private void DeactivateRoster()
+    {
+        if (App.Roster == null) return;
+        App.Roster.SetActive(null);  // raises ActiveRosterChanged → OnActiveRosterChanged updates flags
     }
 
     private void OnActiveRosterChanged(object? sender, ClassroomCtrl.Shared.Models.Roster.ClassRoster? roster)
@@ -1612,11 +1662,13 @@ public partial class MainViewModel : ObservableObject
             {
                 ActiveClassName = "";
                 ActiveClassVisibility = System.Windows.Visibility.Collapsed;
+                HasActiveRoster = false;
             }
             else
             {
                 ActiveClassName = $"📚 {roster.ClassName}";
                 ActiveClassVisibility = System.Windows.Visibility.Visible;
+                HasActiveRoster = true;
             }
         });
     }

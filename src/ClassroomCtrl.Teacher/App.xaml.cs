@@ -157,9 +157,13 @@ public partial class App : Application
 
         // Phase 11.3: Branding (live apply via DynamicResource swap, mirroring Loc.cs pattern)
         // Phase 6C: also restores the persisted Light/Dark theme before brand colors land.
+        // Phase 4 Section D: Light is now the default surface palette.  Existing branding.json
+        // files written under Phase 8 still carry ThemeMode="Dark"; we override at startup so
+        // the new design language ships consistently.  Runtime ApplyTheme is still wired so
+        // the Branding dialog can flip back if a future toggle re-enables dark.
         ClassroomCtrl.Shared.Branding.BrandingService.Initialize();
         ClassroomCtrl.Shared.Branding.BrandingService.ApplyTheme(
-            ClassroomCtrl.Shared.Branding.BrandingService.CurrentTheme);
+            ClassroomCtrl.Shared.Branding.ThemeMode.Light);
         ClassroomCtrl.Shared.Branding.BrandingService.Changed += ApplyBrandingToResources;
         ApplyBrandingToResources();
 
@@ -194,9 +198,48 @@ public partial class App : Application
     {
         var app = Current;
         if (app == null) return;
+
+        // Phase 4.1 Hotfix — BrandingService.EnumerateResources() emits Primary-tinted
+        // Surface.Background / .Elevated / .Overlay using Shade(primary, -0.85 / -0.75 / -0.65).
+        // Those factors were sized for the pre-Phase-4 dark default and produce near-black
+        // surfaces (e.g. #1E40AF → #04091A) on top of any baseline.  A direct App.Resources
+        // entry beats a MergedDictionaries entry, so even though Colors.Light.xaml ships
+        // #F8FAFC for Surface.Background, the runtime resolves to the near-black override.
+        // When Light is active, skip those keys and explicitly Remove any prior write so the
+        // Colors.Light.xaml values from MergedDictionaries flow through as the final answer.
+        bool isLight = ClassroomCtrl.Shared.Branding.BrandingService.CurrentTheme
+                     == ClassroomCtrl.Shared.Branding.ThemeMode.Light;
+
+        // Phase 4.3 — BrandWallpaperBrush has a Shade(primary, -0.40) fallback for the
+        // no-image case (designed for student lock-screen overlays where a tinted plain
+        // brush is fine).  In MainWindow it would paint a dark navy backplane over the
+        // Light theme, which isn't what App Background is supposed to do.  When the user
+        // has no wallpaper file set, drop the key so the binding falls to Transparent and
+        // the parent Surface.Background shows through.
+        var cfg = ClassroomCtrl.Shared.Branding.BrandingService.Current;
+        bool hasWallpaper = !string.IsNullOrWhiteSpace(cfg.WallpaperPath)
+                         && System.IO.File.Exists(cfg.WallpaperPath);
+
         foreach (var kv in ClassroomCtrl.Shared.Branding.BrandingService.EnumerateResources())
+        {
+            if (isLight && IsBrandedDarkSurfaceKey(kv.Key))
+            {
+                app.Resources.Remove(kv.Key);
+                continue;
+            }
+            if (kv.Key == "BrandWallpaperBrush" && !hasWallpaper)
+            {
+                app.Resources.Remove(kv.Key);
+                continue;
+            }
             app.Resources[kv.Key] = kv.Value;
+        }
     }
+
+    private static bool IsBrandedDarkSurfaceKey(string key)
+        => key == "Surface.Background"
+        || key == "Surface.Elevated"
+        || key == "Surface.Overlay";
 
     private const string RegPath = @"Software\NTY\ClassroomCtrl";
     private const string RegValue = "Language";

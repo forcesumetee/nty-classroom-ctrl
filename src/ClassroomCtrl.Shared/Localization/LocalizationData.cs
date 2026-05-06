@@ -252,13 +252,15 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "Exam System",
         ["Lbl_QuizEditor"] = "Quiz Editor",
         ["Lbl_QuestionEditor"] = "Question Editor",
-        ["Btn_NewQuiz"] = "New Quiz",
-        ["Btn_EditQuiz"] = "Edit",
-        ["Btn_DeleteQuiz"] = "Delete",
-        ["Btn_ImportWord"] = "Import from Word",
-        ["Btn_SendQuiz"] = "Send to Students",
-        ["Btn_ViewResults"] = "View Results",
-        ["Btn_EndExam"] = "End Exam",
+        // Phase 5.1 Section B — toolbar labels shortened + iconified so all 7 fit
+        // in the chat-flanked main column without overflow into the chat panel.
+        ["Btn_NewQuiz"] = "➕ New",
+        ["Btn_EditQuiz"] = "✏ Edit",
+        ["Btn_DeleteQuiz"] = "🗑 Delete",
+        ["Btn_ImportWord"] = "📥 Import",
+        ["Btn_SendQuiz"] = "📤 Send",
+        ["Btn_ViewResults"] = "📊 Results",
+        ["Btn_EndExam"] = "⏹ End",
         ["Btn_AddQuestion"] = "Add Question",
         ["Btn_EditQuestion"] = "Edit Question",
         ["Btn_RemoveQuestion"] = "Remove",
@@ -463,7 +465,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "Primary Color",
         ["Lbl_AccentColor"] = "Accent Color",
         ["Lbl_Logo"] = "Logo",
-        ["Lbl_Wallpaper"] = "Lock Screen Wallpaper",
+        ["Lbl_AppBackground"] = "App Background",
+        ["Lbl_BrandingHint"] = "Customize app name, organization, brand colors, logo, and lock-screen wallpaper.  Changes apply live to all open windows.",
+        ["Lbl_AppBackgroundHint"] = "Sets the background image visible behind the student grid in the main app window.  Image is stored locally on this Teacher PC only — student PCs are not affected.",
+        ["Lbl_LivePreview"] = "Live Preview",
         ["Lbl_AppName_Branding"] = "App Name",
         ["Lbl_OrgName"] = "Organization Name",
         ["Lbl_ShowOrgInTitle"] = "Show organization name in title",
@@ -491,6 +496,7 @@ internal static class LocalizationData
         ["Dlg_SettingsSaved"] = "Settings Saved",
         ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.",
         ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.",
+        ["Lbl_AdminPasswordSettings_HintShort"] = "Set the password students enter to unlock connection settings on their PC.",
         ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings",
         ["Lbl_ConfirmPassword"] = "Confirm Password",
         ["Lbl_NewPassword"] = "New Password",
@@ -505,6 +511,39 @@ internal static class LocalizationData
         ["Msg_NoHashToExport"] = "Save a password first before exporting.",
         ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.",
         ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.",
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "Manage class rosters — create, edit, or activate the active class for the session.",
+        ["Hint_RosterEditor"] = "Add students to this class. Use 'Add from connected' to grab everyone online, or enter rows manually.",
+        ["Hint_QuizEditor"] = "Define the quiz title, duration, and questions. Click a question to edit it.",
+        ["Hint_QuestionEditor"] = "Edit the question text and choices. Mark the correct answer.",
+        ["Lbl_RosterCol_Class"] = "Class",
+        ["Lbl_RosterCol_Students"] = "Students",
+        ["Lbl_RosterCol_LastUsed"] = "Last used",
+        ["Lbl_RosterCol_Machine"] = "Machine",
+        ["Lbl_RosterStudents"] = "Students",
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "Pick which webcam to use, then choose resolution and frame rate before starting your broadcast.",
+        ["Hint_NetMovie"] = "Add video files, select one, and click Play to broadcast it to every connected student simultaneously.",
+        ["Hint_MicMonitor"] = "Toggle Listen on each student to hear their microphone. Audio mixes in real time.",
+        ["Btn_Play"] = "▶ Play",
+        ["Btn_Pause"] = "⏸ Pause",
+        ["Btn_Stop"] = "⏹ Stop",
+        ["Lbl_MicListen"] = "Listen",
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "Mark Attendance",
+        ["Lbl_AttendanceStatus"] = "Status",
+        ["Lbl_Present"] = "Present",
+        ["Lbl_Absent"] = "Absent",
+        ["Lbl_Late"] = "Late",
+        ["Lbl_Excused"] = "Excused",
+        ["Lbl_AttendanceStats"] = "Present: {0} | Absent: {1} | Late: {2} | Excused: {3}",
+        ["Btn_DeactivateRoster"] = "Deactivate",
+        ["Tooltip_NoActiveRoster"] = "Activate a roster first",
+        ["Msg_AttendanceExported"] = "Attendance saved to: {0}",
+        ["Lbl_Success"] = "Success",
     };
 
     private static Dictionary<string, string> Th() => new()
@@ -716,13 +755,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "ระบบข้อสอบ",
         ["Lbl_QuizEditor"] = "แก้ไขข้อสอบ",
         ["Lbl_QuestionEditor"] = "แก้ไขคำถาม",
-        ["Btn_NewQuiz"] = "ข้อสอบใหม่",
-        ["Btn_EditQuiz"] = "แก้ไข",
-        ["Btn_DeleteQuiz"] = "ลบ",
-        ["Btn_ImportWord"] = "นำเข้าจาก Word",
-        ["Btn_SendQuiz"] = "ส่งให้นักเรียน",
-        ["Btn_ViewResults"] = "ดูผลสอบ",
-        ["Btn_EndExam"] = "จบสอบ",
+        ["Btn_NewQuiz"] = "➕ ใหม่",
+        ["Btn_EditQuiz"] = "✏ แก้ไข",
+        ["Btn_DeleteQuiz"] = "🗑 ลบ",
+        ["Btn_ImportWord"] = "📥 นำเข้า",
+        ["Btn_SendQuiz"] = "📤 ส่ง",
+        ["Btn_ViewResults"] = "📊 ผลสอบ",
+        ["Btn_EndExam"] = "⏹ จบสอบ",
         ["Btn_AddQuestion"] = "เพิ่มคำถาม",
         ["Btn_EditQuestion"] = "แก้คำถาม",
         ["Btn_RemoveQuestion"] = "ลบคำถาม",
@@ -927,7 +966,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "สีหลัก",
         ["Lbl_AccentColor"] = "สี Accent",
         ["Lbl_Logo"] = "Logo",
-        ["Lbl_Wallpaper"] = "Wallpaper หน้าจอล็อก",
+        ["Lbl_AppBackground"] = "พื้นหลังแอพ",
+        ["Lbl_BrandingHint"] = "ปรับแต่งชื่อแอป องค์กร สีแบรนด์ โลโก้ และ wallpaper หน้าจอล็อก  การแก้จะมีผลทันทีกับทุกหน้าต่าง",
+        ["Lbl_AppBackgroundHint"] = "ตั้งรูปพื้นหลังที่แสดงด้านหลัง student grid ในหน้าต่างหลักของแอพ  รูปถูกเก็บไว้ในเครื่อง Teacher นี้เท่านั้น — เครื่องนักเรียนไม่ได้รับผลกระทบ",
+        ["Lbl_LivePreview"] = "พรีวิวสด",
         ["Lbl_AppName_Branding"] = "ชื่อ App",
         ["Lbl_OrgName"] = "ชื่อองค์กร",
         ["Lbl_ShowOrgInTitle"] = "แสดงชื่อองค์กรใน title",
@@ -952,6 +994,7 @@ internal static class LocalizationData
         ["Dlg_SettingsSaved"] = "บันทึกการตั้งค่าแล้ว",
         ["Dlg_TeacherIPSavedMsg"] = "บันทึก IP ครูแล้ว Agent จะเชื่อมต่อใหม่ด้วย IP ใหม่",
         ["Lbl_AdminPasswordSettings_Hint"] = "ตั้งรหัสผ่านสำหรับให้นักเรียนใส่ก่อนแก้ค่าเชื่อมต่อบนเครื่อง hash บันทึกไว้ใน HKCU ของเครื่องนี้ — กด Export .reg เพื่อ deploy ไปทุกเครื่องนักเรียน",
+        ["Lbl_AdminPasswordSettings_HintShort"] = "ตั้งรหัสที่นักเรียนต้องใส่ก่อนแก้ค่าเชื่อมต่อบนเครื่องตัวเอง",
         ["Lbl_AdminPasswordSettings_Title"] = "ตั้งรหัสผ่าน Admin",
         ["Lbl_ConfirmPassword"] = "ยืนยันรหัสผ่าน",
         ["Lbl_NewPassword"] = "รหัสผ่านใหม่",
@@ -966,6 +1009,39 @@ internal static class LocalizationData
         ["Msg_NoHashToExport"] = "กด Save บันทึกรหัสผ่านก่อนจึงจะ export ได้",
         ["Msg_RegFileExported"] = "บันทึกไฟล์ .reg แล้ว แจกให้เครื่องนักเรียนแล้วรันด้วยสิทธิ์ admin เพื่อ deploy ทั้งเครื่อง",
         ["Tooltip_ExportReg"] = "Export hash รหัสผ่านเป็นไฟล์ .reg แจกให้เครื่องนักเรียนแต่ละเครื่องรัน",
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "จัดการรายชื่อชั้นเรียน — สร้าง แก้ไข หรือเลือกชั้นที่ใช้งานในเซสชันนี้",
+        ["Hint_RosterEditor"] = "เพิ่มนักเรียนเข้าชั้นนี้ ใช้ 'เพิ่มจากนักเรียนที่เชื่อมต่อ' เพื่อดึงทุกคนที่ออนไลน์อยู่ หรือเพิ่มเองทีละแถว",
+        ["Hint_QuizEditor"] = "ตั้งชื่อข้อสอบ ระยะเวลา และข้อคำถาม ดับเบิลคลิกที่ข้อคำถามเพื่อแก้ไข",
+        ["Hint_QuestionEditor"] = "แก้ไขโจทย์และตัวเลือก ทำเครื่องหมายคำตอบที่ถูกต้อง",
+        ["Lbl_RosterCol_Class"] = "ชั้น",
+        ["Lbl_RosterCol_Students"] = "นักเรียน",
+        ["Lbl_RosterCol_LastUsed"] = "ใช้งานล่าสุด",
+        ["Lbl_RosterCol_Machine"] = "เครื่อง",
+        ["Lbl_RosterStudents"] = "รายชื่อนักเรียน",
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "เลือกเว็บแคม ความละเอียด และอัตราเฟรมก่อนเริ่มออกอากาศ",
+        ["Hint_NetMovie"] = "เพิ่มไฟล์วิดีโอ เลือกไฟล์ที่ต้องการแล้วกด Play เพื่อเล่นพร้อมกันให้นักเรียนที่เชื่อมต่อทุกคน",
+        ["Hint_MicMonitor"] = "เปิด Listen ของนักเรียนแต่ละคนเพื่อฟังเสียงไมโครโฟน เสียงผสมรวมแบบเรียลไทม์",
+        ["Btn_Play"] = "▶ เล่น",
+        ["Btn_Pause"] = "⏸ หยุดชั่วคราว",
+        ["Btn_Stop"] = "⏹ หยุด",
+        ["Lbl_MicListen"] = "ฟังเสียง",
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "เช็คชื่อ",
+        ["Lbl_AttendanceStatus"] = "สถานะ",
+        ["Lbl_Present"] = "มา",
+        ["Lbl_Absent"] = "ขาด",
+        ["Lbl_Late"] = "มาสาย",
+        ["Lbl_Excused"] = "ลา",
+        ["Lbl_AttendanceStats"] = "มา: {0} | ขาด: {1} | สาย: {2} | ลา: {3}",
+        ["Btn_DeactivateRoster"] = "ออกจากคลาส",
+        ["Tooltip_NoActiveRoster"] = "เปิดใช้งานคลาสก่อน",
+        ["Msg_AttendanceExported"] = "บันทึกการเช็คชื่อที่: {0}",
+        ["Lbl_Success"] = "สำเร็จ",
     };
 
     private static Dictionary<string, string> Zh() => new()
@@ -1005,11 +1081,11 @@ internal static class LocalizationData
         ["Time_JustNow"] = "刚刚", // TODO: review Time_JustNow
         ["Time_MinAgo"] = "{0} 分钟前", // TODO: review Time_MinAgo
         ["Time_HourAgo"] = "{0} 小时前", // TODO: review Time_HourAgo
-        ["Hdr_ClassTools"] = "Class Tools", // TODO: translate Hdr_ClassTools
-        ["Hdr_Audio"] = "Audio", // TODO: translate Hdr_Audio
-        ["Hdr_RecordingBreakout"] = "Recording & Breakout", // TODO: translate Hdr_RecordingBreakout
-        ["Hdr_TeachAssess"] = "Teach & Assess", // TODO: translate Hdr_TeachAssess
-        ["Hdr_System"] = "System", // TODO: translate Hdr_System
+        ["Hdr_ClassTools"] = "课堂工具",  // TODO: review Hdr_ClassTools
+        ["Hdr_Audio"] = "音频",  // TODO: review Hdr_Audio
+        ["Hdr_RecordingBreakout"] = "录制与分组",  // TODO: review Hdr_RecordingBreakout
+        ["Hdr_TeachAssess"] = "教学与评估",  // TODO: review Hdr_TeachAssess
+        ["Hdr_System"] = "系统",  // TODO: review Hdr_System
         ["Help_ClassTools"] = "管理实时课堂的工具 — 锁定学生屏幕、应用限制、广播摄像头、屏幕批注、播放媒体、发送文件。",  // TODO: review
         ["Help_Audio"] = "音频控件 — 切换声音和麦克风、广播电脑音频、静音所有学生、监听学生麦克风并调节音量。",  // TODO: review
         ["Help_RecordingBreakout"] = "录制课程以便日后查看,将班级分成小组讨论室,或同时在多个物理教室授课。",  // TODO: review
@@ -1172,25 +1248,26 @@ internal static class LocalizationData
         ["Lbl_AdaptiveOff"] = "自适应: 关",
 
         // Phase 8 (Bug A) — Admin password + IP-update keys. Values copy English; translator follow-up needed.
-        ["Btn_AdminPasswordSettings"] = "Admin Password", // TODO: translate Btn_AdminPasswordSettings
-        ["Btn_ResetToDefault"] = "Reset to default", // TODO: translate Btn_ResetToDefault
-        ["Chat_TeacherIPUpdated"] = "[System] Teacher IP updated. Reconnecting…", // TODO: translate Chat_TeacherIPUpdated
-        ["Dlg_SettingsSaved"] = "Settings Saved", // TODO: translate Dlg_SettingsSaved
-        ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.", // TODO: translate Dlg_TeacherIPSavedMsg
-        ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.", // TODO: translate Lbl_AdminPasswordSettings_Hint
-        ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings", // TODO: translate Lbl_AdminPasswordSettings_Title
-        ["Lbl_ConfirmPassword"] = "Confirm Password", // TODO: translate Lbl_ConfirmPassword
-        ["Lbl_NewPassword"] = "New Password", // TODO: translate Lbl_NewPassword
-        ["Msg_PasswordEmpty"] = "Password cannot be empty.", // TODO: translate Msg_PasswordEmpty
-        ["Msg_PasswordMismatch"] = "Passwords do not match.", // TODO: translate Msg_PasswordMismatch
-        ["Msg_PasswordReset"] = "Reset to built-in default password (nty2026).", // TODO: translate Msg_PasswordReset
-        ["Msg_PasswordSaved"] = "Password updated. Deploy the same hash to student PCs to apply.", // TODO: translate Msg_PasswordSaved
-        ["Msg_PasswordSaveFailed"] = "Failed to save password: {0}", // TODO: translate Msg_PasswordSaveFailed
-        ["Msg_PasswordTooShort"] = "Password must be at least 4 characters.", // TODO: translate Msg_PasswordTooShort
-        ["Btn_ExportRegFile"] = "Export .reg", // TODO: translate Btn_ExportRegFile
-        ["Msg_NoHashToExport"] = "Save a password first before exporting.", // TODO: translate Msg_NoHashToExport
-        ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.", // TODO: translate Msg_RegFileExported
-        ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.", // TODO: translate Tooltip_ExportReg
+        ["Btn_AdminPasswordSettings"] = "管理员密码",  // TODO: review Btn_AdminPasswordSettings
+        ["Btn_ResetToDefault"] = "重置为默认值",  // TODO: review Btn_ResetToDefault
+        ["Chat_TeacherIPUpdated"] = "[系统] 教师 IP 已更新。正在重新连接…",  // TODO: review Chat_TeacherIPUpdated
+        ["Dlg_SettingsSaved"] = "设置已保存",  // TODO: review Dlg_SettingsSaved
+        ["Dlg_TeacherIPSavedMsg"] = "教师 IP 已保存。代理将使用新地址重新连接。",  // TODO: review Dlg_TeacherIPSavedMsg
+        ["Lbl_AdminPasswordSettings_Hint"] = "设置学生在其电脑上更改连接设置时必须输入的密码。哈希值保存在本机的 HKCU 下 — 使用导出 .reg 部署到所有学生电脑(全机生效)。",  // TODO: review Lbl_AdminPasswordSettings_Hint
+        ["Lbl_AdminPasswordSettings_HintShort"] = "设置学生在解锁电脑连接设置时输入的密码。",  // TODO: review
+        ["Lbl_AdminPasswordSettings_Title"] = "管理员密码设置",  // TODO: review Lbl_AdminPasswordSettings_Title
+        ["Lbl_ConfirmPassword"] = "确认密码",  // TODO: review Lbl_ConfirmPassword
+        ["Lbl_NewPassword"] = "新密码",  // TODO: review Lbl_NewPassword
+        ["Msg_PasswordEmpty"] = "密码不能为空。",  // TODO: review Msg_PasswordEmpty
+        ["Msg_PasswordMismatch"] = "两次输入的密码不一致。",  // TODO: review Msg_PasswordMismatch
+        ["Msg_PasswordReset"] = "已重置为内置默认密码 (nty2026)。",  // TODO: review Msg_PasswordReset
+        ["Msg_PasswordSaved"] = "密码已更新。请将相同的哈希值部署到学生电脑以生效。",  // TODO: review Msg_PasswordSaved
+        ["Msg_PasswordSaveFailed"] = "保存密码失败:{0}",  // TODO: review Msg_PasswordSaveFailed
+        ["Msg_PasswordTooShort"] = "密码至少需要 4 个字符。",  // TODO: review Msg_PasswordTooShort
+        ["Btn_ExportRegFile"] = "导出 .reg",  // TODO: review Btn_ExportRegFile
+        ["Msg_NoHashToExport"] = "请先保存密码再导出。",  // TODO: review Msg_NoHashToExport
+        ["Msg_RegFileExported"] = "已保存 .reg 文件。在每台学生电脑上以管理员权限运行以全机部署。",  // TODO: review Msg_RegFileExported
+        ["Tooltip_ExportReg"] = "将密码哈希导出为 .reg 文件。分发到学生电脑并以管理员身份运行以应用。",  // TODO: review Tooltip_ExportReg
         // ===== Phase 1.2 fix-up: machine-translated entries — review tagged =====
         ["Btn_Cancel"] = "取消", // TODO: review Btn_Cancel
         ["Btn_Save"] = "保存", // TODO: review Btn_Save
@@ -1199,13 +1276,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "考试系统", // TODO: review Lbl_QuizManager
         ["Lbl_QuizEditor"] = "考试编辑器", // TODO: review Lbl_QuizEditor
         ["Lbl_QuestionEditor"] = "题目编辑器", // TODO: review Lbl_QuestionEditor
-        ["Btn_NewQuiz"] = "新建考试", // TODO: review Btn_NewQuiz
-        ["Btn_EditQuiz"] = "编辑", // TODO: review Btn_EditQuiz
-        ["Btn_DeleteQuiz"] = "删除", // TODO: review Btn_DeleteQuiz
-        ["Btn_ImportWord"] = "从 Word 导入", // TODO: review Btn_ImportWord
-        ["Btn_SendQuiz"] = "发送给学生", // TODO: review Btn_SendQuiz
-        ["Btn_ViewResults"] = "查看结果", // TODO: review Btn_ViewResults
-        ["Btn_EndExam"] = "结束考试", // TODO: review Btn_EndExam
+        ["Btn_NewQuiz"] = "➕ 新建", // TODO: review Btn_NewQuiz
+        ["Btn_EditQuiz"] = "✏ 编辑", // TODO: review Btn_EditQuiz
+        ["Btn_DeleteQuiz"] = "🗑 删除", // TODO: review Btn_DeleteQuiz
+        ["Btn_ImportWord"] = "📥 导入", // TODO: review Btn_ImportWord
+        ["Btn_SendQuiz"] = "📤 发送", // TODO: review Btn_SendQuiz
+        ["Btn_ViewResults"] = "📊 结果", // TODO: review Btn_ViewResults
+        ["Btn_EndExam"] = "⏹ 结束", // TODO: review Btn_EndExam
         ["Btn_AddQuestion"] = "添加题目", // TODO: review Btn_AddQuestion
         ["Btn_EditQuestion"] = "编辑题目", // TODO: review Btn_EditQuestion
         ["Btn_RemoveQuestion"] = "移除", // TODO: review Btn_RemoveQuestion
@@ -1368,7 +1445,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "主色", // TODO: review Lbl_PrimaryColor
         ["Lbl_AccentColor"] = "强调色", // TODO: review Lbl_AccentColor
         ["Lbl_Logo"] = "标志", // TODO: review Lbl_Logo
-        ["Lbl_Wallpaper"] = "锁屏壁纸", // TODO: review Lbl_Wallpaper
+        ["Lbl_AppBackground"] = "应用背景",  // TODO: review
+        ["Lbl_BrandingHint"] = "自定义应用名称、组织、品牌颜色、徽标和锁屏壁纸。更改将立即应用于所有打开的窗口。",  // TODO: review
+        ["Lbl_AppBackgroundHint"] = "设置主应用窗口中学生网格背后可见的背景图像。图像仅存储在此教师 PC 本地 — 不影响学生 PC。",  // TODO: review
+        ["Lbl_LivePreview"] = "实时预览",  // TODO: review
         ["Lbl_AppName_Branding"] = "应用名称", // TODO: review Lbl_AppName_Branding
         ["Lbl_OrgName"] = "机构名称", // TODO: review Lbl_OrgName
         ["Lbl_ShowOrgInTitle"] = "在标题中显示机构名称", // TODO: review Lbl_ShowOrgInTitle
@@ -1381,6 +1461,39 @@ internal static class LocalizationData
         ["Btn_StartExam"] = "开始考试 →", // TODO: review Btn_StartExam
         ["Lbl_FillBeforeExam"] = "请在考试开始前填写信息。", // TODO: review Lbl_FillBeforeExam
         ["Err_FillAllFields"] = "请填写所有字段。", // TODO: review Err_FillAllFields
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "管理班级名单 — 创建、编辑或激活当前会话使用的班级。", // TODO: review Hint_RosterManager
+        ["Hint_RosterEditor"] = "向此班级添加学生。使用'从已连接添加'快速添加在线学生，或手动输入。", // TODO: review Hint_RosterEditor
+        ["Hint_QuizEditor"] = "设置考试标题、时长和题目。双击题目可编辑。", // TODO: review Hint_QuizEditor
+        ["Hint_QuestionEditor"] = "编辑题目文本和选项。标记正确答案。", // TODO: review Hint_QuestionEditor
+        ["Lbl_RosterCol_Class"] = "班级", // TODO: review Lbl_RosterCol_Class
+        ["Lbl_RosterCol_Students"] = "学生", // TODO: review Lbl_RosterCol_Students
+        ["Lbl_RosterCol_LastUsed"] = "最近使用", // TODO: review Lbl_RosterCol_LastUsed
+        ["Lbl_RosterCol_Machine"] = "计算机", // TODO: review Lbl_RosterCol_Machine
+        ["Lbl_RosterStudents"] = "学生", // TODO: review Lbl_RosterStudents
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "开始广播前，请选择摄像头、分辨率和帧率。", // TODO: review Hint_CameraSelector
+        ["Hint_NetMovie"] = "添加视频文件，选择一个，然后点击 Play 同步播放给所有已连接学生。", // TODO: review Hint_NetMovie
+        ["Hint_MicMonitor"] = "在每位学生上启用 Listen 即可收听其麦克风。音频实时混合。", // TODO: review Hint_MicMonitor
+        ["Btn_Play"] = "▶ 播放", // TODO: review Btn_Play
+        ["Btn_Pause"] = "⏸ 暂停", // TODO: review Btn_Pause
+        ["Btn_Stop"] = "⏹ 停止", // TODO: review Btn_Stop
+        ["Lbl_MicListen"] = "Listen", // TODO: review Lbl_MicListen
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "考勤", // TODO: review Hdr_MarkAttendance
+        ["Lbl_AttendanceStatus"] = "状态", // TODO: review Lbl_AttendanceStatus
+        ["Lbl_Present"] = "出席", // TODO: review Lbl_Present
+        ["Lbl_Absent"] = "缺席", // TODO: review Lbl_Absent
+        ["Lbl_Late"] = "迟到", // TODO: review Lbl_Late
+        ["Lbl_Excused"] = "请假", // TODO: review Lbl_Excused
+        ["Lbl_AttendanceStats"] = "出席: {0} | 缺席: {1} | 迟到: {2} | 请假: {3}", // TODO: review Lbl_AttendanceStats
+        ["Btn_DeactivateRoster"] = "停用", // TODO: review Btn_DeactivateRoster
+        ["Tooltip_NoActiveRoster"] = "请先激活班级名单", // TODO: review Tooltip_NoActiveRoster
+        ["Msg_AttendanceExported"] = "考勤已保存至: {0}", // TODO: review Msg_AttendanceExported
+        ["Lbl_Success"] = "成功", // TODO: review Lbl_Success
     };
 
     private static Dictionary<string, string> Ja() => new()
@@ -1420,11 +1533,11 @@ internal static class LocalizationData
         ["Time_JustNow"] = "たった今", // TODO: review Time_JustNow
         ["Time_MinAgo"] = "{0} 分前", // TODO: review Time_MinAgo
         ["Time_HourAgo"] = "{0} 時間前", // TODO: review Time_HourAgo
-        ["Hdr_ClassTools"] = "Class Tools", // TODO: translate Hdr_ClassTools
-        ["Hdr_Audio"] = "Audio", // TODO: translate Hdr_Audio
-        ["Hdr_RecordingBreakout"] = "Recording & Breakout", // TODO: translate Hdr_RecordingBreakout
-        ["Hdr_TeachAssess"] = "Teach & Assess", // TODO: translate Hdr_TeachAssess
-        ["Hdr_System"] = "System", // TODO: translate Hdr_System
+        ["Hdr_ClassTools"] = "クラスツール",  // TODO: review Hdr_ClassTools
+        ["Hdr_Audio"] = "オーディオ",  // TODO: review Hdr_Audio
+        ["Hdr_RecordingBreakout"] = "録画・ブレイクアウト",  // TODO: review Hdr_RecordingBreakout
+        ["Hdr_TeachAssess"] = "授業・評価",  // TODO: review Hdr_TeachAssess
+        ["Hdr_System"] = "システム",  // TODO: review Hdr_System
         ["Help_ClassTools"] = "ライブクラスを管理するツール — 生徒の画面をロック、制限を適用、カメラ配信、画面に注釈、メディア再生、ファイル送信。",  // TODO: review
         ["Help_Audio"] = "オーディオコントロール — サウンドとマイクの切り替え、PCオーディオの配信、全生徒のミュート、生徒のマイク監視、音量調整。",  // TODO: review
         ["Help_RecordingBreakout"] = "後で見直すためにセッションを録画、クラスを小規模なブレイクアウトルームに分割、または複数の物理教室で同時授業。",  // TODO: review
@@ -1587,25 +1700,26 @@ internal static class LocalizationData
         ["Lbl_AdaptiveOff"] = "適応: OFF",
 
         // Phase 8 (Bug A) — Admin password + IP-update keys. Values copy English; translator follow-up needed.
-        ["Btn_AdminPasswordSettings"] = "Admin Password", // TODO: translate Btn_AdminPasswordSettings
-        ["Btn_ResetToDefault"] = "Reset to default", // TODO: translate Btn_ResetToDefault
-        ["Chat_TeacherIPUpdated"] = "[System] Teacher IP updated. Reconnecting…", // TODO: translate Chat_TeacherIPUpdated
-        ["Dlg_SettingsSaved"] = "Settings Saved", // TODO: translate Dlg_SettingsSaved
-        ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.", // TODO: translate Dlg_TeacherIPSavedMsg
-        ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.", // TODO: translate Lbl_AdminPasswordSettings_Hint
-        ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings", // TODO: translate Lbl_AdminPasswordSettings_Title
-        ["Lbl_ConfirmPassword"] = "Confirm Password", // TODO: translate Lbl_ConfirmPassword
-        ["Lbl_NewPassword"] = "New Password", // TODO: translate Lbl_NewPassword
-        ["Msg_PasswordEmpty"] = "Password cannot be empty.", // TODO: translate Msg_PasswordEmpty
-        ["Msg_PasswordMismatch"] = "Passwords do not match.", // TODO: translate Msg_PasswordMismatch
-        ["Msg_PasswordReset"] = "Reset to built-in default password (nty2026).", // TODO: translate Msg_PasswordReset
-        ["Msg_PasswordSaved"] = "Password updated. Deploy the same hash to student PCs to apply.", // TODO: translate Msg_PasswordSaved
-        ["Msg_PasswordSaveFailed"] = "Failed to save password: {0}", // TODO: translate Msg_PasswordSaveFailed
-        ["Msg_PasswordTooShort"] = "Password must be at least 4 characters.", // TODO: translate Msg_PasswordTooShort
-        ["Btn_ExportRegFile"] = "Export .reg", // TODO: translate Btn_ExportRegFile
-        ["Msg_NoHashToExport"] = "Save a password first before exporting.", // TODO: translate Msg_NoHashToExport
-        ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.", // TODO: translate Msg_RegFileExported
-        ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.", // TODO: translate Tooltip_ExportReg
+        ["Btn_AdminPasswordSettings"] = "管理者パスワード",  // TODO: review Btn_AdminPasswordSettings
+        ["Btn_ResetToDefault"] = "デフォルトに戻す",  // TODO: review Btn_ResetToDefault
+        ["Chat_TeacherIPUpdated"] = "[システム] 教師 IP が更新されました。再接続中…",  // TODO: review Chat_TeacherIPUpdated
+        ["Dlg_SettingsSaved"] = "設定を保存しました",  // TODO: review Dlg_SettingsSaved
+        ["Dlg_TeacherIPSavedMsg"] = "教師 IP を保存しました。エージェントは新しいアドレスで再接続します。",  // TODO: review Dlg_TeacherIPSavedMsg
+        ["Lbl_AdminPasswordSettings_Hint"] = "生徒が PC で接続設定を変更する際に入力する必要のあるパスワードを設定します。ハッシュはこの PC の HKCU に保存されます — Export .reg を使用して、すべての生徒 PC にマシン全体に展開してください。",  // TODO: review Lbl_AdminPasswordSettings_Hint
+        ["Lbl_AdminPasswordSettings_HintShort"] = "生徒が PC の接続設定をロック解除する際に入力するパスワードを設定します。",  // TODO: review
+        ["Lbl_AdminPasswordSettings_Title"] = "管理者パスワード設定",  // TODO: review Lbl_AdminPasswordSettings_Title
+        ["Lbl_ConfirmPassword"] = "パスワードを確認",  // TODO: review Lbl_ConfirmPassword
+        ["Lbl_NewPassword"] = "新しいパスワード",  // TODO: review Lbl_NewPassword
+        ["Msg_PasswordEmpty"] = "パスワードを空にすることはできません。",  // TODO: review Msg_PasswordEmpty
+        ["Msg_PasswordMismatch"] = "パスワードが一致しません。",  // TODO: review Msg_PasswordMismatch
+        ["Msg_PasswordReset"] = "組み込みのデフォルトパスワード (nty2026) にリセットしました。",  // TODO: review Msg_PasswordReset
+        ["Msg_PasswordSaved"] = "パスワードを更新しました。同じハッシュを生徒 PC に展開して適用してください。",  // TODO: review Msg_PasswordSaved
+        ["Msg_PasswordSaveFailed"] = "パスワードの保存に失敗しました: {0}",  // TODO: review Msg_PasswordSaveFailed
+        ["Msg_PasswordTooShort"] = "パスワードは 4 文字以上である必要があります。",  // TODO: review Msg_PasswordTooShort
+        ["Btn_ExportRegFile"] = ".reg をエクスポート",  // TODO: review Btn_ExportRegFile
+        ["Msg_NoHashToExport"] = "エクスポートする前にパスワードを保存してください。",  // TODO: review Msg_NoHashToExport
+        ["Msg_RegFileExported"] = ".reg ファイルを保存しました。各生徒 PC で管理者権限で実行してマシン全体に展開してください。",  // TODO: review Msg_RegFileExported
+        ["Tooltip_ExportReg"] = "パスワードハッシュを .reg ファイルとしてエクスポートします。生徒 PC に配布し、管理者として実行して適用します。",  // TODO: review Tooltip_ExportReg
         // ===== Phase 1.2 fix-up: machine-translated entries — review tagged =====
         ["Btn_Cancel"] = "キャンセル", // TODO: review Btn_Cancel
         ["Btn_Save"] = "保存", // TODO: review Btn_Save
@@ -1614,13 +1728,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "試験システム", // TODO: review Lbl_QuizManager
         ["Lbl_QuizEditor"] = "試験エディター", // TODO: review Lbl_QuizEditor
         ["Lbl_QuestionEditor"] = "問題エディター", // TODO: review Lbl_QuestionEditor
-        ["Btn_NewQuiz"] = "新規試験", // TODO: review Btn_NewQuiz
-        ["Btn_EditQuiz"] = "編集", // TODO: review Btn_EditQuiz
-        ["Btn_DeleteQuiz"] = "削除", // TODO: review Btn_DeleteQuiz
-        ["Btn_ImportWord"] = "Word からインポート", // TODO: review Btn_ImportWord
-        ["Btn_SendQuiz"] = "生徒に送信", // TODO: review Btn_SendQuiz
-        ["Btn_ViewResults"] = "結果を表示", // TODO: review Btn_ViewResults
-        ["Btn_EndExam"] = "試験を終了", // TODO: review Btn_EndExam
+        ["Btn_NewQuiz"] = "➕ 新規", // TODO: review Btn_NewQuiz
+        ["Btn_EditQuiz"] = "✏ 編集", // TODO: review Btn_EditQuiz
+        ["Btn_DeleteQuiz"] = "🗑 削除", // TODO: review Btn_DeleteQuiz
+        ["Btn_ImportWord"] = "📥 インポート", // TODO: review Btn_ImportWord
+        ["Btn_SendQuiz"] = "📤 送信", // TODO: review Btn_SendQuiz
+        ["Btn_ViewResults"] = "📊 結果", // TODO: review Btn_ViewResults
+        ["Btn_EndExam"] = "⏹ 終了", // TODO: review Btn_EndExam
         ["Btn_AddQuestion"] = "問題を追加", // TODO: review Btn_AddQuestion
         ["Btn_EditQuestion"] = "問題を編集", // TODO: review Btn_EditQuestion
         ["Btn_RemoveQuestion"] = "削除", // TODO: review Btn_RemoveQuestion
@@ -1783,7 +1897,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "メインカラー", // TODO: review Lbl_PrimaryColor
         ["Lbl_AccentColor"] = "アクセントカラー", // TODO: review Lbl_AccentColor
         ["Lbl_Logo"] = "ロゴ", // TODO: review Lbl_Logo
-        ["Lbl_Wallpaper"] = "ロック画面の壁紙", // TODO: review Lbl_Wallpaper
+        ["Lbl_AppBackground"] = "アプリの背景",  // TODO: review
+        ["Lbl_BrandingHint"] = "アプリ名、組織、ブランドカラー、ロゴ、ロック画面の壁紙をカスタマイズします。変更は開いているすべてのウィンドウにリアルタイムで適用されます。",  // TODO: review
+        ["Lbl_AppBackgroundHint"] = "メインアプリウィンドウの生徒グリッドの背景に表示される画像を設定します。画像はこの教師 PC のローカルにのみ保存されます — 生徒 PC には影響しません。",  // TODO: review
+        ["Lbl_LivePreview"] = "ライブプレビュー",  // TODO: review
         ["Lbl_AppName_Branding"] = "アプリ名", // TODO: review Lbl_AppName_Branding
         ["Lbl_OrgName"] = "組織名", // TODO: review Lbl_OrgName
         ["Lbl_ShowOrgInTitle"] = "タイトルに組織名を表示", // TODO: review Lbl_ShowOrgInTitle
@@ -1796,6 +1913,39 @@ internal static class LocalizationData
         ["Btn_StartExam"] = "試験を開始 →", // TODO: review Btn_StartExam
         ["Lbl_FillBeforeExam"] = "試験開始前に情報を入力してください。", // TODO: review Lbl_FillBeforeExam
         ["Err_FillAllFields"] = "すべての項目を入力してください。", // TODO: review Err_FillAllFields
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "クラス名簿を管理 — 作成、編集、またはセッションで使用するクラスを有効化。", // TODO: review Hint_RosterManager
+        ["Hint_RosterEditor"] = "このクラスに生徒を追加します。'接続中から追加'でオンライン全員を一括追加、または手動入力。", // TODO: review Hint_RosterEditor
+        ["Hint_QuizEditor"] = "試験のタイトル、時間、問題を設定。問題をクリックして編集。", // TODO: review Hint_QuizEditor
+        ["Hint_QuestionEditor"] = "問題文と選択肢を編集。正解にマークを付けます。", // TODO: review Hint_QuestionEditor
+        ["Lbl_RosterCol_Class"] = "クラス", // TODO: review Lbl_RosterCol_Class
+        ["Lbl_RosterCol_Students"] = "生徒", // TODO: review Lbl_RosterCol_Students
+        ["Lbl_RosterCol_LastUsed"] = "最終使用", // TODO: review Lbl_RosterCol_LastUsed
+        ["Lbl_RosterCol_Machine"] = "コンピューター", // TODO: review Lbl_RosterCol_Machine
+        ["Lbl_RosterStudents"] = "生徒", // TODO: review Lbl_RosterStudents
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "配信を開始する前に、Webカメラ・解像度・フレームレートを選択してください。", // TODO: review Hint_CameraSelector
+        ["Hint_NetMovie"] = "動画ファイルを追加し、選択して Play を押すと、接続中の全生徒に同時に配信します。", // TODO: review Hint_NetMovie
+        ["Hint_MicMonitor"] = "各生徒の Listen をオンにするとマイクを聞けます。音声はリアルタイムでミックスされます。", // TODO: review Hint_MicMonitor
+        ["Btn_Play"] = "▶ 再生", // TODO: review Btn_Play
+        ["Btn_Pause"] = "⏸ 一時停止", // TODO: review Btn_Pause
+        ["Btn_Stop"] = "⏹ 停止", // TODO: review Btn_Stop
+        ["Lbl_MicListen"] = "Listen", // TODO: review Lbl_MicListen
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "出席登録", // TODO: review Hdr_MarkAttendance
+        ["Lbl_AttendanceStatus"] = "ステータス", // TODO: review Lbl_AttendanceStatus
+        ["Lbl_Present"] = "出席", // TODO: review Lbl_Present
+        ["Lbl_Absent"] = "欠席", // TODO: review Lbl_Absent
+        ["Lbl_Late"] = "遅刻", // TODO: review Lbl_Late
+        ["Lbl_Excused"] = "公欠", // TODO: review Lbl_Excused
+        ["Lbl_AttendanceStats"] = "出席: {0} | 欠席: {1} | 遅刻: {2} | 公欠: {3}", // TODO: review Lbl_AttendanceStats
+        ["Btn_DeactivateRoster"] = "解除", // TODO: review Btn_DeactivateRoster
+        ["Tooltip_NoActiveRoster"] = "クラス名簿を先に有効化してください", // TODO: review Tooltip_NoActiveRoster
+        ["Msg_AttendanceExported"] = "出席を保存しました: {0}", // TODO: review Msg_AttendanceExported
+        ["Lbl_Success"] = "成功", // TODO: review Lbl_Success
     };
 
     private static Dictionary<string, string> Ko() => new()
@@ -1835,11 +1985,11 @@ internal static class LocalizationData
         ["Time_JustNow"] = "방금 전", // TODO: review Time_JustNow
         ["Time_MinAgo"] = "{0}분 전", // TODO: review Time_MinAgo
         ["Time_HourAgo"] = "{0}시간 전", // TODO: review Time_HourAgo
-        ["Hdr_ClassTools"] = "Class Tools", // TODO: translate Hdr_ClassTools
-        ["Hdr_Audio"] = "Audio", // TODO: translate Hdr_Audio
-        ["Hdr_RecordingBreakout"] = "Recording & Breakout", // TODO: translate Hdr_RecordingBreakout
-        ["Hdr_TeachAssess"] = "Teach & Assess", // TODO: translate Hdr_TeachAssess
-        ["Hdr_System"] = "System", // TODO: translate Hdr_System
+        ["Hdr_ClassTools"] = "수업 도구",  // TODO: review Hdr_ClassTools
+        ["Hdr_Audio"] = "오디오",  // TODO: review Hdr_Audio
+        ["Hdr_RecordingBreakout"] = "녹화 및 분반",  // TODO: review Hdr_RecordingBreakout
+        ["Hdr_TeachAssess"] = "교육 및 평가",  // TODO: review Hdr_TeachAssess
+        ["Hdr_System"] = "시스템",  // TODO: review Hdr_System
         ["Help_ClassTools"] = "실시간 수업 관리 도구 — 학생 화면 잠금, 제한 적용, 카메라 방송, 화면 주석, 미디어 재생, 파일 전송.",  // TODO: review
         ["Help_Audio"] = "오디오 컨트롤 — 사운드 및 마이크 토글, 컴퓨터 오디오 방송, 모든 학생 음소거, 학생 마이크 모니터링, 볼륨 조절.",  // TODO: review
         ["Help_RecordingBreakout"] = "나중에 검토할 수 있도록 세션을 녹화하거나, 학급을 소규모 분반으로 나누거나, 여러 물리적 교실에서 동시에 수업하세요.",  // TODO: review
@@ -2002,25 +2152,26 @@ internal static class LocalizationData
         ["Lbl_AdaptiveOff"] = "적응형: 꺼짐",
 
         // Phase 8 (Bug A) — Admin password + IP-update keys. Values copy English; translator follow-up needed.
-        ["Btn_AdminPasswordSettings"] = "Admin Password", // TODO: translate Btn_AdminPasswordSettings
-        ["Btn_ResetToDefault"] = "Reset to default", // TODO: translate Btn_ResetToDefault
-        ["Chat_TeacherIPUpdated"] = "[System] Teacher IP updated. Reconnecting…", // TODO: translate Chat_TeacherIPUpdated
-        ["Dlg_SettingsSaved"] = "Settings Saved", // TODO: translate Dlg_SettingsSaved
-        ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.", // TODO: translate Dlg_TeacherIPSavedMsg
-        ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.", // TODO: translate Lbl_AdminPasswordSettings_Hint
-        ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings", // TODO: translate Lbl_AdminPasswordSettings_Title
-        ["Lbl_ConfirmPassword"] = "Confirm Password", // TODO: translate Lbl_ConfirmPassword
-        ["Lbl_NewPassword"] = "New Password", // TODO: translate Lbl_NewPassword
-        ["Msg_PasswordEmpty"] = "Password cannot be empty.", // TODO: translate Msg_PasswordEmpty
-        ["Msg_PasswordMismatch"] = "Passwords do not match.", // TODO: translate Msg_PasswordMismatch
-        ["Msg_PasswordReset"] = "Reset to built-in default password (nty2026).", // TODO: translate Msg_PasswordReset
-        ["Msg_PasswordSaved"] = "Password updated. Deploy the same hash to student PCs to apply.", // TODO: translate Msg_PasswordSaved
-        ["Msg_PasswordSaveFailed"] = "Failed to save password: {0}", // TODO: translate Msg_PasswordSaveFailed
-        ["Msg_PasswordTooShort"] = "Password must be at least 4 characters.", // TODO: translate Msg_PasswordTooShort
-        ["Btn_ExportRegFile"] = "Export .reg", // TODO: translate Btn_ExportRegFile
-        ["Msg_NoHashToExport"] = "Save a password first before exporting.", // TODO: translate Msg_NoHashToExport
-        ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.", // TODO: translate Msg_RegFileExported
-        ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.", // TODO: translate Tooltip_ExportReg
+        ["Btn_AdminPasswordSettings"] = "관리자 비밀번호",  // TODO: review Btn_AdminPasswordSettings
+        ["Btn_ResetToDefault"] = "기본값으로 재설정",  // TODO: review Btn_ResetToDefault
+        ["Chat_TeacherIPUpdated"] = "[시스템] 교사 IP가 업데이트되었습니다. 다시 연결 중…",  // TODO: review Chat_TeacherIPUpdated
+        ["Dlg_SettingsSaved"] = "설정이 저장됨",  // TODO: review Dlg_SettingsSaved
+        ["Dlg_TeacherIPSavedMsg"] = "교사 IP가 저장되었습니다. 에이전트가 새 주소로 다시 연결됩니다.",  // TODO: review Dlg_TeacherIPSavedMsg
+        ["Lbl_AdminPasswordSettings_Hint"] = "학생이 PC에서 연결 설정을 변경할 때 입력해야 하는 비밀번호를 설정합니다. 해시는 이 컴퓨터의 HKCU에 저장됩니다 — Export .reg를 사용하여 모든 학생 PC에 컴퓨터 전체로 배포하세요.",  // TODO: review Lbl_AdminPasswordSettings_Hint
+        ["Lbl_AdminPasswordSettings_HintShort"] = "학생이 PC의 연결 설정을 잠금 해제할 때 입력하는 비밀번호를 설정합니다.",  // TODO: review
+        ["Lbl_AdminPasswordSettings_Title"] = "관리자 비밀번호 설정",  // TODO: review Lbl_AdminPasswordSettings_Title
+        ["Lbl_ConfirmPassword"] = "비밀번호 확인",  // TODO: review Lbl_ConfirmPassword
+        ["Lbl_NewPassword"] = "새 비밀번호",  // TODO: review Lbl_NewPassword
+        ["Msg_PasswordEmpty"] = "비밀번호는 비워둘 수 없습니다.",  // TODO: review Msg_PasswordEmpty
+        ["Msg_PasswordMismatch"] = "비밀번호가 일치하지 않습니다.",  // TODO: review Msg_PasswordMismatch
+        ["Msg_PasswordReset"] = "기본 비밀번호 (nty2026)로 재설정되었습니다.",  // TODO: review Msg_PasswordReset
+        ["Msg_PasswordSaved"] = "비밀번호가 업데이트되었습니다. 동일한 해시를 학생 PC에 배포하여 적용하세요.",  // TODO: review Msg_PasswordSaved
+        ["Msg_PasswordSaveFailed"] = "비밀번호 저장 실패: {0}",  // TODO: review Msg_PasswordSaveFailed
+        ["Msg_PasswordTooShort"] = "비밀번호는 최소 4자 이상이어야 합니다.",  // TODO: review Msg_PasswordTooShort
+        ["Btn_ExportRegFile"] = ".reg 내보내기",  // TODO: review Btn_ExportRegFile
+        ["Msg_NoHashToExport"] = "내보내기 전에 비밀번호를 먼저 저장하세요.",  // TODO: review Msg_NoHashToExport
+        ["Msg_RegFileExported"] = ".reg 파일을 저장했습니다. 각 학생 PC에서 관리자 권한으로 실행하여 컴퓨터 전체에 배포하세요.",  // TODO: review Msg_RegFileExported
+        ["Tooltip_ExportReg"] = "비밀번호 해시를 .reg 파일로 내보냅니다. 학생 PC에 배포하고 관리자로 실행하여 적용하세요.",  // TODO: review Tooltip_ExportReg
         // ===== Phase 1.2 fix-up: machine-translated entries — review tagged =====
         ["Btn_Cancel"] = "취소", // TODO: review Btn_Cancel
         ["Btn_Save"] = "저장", // TODO: review Btn_Save
@@ -2029,13 +2180,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "시험 시스템", // TODO: review Lbl_QuizManager
         ["Lbl_QuizEditor"] = "퀴즈 편집기", // TODO: review Lbl_QuizEditor
         ["Lbl_QuestionEditor"] = "문제 편집기", // TODO: review Lbl_QuestionEditor
-        ["Btn_NewQuiz"] = "새 시험", // TODO: review Btn_NewQuiz
-        ["Btn_EditQuiz"] = "편집", // TODO: review Btn_EditQuiz
-        ["Btn_DeleteQuiz"] = "삭제", // TODO: review Btn_DeleteQuiz
-        ["Btn_ImportWord"] = "Word에서 가져오기", // TODO: review Btn_ImportWord
-        ["Btn_SendQuiz"] = "학생에게 전송", // TODO: review Btn_SendQuiz
-        ["Btn_ViewResults"] = "결과 보기", // TODO: review Btn_ViewResults
-        ["Btn_EndExam"] = "시험 종료", // TODO: review Btn_EndExam
+        ["Btn_NewQuiz"] = "➕ 새로 만들기", // TODO: review Btn_NewQuiz
+        ["Btn_EditQuiz"] = "✏ 편집", // TODO: review Btn_EditQuiz
+        ["Btn_DeleteQuiz"] = "🗑 삭제", // TODO: review Btn_DeleteQuiz
+        ["Btn_ImportWord"] = "📥 가져오기", // TODO: review Btn_ImportWord
+        ["Btn_SendQuiz"] = "📤 전송", // TODO: review Btn_SendQuiz
+        ["Btn_ViewResults"] = "📊 결과", // TODO: review Btn_ViewResults
+        ["Btn_EndExam"] = "⏹ 종료", // TODO: review Btn_EndExam
         ["Btn_AddQuestion"] = "문제 추가", // TODO: review Btn_AddQuestion
         ["Btn_EditQuestion"] = "문제 편집", // TODO: review Btn_EditQuestion
         ["Btn_RemoveQuestion"] = "제거", // TODO: review Btn_RemoveQuestion
@@ -2198,7 +2349,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "주요 색상", // TODO: review Lbl_PrimaryColor
         ["Lbl_AccentColor"] = "강조 색상", // TODO: review Lbl_AccentColor
         ["Lbl_Logo"] = "로고", // TODO: review Lbl_Logo
-        ["Lbl_Wallpaper"] = "잠금 화면 배경", // TODO: review Lbl_Wallpaper
+        ["Lbl_AppBackground"] = "앱 배경",  // TODO: review
+        ["Lbl_BrandingHint"] = "앱 이름, 조직, 브랜드 색상, 로고 및 잠금 화면 배경을 사용자 지정합니다. 변경 사항은 열려 있는 모든 창에 실시간으로 적용됩니다.",  // TODO: review
+        ["Lbl_AppBackgroundHint"] = "메인 앱 창의 학생 그리드 뒤에 보이는 배경 이미지를 설정합니다. 이미지는 이 교사 PC에만 로컬로 저장되며, 학생 PC에는 영향을 주지 않습니다.",  // TODO: review
+        ["Lbl_LivePreview"] = "라이브 미리보기",  // TODO: review
         ["Lbl_AppName_Branding"] = "앱 이름", // TODO: review Lbl_AppName_Branding
         ["Lbl_OrgName"] = "기관 이름", // TODO: review Lbl_OrgName
         ["Lbl_ShowOrgInTitle"] = "제목에 기관 이름 표시", // TODO: review Lbl_ShowOrgInTitle
@@ -2211,6 +2365,39 @@ internal static class LocalizationData
         ["Btn_StartExam"] = "시험 시작 →", // TODO: review Btn_StartExam
         ["Lbl_FillBeforeExam"] = "시험 시작 전에 정보를 입력하세요.", // TODO: review Lbl_FillBeforeExam
         ["Err_FillAllFields"] = "모든 필드를 입력하세요.", // TODO: review Err_FillAllFields
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "학급 명단 관리 — 세션에서 사용할 학급을 생성, 편집 또는 활성화.", // TODO: review Hint_RosterManager
+        ["Hint_RosterEditor"] = "이 학급에 학생 추가. '연결됨에서 추가'로 온라인 전체를 일괄 추가, 또는 수동 입력.", // TODO: review Hint_RosterEditor
+        ["Hint_QuizEditor"] = "시험 제목, 시간, 문제를 설정. 문제를 클릭하여 편집.", // TODO: review Hint_QuizEditor
+        ["Hint_QuestionEditor"] = "질문 텍스트와 선택지 편집. 정답에 표시.", // TODO: review Hint_QuestionEditor
+        ["Lbl_RosterCol_Class"] = "학급", // TODO: review Lbl_RosterCol_Class
+        ["Lbl_RosterCol_Students"] = "학생", // TODO: review Lbl_RosterCol_Students
+        ["Lbl_RosterCol_LastUsed"] = "마지막 사용", // TODO: review Lbl_RosterCol_LastUsed
+        ["Lbl_RosterCol_Machine"] = "컴퓨터", // TODO: review Lbl_RosterCol_Machine
+        ["Lbl_RosterStudents"] = "학생", // TODO: review Lbl_RosterStudents
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "방송 시작 전에 웹캠, 해상도, 프레임 속도를 선택하세요.", // TODO: review Hint_CameraSelector
+        ["Hint_NetMovie"] = "비디오 파일을 추가하고 하나를 선택한 뒤 Play를 눌러 연결된 모든 학생에게 동시에 재생합니다.", // TODO: review Hint_NetMovie
+        ["Hint_MicMonitor"] = "각 학생의 Listen을 켜면 마이크를 들을 수 있습니다. 오디오는 실시간으로 믹싱됩니다.", // TODO: review Hint_MicMonitor
+        ["Btn_Play"] = "▶ 재생", // TODO: review Btn_Play
+        ["Btn_Pause"] = "⏸ 일시정지", // TODO: review Btn_Pause
+        ["Btn_Stop"] = "⏹ 정지", // TODO: review Btn_Stop
+        ["Lbl_MicListen"] = "Listen", // TODO: review Lbl_MicListen
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "출석 체크", // TODO: review Hdr_MarkAttendance
+        ["Lbl_AttendanceStatus"] = "상태", // TODO: review Lbl_AttendanceStatus
+        ["Lbl_Present"] = "출석", // TODO: review Lbl_Present
+        ["Lbl_Absent"] = "결석", // TODO: review Lbl_Absent
+        ["Lbl_Late"] = "지각", // TODO: review Lbl_Late
+        ["Lbl_Excused"] = "공결", // TODO: review Lbl_Excused
+        ["Lbl_AttendanceStats"] = "출석: {0} | 결석: {1} | 지각: {2} | 공결: {3}", // TODO: review Lbl_AttendanceStats
+        ["Btn_DeactivateRoster"] = "해제", // TODO: review Btn_DeactivateRoster
+        ["Tooltip_NoActiveRoster"] = "학급 명단을 먼저 활성화하세요", // TODO: review Tooltip_NoActiveRoster
+        ["Msg_AttendanceExported"] = "출석부 저장됨: {0}", // TODO: review Msg_AttendanceExported
+        ["Lbl_Success"] = "성공", // TODO: review Lbl_Success
     };
 
     private static Dictionary<string, string> Es() => new()
@@ -2250,11 +2437,11 @@ internal static class LocalizationData
         ["Time_JustNow"] = "Ahora", // TODO: review Time_JustNow
         ["Time_MinAgo"] = "Hace {0} min", // TODO: review Time_MinAgo
         ["Time_HourAgo"] = "Hace {0} h", // TODO: review Time_HourAgo
-        ["Hdr_ClassTools"] = "Class Tools", // TODO: translate Hdr_ClassTools
-        ["Hdr_Audio"] = "Audio", // TODO: translate Hdr_Audio
-        ["Hdr_RecordingBreakout"] = "Recording & Breakout", // TODO: translate Hdr_RecordingBreakout
-        ["Hdr_TeachAssess"] = "Teach & Assess", // TODO: translate Hdr_TeachAssess
-        ["Hdr_System"] = "System", // TODO: translate Hdr_System
+        ["Hdr_ClassTools"] = "Herramientas de clase",  // TODO: review Hdr_ClassTools
+        ["Hdr_Audio"] = "Audio",  // TODO: review Hdr_Audio
+        ["Hdr_RecordingBreakout"] = "Grabación y salas",  // TODO: review Hdr_RecordingBreakout
+        ["Hdr_TeachAssess"] = "Enseñar y evaluar",  // TODO: review Hdr_TeachAssess
+        ["Hdr_System"] = "Sistema",  // TODO: review Hdr_System
         ["Help_ClassTools"] = "Herramientas para administrar tu clase en vivo: bloquear pantallas de estudiantes, aplicar restricciones, transmitir cámara, anotar sobre la pantalla, reproducir medios y enviar archivos.",  // TODO: review
         ["Help_Audio"] = "Controles de audio: alternar sonidos y micrófono, transmitir audio del equipo, silenciar a todos los estudiantes, monitorear micrófonos de estudiantes y ajustar su volumen.",  // TODO: review
         ["Help_RecordingBreakout"] = "Graba sesiones para revisar más tarde, organiza la clase en salas más pequeñas, o enseña en varias aulas físicas simultáneamente.",  // TODO: review
@@ -2417,25 +2604,26 @@ internal static class LocalizationData
         ["Lbl_AdaptiveOff"] = "Adaptativo: OFF",
 
         // Phase 8 (Bug A) — Admin password + IP-update keys. Values copy English; translator follow-up needed.
-        ["Btn_AdminPasswordSettings"] = "Admin Password", // TODO: translate Btn_AdminPasswordSettings
-        ["Btn_ResetToDefault"] = "Reset to default", // TODO: translate Btn_ResetToDefault
-        ["Chat_TeacherIPUpdated"] = "[System] Teacher IP updated. Reconnecting…", // TODO: translate Chat_TeacherIPUpdated
-        ["Dlg_SettingsSaved"] = "Settings Saved", // TODO: translate Dlg_SettingsSaved
-        ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.", // TODO: translate Dlg_TeacherIPSavedMsg
-        ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.", // TODO: translate Lbl_AdminPasswordSettings_Hint
-        ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings", // TODO: translate Lbl_AdminPasswordSettings_Title
-        ["Lbl_ConfirmPassword"] = "Confirm Password", // TODO: translate Lbl_ConfirmPassword
-        ["Lbl_NewPassword"] = "New Password", // TODO: translate Lbl_NewPassword
-        ["Msg_PasswordEmpty"] = "Password cannot be empty.", // TODO: translate Msg_PasswordEmpty
-        ["Msg_PasswordMismatch"] = "Passwords do not match.", // TODO: translate Msg_PasswordMismatch
-        ["Msg_PasswordReset"] = "Reset to built-in default password (nty2026).", // TODO: translate Msg_PasswordReset
-        ["Msg_PasswordSaved"] = "Password updated. Deploy the same hash to student PCs to apply.", // TODO: translate Msg_PasswordSaved
-        ["Msg_PasswordSaveFailed"] = "Failed to save password: {0}", // TODO: translate Msg_PasswordSaveFailed
-        ["Msg_PasswordTooShort"] = "Password must be at least 4 characters.", // TODO: translate Msg_PasswordTooShort
-        ["Btn_ExportRegFile"] = "Export .reg", // TODO: translate Btn_ExportRegFile
-        ["Msg_NoHashToExport"] = "Save a password first before exporting.", // TODO: translate Msg_NoHashToExport
-        ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.", // TODO: translate Msg_RegFileExported
-        ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.", // TODO: translate Tooltip_ExportReg
+        ["Btn_AdminPasswordSettings"] = "Contraseña de administrador",  // TODO: review Btn_AdminPasswordSettings
+        ["Btn_ResetToDefault"] = "Restablecer valores predeterminados",  // TODO: review Btn_ResetToDefault
+        ["Chat_TeacherIPUpdated"] = "[Sistema] IP del profesor actualizada. Reconectando…",  // TODO: review Chat_TeacherIPUpdated
+        ["Dlg_SettingsSaved"] = "Configuración guardada",  // TODO: review Dlg_SettingsSaved
+        ["Dlg_TeacherIPSavedMsg"] = "IP del profesor guardada. El agente se reconectará usando la nueva dirección.",  // TODO: review Dlg_TeacherIPSavedMsg
+        ["Lbl_AdminPasswordSettings_Hint"] = "Establezca una contraseña que los estudiantes deban introducir para cambiar la configuración de conexión en sus PC. El hash se guarda en HKCU en esta máquina — use Exportar .reg para implementarlo en todos los PC de los estudiantes a nivel de máquina.",  // TODO: review Lbl_AdminPasswordSettings_Hint
+        ["Lbl_AdminPasswordSettings_HintShort"] = "Defina la contraseña que los estudiantes introducen para desbloquear los ajustes de conexión.",  // TODO: review
+        ["Lbl_AdminPasswordSettings_Title"] = "Configuración de contraseña de administrador",  // TODO: review Lbl_AdminPasswordSettings_Title
+        ["Lbl_ConfirmPassword"] = "Confirmar contraseña",  // TODO: review Lbl_ConfirmPassword
+        ["Lbl_NewPassword"] = "Nueva contraseña",  // TODO: review Lbl_NewPassword
+        ["Msg_PasswordEmpty"] = "La contraseña no puede estar vacía.",  // TODO: review Msg_PasswordEmpty
+        ["Msg_PasswordMismatch"] = "Las contraseñas no coinciden.",  // TODO: review Msg_PasswordMismatch
+        ["Msg_PasswordReset"] = "Restablecido a la contraseña predeterminada incorporada (nty2026).",  // TODO: review Msg_PasswordReset
+        ["Msg_PasswordSaved"] = "Contraseña actualizada. Implemente el mismo hash en los PC de los estudiantes para aplicarlo.",  // TODO: review Msg_PasswordSaved
+        ["Msg_PasswordSaveFailed"] = "No se pudo guardar la contraseña: {0}",  // TODO: review Msg_PasswordSaveFailed
+        ["Msg_PasswordTooShort"] = "La contraseña debe tener al menos 4 caracteres.",  // TODO: review Msg_PasswordTooShort
+        ["Btn_ExportRegFile"] = "Exportar .reg",  // TODO: review Btn_ExportRegFile
+        ["Msg_NoHashToExport"] = "Guarde una contraseña antes de exportar.",  // TODO: review Msg_NoHashToExport
+        ["Msg_RegFileExported"] = "Archivo .reg guardado. Ejecute en cada PC de estudiante con permisos de administrador para implementarlo a nivel de máquina.",  // TODO: review Msg_RegFileExported
+        ["Tooltip_ExportReg"] = "Exportar el hash de contraseña como archivo .reg. Distribuya a los PC de los estudiantes y ejecute como administrador para aplicar.",  // TODO: review Tooltip_ExportReg
         // ===== Phase 1.2 fix-up: machine-translated entries — review tagged =====
         ["Btn_Cancel"] = "Cancelar", // TODO: review Btn_Cancel
         ["Btn_Save"] = "Guardar", // TODO: review Btn_Save
@@ -2444,13 +2632,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "Sistema de Exámenes", // TODO: review Lbl_QuizManager
         ["Lbl_QuizEditor"] = "Editor de cuestionario", // TODO: review Lbl_QuizEditor
         ["Lbl_QuestionEditor"] = "Editor de pregunta", // TODO: review Lbl_QuestionEditor
-        ["Btn_NewQuiz"] = "Nuevo cuestionario", // TODO: review Btn_NewQuiz
-        ["Btn_EditQuiz"] = "Editar", // TODO: review Btn_EditQuiz
-        ["Btn_DeleteQuiz"] = "Eliminar", // TODO: review Btn_DeleteQuiz
-        ["Btn_ImportWord"] = "Importar desde Word", // TODO: review Btn_ImportWord
-        ["Btn_SendQuiz"] = "Enviar a estudiantes", // TODO: review Btn_SendQuiz
-        ["Btn_ViewResults"] = "Ver resultados", // TODO: review Btn_ViewResults
-        ["Btn_EndExam"] = "Finalizar examen", // TODO: review Btn_EndExam
+        ["Btn_NewQuiz"] = "➕ Nuevo", // TODO: review Btn_NewQuiz
+        ["Btn_EditQuiz"] = "✏ Editar", // TODO: review Btn_EditQuiz
+        ["Btn_DeleteQuiz"] = "🗑 Eliminar", // TODO: review Btn_DeleteQuiz
+        ["Btn_ImportWord"] = "📥 Importar", // TODO: review Btn_ImportWord
+        ["Btn_SendQuiz"] = "📤 Enviar", // TODO: review Btn_SendQuiz
+        ["Btn_ViewResults"] = "📊 Resultados", // TODO: review Btn_ViewResults
+        ["Btn_EndExam"] = "⏹ Finalizar", // TODO: review Btn_EndExam
         ["Btn_AddQuestion"] = "Añadir pregunta", // TODO: review Btn_AddQuestion
         ["Btn_EditQuestion"] = "Editar pregunta", // TODO: review Btn_EditQuestion
         ["Btn_RemoveQuestion"] = "Quitar", // TODO: review Btn_RemoveQuestion
@@ -2613,7 +2801,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "Color primario", // TODO: review Lbl_PrimaryColor
         ["Lbl_AccentColor"] = "Color de acento", // TODO: review Lbl_AccentColor
         ["Lbl_Logo"] = "Logotipo", // TODO: review Lbl_Logo
-        ["Lbl_Wallpaper"] = "Fondo de pantalla de bloqueo", // TODO: review Lbl_Wallpaper
+        ["Lbl_AppBackground"] = "Fondo de la aplicación",  // TODO: review
+        ["Lbl_BrandingHint"] = "Personalice el nombre de la aplicación, la organización, los colores de marca, el logotipo y el fondo de pantalla de bloqueo. Los cambios se aplican en vivo a todas las ventanas abiertas.",  // TODO: review
+        ["Lbl_AppBackgroundHint"] = "Establece la imagen de fondo visible detrás de la cuadrícula de estudiantes en la ventana principal de la aplicación. La imagen se almacena localmente solo en este PC de profesor; los PC de estudiantes no se ven afectados.",  // TODO: review
+        ["Lbl_LivePreview"] = "Vista previa en vivo",  // TODO: review
         ["Lbl_AppName_Branding"] = "Nombre de la aplicación", // TODO: review Lbl_AppName_Branding
         ["Lbl_OrgName"] = "Nombre de la organización", // TODO: review Lbl_OrgName
         ["Lbl_ShowOrgInTitle"] = "Mostrar el nombre de la organización en el título", // TODO: review Lbl_ShowOrgInTitle
@@ -2626,6 +2817,39 @@ internal static class LocalizationData
         ["Btn_StartExam"] = "Iniciar examen →", // TODO: review Btn_StartExam
         ["Lbl_FillBeforeExam"] = "Completa tu información antes de iniciar el examen.", // TODO: review Lbl_FillBeforeExam
         ["Err_FillAllFields"] = "Completa todos los campos.", // TODO: review Err_FillAllFields
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "Gestiona listas de clase — crea, edita o activa la clase activa de la sesión.", // TODO: review Hint_RosterManager
+        ["Hint_RosterEditor"] = "Añade estudiantes a esta clase. Usa 'Añadir desde conectados' para incluir a todos los conectados, o introduce filas manualmente.", // TODO: review Hint_RosterEditor
+        ["Hint_QuizEditor"] = "Define el título, duración y preguntas del examen. Haz clic en una pregunta para editarla.", // TODO: review Hint_QuizEditor
+        ["Hint_QuestionEditor"] = "Edita el texto y las opciones de la pregunta. Marca la respuesta correcta.", // TODO: review Hint_QuestionEditor
+        ["Lbl_RosterCol_Class"] = "Clase", // TODO: review Lbl_RosterCol_Class
+        ["Lbl_RosterCol_Students"] = "Estudiantes", // TODO: review Lbl_RosterCol_Students
+        ["Lbl_RosterCol_LastUsed"] = "Último uso", // TODO: review Lbl_RosterCol_LastUsed
+        ["Lbl_RosterCol_Machine"] = "Equipo", // TODO: review Lbl_RosterCol_Machine
+        ["Lbl_RosterStudents"] = "Estudiantes", // TODO: review Lbl_RosterStudents
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "Elige la cámara web, la resolución y la velocidad de cuadros antes de iniciar la transmisión.", // TODO: review Hint_CameraSelector
+        ["Hint_NetMovie"] = "Añade archivos de vídeo, selecciona uno y pulsa Play para transmitirlo simultáneamente a todos los estudiantes conectados.", // TODO: review Hint_NetMovie
+        ["Hint_MicMonitor"] = "Activa Listen en cada estudiante para escuchar su micrófono. El audio se mezcla en tiempo real.", // TODO: review Hint_MicMonitor
+        ["Btn_Play"] = "▶ Reproducir", // TODO: review Btn_Play
+        ["Btn_Pause"] = "⏸ Pausar", // TODO: review Btn_Pause
+        ["Btn_Stop"] = "⏹ Detener", // TODO: review Btn_Stop
+        ["Lbl_MicListen"] = "Listen", // TODO: review Lbl_MicListen
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "Pasar lista", // TODO: review Hdr_MarkAttendance
+        ["Lbl_AttendanceStatus"] = "Estado", // TODO: review Lbl_AttendanceStatus
+        ["Lbl_Present"] = "Presente", // TODO: review Lbl_Present
+        ["Lbl_Absent"] = "Ausente", // TODO: review Lbl_Absent
+        ["Lbl_Late"] = "Tarde", // TODO: review Lbl_Late
+        ["Lbl_Excused"] = "Justificado", // TODO: review Lbl_Excused
+        ["Lbl_AttendanceStats"] = "Presente: {0} | Ausente: {1} | Tarde: {2} | Justif.: {3}", // TODO: review Lbl_AttendanceStats
+        ["Btn_DeactivateRoster"] = "Desactivar", // TODO: review Btn_DeactivateRoster
+        ["Tooltip_NoActiveRoster"] = "Activa primero una lista de clase", // TODO: review Tooltip_NoActiveRoster
+        ["Msg_AttendanceExported"] = "Asistencia guardada en: {0}", // TODO: review Msg_AttendanceExported
+        ["Lbl_Success"] = "Listo", // TODO: review Lbl_Success
     };
 
     private static Dictionary<string, string> Fr() => new()
@@ -2665,11 +2889,11 @@ internal static class LocalizationData
         ["Time_JustNow"] = "À l'instant", // TODO: review Time_JustNow
         ["Time_MinAgo"] = "Il y a {0} min", // TODO: review Time_MinAgo
         ["Time_HourAgo"] = "Il y a {0} h", // TODO: review Time_HourAgo
-        ["Hdr_ClassTools"] = "Class Tools", // TODO: translate Hdr_ClassTools
-        ["Hdr_Audio"] = "Audio", // TODO: translate Hdr_Audio
-        ["Hdr_RecordingBreakout"] = "Recording & Breakout", // TODO: translate Hdr_RecordingBreakout
-        ["Hdr_TeachAssess"] = "Teach & Assess", // TODO: translate Hdr_TeachAssess
-        ["Hdr_System"] = "System", // TODO: translate Hdr_System
+        ["Hdr_ClassTools"] = "Outils de classe",  // TODO: review Hdr_ClassTools
+        ["Hdr_Audio"] = "Audio",  // TODO: review Hdr_Audio
+        ["Hdr_RecordingBreakout"] = "Enregistrement et sous-groupes",  // TODO: review Hdr_RecordingBreakout
+        ["Hdr_TeachAssess"] = "Enseigner et évaluer",  // TODO: review Hdr_TeachAssess
+        ["Hdr_System"] = "Système",  // TODO: review Hdr_System
         ["Help_ClassTools"] = "Outils pour gérer votre classe en direct — verrouiller les écrans des élèves, appliquer des restrictions, diffuser la caméra, annoter à l'écran, lire des médias et envoyer des fichiers.",  // TODO: review
         ["Help_Audio"] = "Commandes audio — activer/désactiver les sons et le microphone, diffuser le son de l'ordinateur, couper tous les élèves, surveiller les micros des élèves et ajuster leur volume.",  // TODO: review
         ["Help_RecordingBreakout"] = "Enregistrez les sessions pour les revoir plus tard, organisez la classe en sous-groupes, ou enseignez simultanément dans plusieurs salles physiques.",  // TODO: review
@@ -2832,25 +3056,26 @@ internal static class LocalizationData
         ["Lbl_AdaptiveOff"] = "Adaptatif : OFF",
 
         // Phase 8 (Bug A) — Admin password + IP-update keys. Values copy English; translator follow-up needed.
-        ["Btn_AdminPasswordSettings"] = "Admin Password", // TODO: translate Btn_AdminPasswordSettings
-        ["Btn_ResetToDefault"] = "Reset to default", // TODO: translate Btn_ResetToDefault
-        ["Chat_TeacherIPUpdated"] = "[System] Teacher IP updated. Reconnecting…", // TODO: translate Chat_TeacherIPUpdated
-        ["Dlg_SettingsSaved"] = "Settings Saved", // TODO: translate Dlg_SettingsSaved
-        ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.", // TODO: translate Dlg_TeacherIPSavedMsg
-        ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.", // TODO: translate Lbl_AdminPasswordSettings_Hint
-        ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings", // TODO: translate Lbl_AdminPasswordSettings_Title
-        ["Lbl_ConfirmPassword"] = "Confirm Password", // TODO: translate Lbl_ConfirmPassword
-        ["Lbl_NewPassword"] = "New Password", // TODO: translate Lbl_NewPassword
-        ["Msg_PasswordEmpty"] = "Password cannot be empty.", // TODO: translate Msg_PasswordEmpty
-        ["Msg_PasswordMismatch"] = "Passwords do not match.", // TODO: translate Msg_PasswordMismatch
-        ["Msg_PasswordReset"] = "Reset to built-in default password (nty2026).", // TODO: translate Msg_PasswordReset
-        ["Msg_PasswordSaved"] = "Password updated. Deploy the same hash to student PCs to apply.", // TODO: translate Msg_PasswordSaved
-        ["Msg_PasswordSaveFailed"] = "Failed to save password: {0}", // TODO: translate Msg_PasswordSaveFailed
-        ["Msg_PasswordTooShort"] = "Password must be at least 4 characters.", // TODO: translate Msg_PasswordTooShort
-        ["Btn_ExportRegFile"] = "Export .reg", // TODO: translate Btn_ExportRegFile
-        ["Msg_NoHashToExport"] = "Save a password first before exporting.", // TODO: translate Msg_NoHashToExport
-        ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.", // TODO: translate Msg_RegFileExported
-        ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.", // TODO: translate Tooltip_ExportReg
+        ["Btn_AdminPasswordSettings"] = "Mot de passe administrateur",  // TODO: review Btn_AdminPasswordSettings
+        ["Btn_ResetToDefault"] = "Réinitialiser par défaut",  // TODO: review Btn_ResetToDefault
+        ["Chat_TeacherIPUpdated"] = "[Système] IP de l'enseignant mise à jour. Reconnexion…",  // TODO: review Chat_TeacherIPUpdated
+        ["Dlg_SettingsSaved"] = "Paramètres enregistrés",  // TODO: review Dlg_SettingsSaved
+        ["Dlg_TeacherIPSavedMsg"] = "IP de l'enseignant enregistrée. L'agent se reconnectera avec la nouvelle adresse.",  // TODO: review Dlg_TeacherIPSavedMsg
+        ["Lbl_AdminPasswordSettings_Hint"] = "Définissez un mot de passe que les élèves doivent saisir pour modifier les paramètres de connexion sur leurs PC. Le hash est enregistré dans HKCU sur cette machine — utilisez Exporter .reg pour le déployer sur tous les PC des élèves à l'échelle de la machine.",  // TODO: review Lbl_AdminPasswordSettings_Hint
+        ["Lbl_AdminPasswordSettings_HintShort"] = "Définissez le mot de passe que les élèves saisissent pour déverrouiller les paramètres de connexion.",  // TODO: review
+        ["Lbl_AdminPasswordSettings_Title"] = "Paramètres du mot de passe administrateur",  // TODO: review Lbl_AdminPasswordSettings_Title
+        ["Lbl_ConfirmPassword"] = "Confirmer le mot de passe",  // TODO: review Lbl_ConfirmPassword
+        ["Lbl_NewPassword"] = "Nouveau mot de passe",  // TODO: review Lbl_NewPassword
+        ["Msg_PasswordEmpty"] = "Le mot de passe ne peut pas être vide.",  // TODO: review Msg_PasswordEmpty
+        ["Msg_PasswordMismatch"] = "Les mots de passe ne correspondent pas.",  // TODO: review Msg_PasswordMismatch
+        ["Msg_PasswordReset"] = "Réinitialisé au mot de passe par défaut intégré (nty2026).",  // TODO: review Msg_PasswordReset
+        ["Msg_PasswordSaved"] = "Mot de passe mis à jour. Déployez le même hash sur les PC des élèves pour l'appliquer.",  // TODO: review Msg_PasswordSaved
+        ["Msg_PasswordSaveFailed"] = "Impossible d'enregistrer le mot de passe: {0}",  // TODO: review Msg_PasswordSaveFailed
+        ["Msg_PasswordTooShort"] = "Le mot de passe doit contenir au moins 4 caractères.",  // TODO: review Msg_PasswordTooShort
+        ["Btn_ExportRegFile"] = "Exporter .reg",  // TODO: review Btn_ExportRegFile
+        ["Msg_NoHashToExport"] = "Enregistrez d'abord un mot de passe avant d'exporter.",  // TODO: review Msg_NoHashToExport
+        ["Msg_RegFileExported"] = "Fichier .reg enregistré. Exécutez sur chaque PC d'élève avec les droits d'administrateur pour le déployer à l'échelle de la machine.",  // TODO: review Msg_RegFileExported
+        ["Tooltip_ExportReg"] = "Exporter le hash du mot de passe sous forme de fichier .reg. Distribuez aux PC des élèves et exécutez en tant qu'administrateur pour appliquer.",  // TODO: review Tooltip_ExportReg
         // ===== Phase 1.2 fix-up: machine-translated entries — review tagged =====
         ["Btn_Cancel"] = "Annuler", // TODO: review Btn_Cancel
         ["Btn_Save"] = "Enregistrer", // TODO: review Btn_Save
@@ -2859,13 +3084,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "Système d'examen", // TODO: review Lbl_QuizManager
         ["Lbl_QuizEditor"] = "Éditeur de questionnaire", // TODO: review Lbl_QuizEditor
         ["Lbl_QuestionEditor"] = "Éditeur de question", // TODO: review Lbl_QuestionEditor
-        ["Btn_NewQuiz"] = "Nouveau questionnaire", // TODO: review Btn_NewQuiz
-        ["Btn_EditQuiz"] = "Modifier", // TODO: review Btn_EditQuiz
-        ["Btn_DeleteQuiz"] = "Supprimer", // TODO: review Btn_DeleteQuiz
-        ["Btn_ImportWord"] = "Importer depuis Word", // TODO: review Btn_ImportWord
-        ["Btn_SendQuiz"] = "Envoyer aux élèves", // TODO: review Btn_SendQuiz
-        ["Btn_ViewResults"] = "Voir les résultats", // TODO: review Btn_ViewResults
-        ["Btn_EndExam"] = "Terminer l'examen", // TODO: review Btn_EndExam
+        ["Btn_NewQuiz"] = "➕ Nouveau", // TODO: review Btn_NewQuiz
+        ["Btn_EditQuiz"] = "✏ Modifier", // TODO: review Btn_EditQuiz
+        ["Btn_DeleteQuiz"] = "🗑 Supprimer", // TODO: review Btn_DeleteQuiz
+        ["Btn_ImportWord"] = "📥 Importer", // TODO: review Btn_ImportWord
+        ["Btn_SendQuiz"] = "📤 Envoyer", // TODO: review Btn_SendQuiz
+        ["Btn_ViewResults"] = "📊 Résultats", // TODO: review Btn_ViewResults
+        ["Btn_EndExam"] = "⏹ Terminer", // TODO: review Btn_EndExam
         ["Btn_AddQuestion"] = "Ajouter une question", // TODO: review Btn_AddQuestion
         ["Btn_EditQuestion"] = "Modifier la question", // TODO: review Btn_EditQuestion
         ["Btn_RemoveQuestion"] = "Retirer", // TODO: review Btn_RemoveQuestion
@@ -3028,7 +3253,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "Couleur principale", // TODO: review Lbl_PrimaryColor
         ["Lbl_AccentColor"] = "Couleur d'accent", // TODO: review Lbl_AccentColor
         ["Lbl_Logo"] = "Logo", // TODO: review Lbl_Logo
-        ["Lbl_Wallpaper"] = "Fond d'écran de verrouillage", // TODO: review Lbl_Wallpaper
+        ["Lbl_AppBackground"] = "Arrière-plan de l'application",  // TODO: review
+        ["Lbl_BrandingHint"] = "Personnalisez le nom de l'application, l'organisation, les couleurs de marque, le logo et le fond d'écran de verrouillage. Les modifications s'appliquent en direct à toutes les fenêtres ouvertes.",  // TODO: review
+        ["Lbl_AppBackgroundHint"] = "Définit l'image d'arrière-plan visible derrière la grille des élèves dans la fenêtre principale de l'application. L'image est stockée localement sur ce PC d'enseignant uniquement — les PC des élèves ne sont pas affectés.",  // TODO: review
+        ["Lbl_LivePreview"] = "Aperçu en direct",  // TODO: review
         ["Lbl_AppName_Branding"] = "Nom de l'application", // TODO: review Lbl_AppName_Branding
         ["Lbl_OrgName"] = "Nom de l'organisation", // TODO: review Lbl_OrgName
         ["Lbl_ShowOrgInTitle"] = "Afficher le nom de l'organisation dans le titre", // TODO: review Lbl_ShowOrgInTitle
@@ -3041,6 +3269,39 @@ internal static class LocalizationData
         ["Btn_StartExam"] = "Commencer l'examen →", // TODO: review Btn_StartExam
         ["Lbl_FillBeforeExam"] = "Veuillez remplir vos informations avant de commencer l'examen.", // TODO: review Lbl_FillBeforeExam
         ["Err_FillAllFields"] = "Veuillez remplir tous les champs.", // TODO: review Err_FillAllFields
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "Gérer les listes de classe — créez, modifiez ou activez la classe utilisée pour la session.", // TODO: review Hint_RosterManager
+        ["Hint_RosterEditor"] = "Ajoutez des élèves à cette classe. Utilisez 'Ajouter depuis connectés' pour inclure tous les connectés, ou saisissez manuellement.", // TODO: review Hint_RosterEditor
+        ["Hint_QuizEditor"] = "Définissez le titre, la durée et les questions du quiz. Cliquez sur une question pour l'éditer.", // TODO: review Hint_QuizEditor
+        ["Hint_QuestionEditor"] = "Modifiez le texte et les options de la question. Marquez la bonne réponse.", // TODO: review Hint_QuestionEditor
+        ["Lbl_RosterCol_Class"] = "Classe", // TODO: review Lbl_RosterCol_Class
+        ["Lbl_RosterCol_Students"] = "Élèves", // TODO: review Lbl_RosterCol_Students
+        ["Lbl_RosterCol_LastUsed"] = "Dernière utilisation", // TODO: review Lbl_RosterCol_LastUsed
+        ["Lbl_RosterCol_Machine"] = "Machine", // TODO: review Lbl_RosterCol_Machine
+        ["Lbl_RosterStudents"] = "Élèves", // TODO: review Lbl_RosterStudents
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "Choisissez la webcam, la résolution et la fréquence d'images avant de démarrer la diffusion.", // TODO: review Hint_CameraSelector
+        ["Hint_NetMovie"] = "Ajoutez des fichiers vidéo, sélectionnez-en un, puis cliquez sur Play pour les diffuser simultanément à tous les élèves connectés.", // TODO: review Hint_NetMovie
+        ["Hint_MicMonitor"] = "Activez Listen sur chaque élève pour entendre son microphone. L'audio est mixé en temps réel.", // TODO: review Hint_MicMonitor
+        ["Btn_Play"] = "▶ Lecture", // TODO: review Btn_Play
+        ["Btn_Pause"] = "⏸ Pause", // TODO: review Btn_Pause
+        ["Btn_Stop"] = "⏹ Arrêt", // TODO: review Btn_Stop
+        ["Lbl_MicListen"] = "Listen", // TODO: review Lbl_MicListen
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "Faire l'appel", // TODO: review Hdr_MarkAttendance
+        ["Lbl_AttendanceStatus"] = "Statut", // TODO: review Lbl_AttendanceStatus
+        ["Lbl_Present"] = "Présent", // TODO: review Lbl_Present
+        ["Lbl_Absent"] = "Absent", // TODO: review Lbl_Absent
+        ["Lbl_Late"] = "En retard", // TODO: review Lbl_Late
+        ["Lbl_Excused"] = "Excusé", // TODO: review Lbl_Excused
+        ["Lbl_AttendanceStats"] = "Présent: {0} | Absent: {1} | Retard: {2} | Excusé: {3}", // TODO: review Lbl_AttendanceStats
+        ["Btn_DeactivateRoster"] = "Désactiver", // TODO: review Btn_DeactivateRoster
+        ["Tooltip_NoActiveRoster"] = "Activez d'abord une liste de classe", // TODO: review Tooltip_NoActiveRoster
+        ["Msg_AttendanceExported"] = "Présences enregistrées : {0}", // TODO: review Msg_AttendanceExported
+        ["Lbl_Success"] = "Réussi", // TODO: review Lbl_Success
     };
 
     private static Dictionary<string, string> De() => new()
@@ -3080,11 +3341,11 @@ internal static class LocalizationData
         ["Time_JustNow"] = "Gerade eben", // TODO: review Time_JustNow
         ["Time_MinAgo"] = "vor {0} Min", // TODO: review Time_MinAgo
         ["Time_HourAgo"] = "vor {0} h", // TODO: review Time_HourAgo
-        ["Hdr_ClassTools"] = "Class Tools", // TODO: translate Hdr_ClassTools
-        ["Hdr_Audio"] = "Audio", // TODO: translate Hdr_Audio
-        ["Hdr_RecordingBreakout"] = "Recording & Breakout", // TODO: translate Hdr_RecordingBreakout
-        ["Hdr_TeachAssess"] = "Teach & Assess", // TODO: translate Hdr_TeachAssess
-        ["Hdr_System"] = "System", // TODO: translate Hdr_System
+        ["Hdr_ClassTools"] = "Klassenwerkzeuge",  // TODO: review Hdr_ClassTools
+        ["Hdr_Audio"] = "Audio",  // TODO: review Hdr_Audio
+        ["Hdr_RecordingBreakout"] = "Aufnahme & Gruppenräume",  // TODO: review Hdr_RecordingBreakout
+        ["Hdr_TeachAssess"] = "Unterrichten & Bewerten",  // TODO: review Hdr_TeachAssess
+        ["Hdr_System"] = "System",  // TODO: review Hdr_System
         ["Help_ClassTools"] = "Tools zur Verwaltung Ihrer Live-Klasse — Schülerbildschirme sperren, Einschränkungen anwenden, Kamera übertragen, Bildschirm annotieren, Medien abspielen und Dateien senden.",  // TODO: review
         ["Help_Audio"] = "Audio-Steuerung — Sounds und Mikrofon umschalten, PC-Audio übertragen, alle Schüler stummschalten, Schülermikrofone überwachen und deren Lautstärke anpassen.",  // TODO: review
         ["Help_RecordingBreakout"] = "Sitzungen zur späteren Überprüfung aufzeichnen, die Klasse in kleinere Breakout-Räume aufteilen oder gleichzeitig in mehreren Räumen unterrichten.",  // TODO: review
@@ -3247,25 +3508,26 @@ internal static class LocalizationData
         ["Lbl_AdaptiveOff"] = "Adaptiv: AUS",
 
         // Phase 8 (Bug A) — Admin password + IP-update keys. Values copy English; translator follow-up needed.
-        ["Btn_AdminPasswordSettings"] = "Admin Password", // TODO: translate Btn_AdminPasswordSettings
-        ["Btn_ResetToDefault"] = "Reset to default", // TODO: translate Btn_ResetToDefault
-        ["Chat_TeacherIPUpdated"] = "[System] Teacher IP updated. Reconnecting…", // TODO: translate Chat_TeacherIPUpdated
-        ["Dlg_SettingsSaved"] = "Settings Saved", // TODO: translate Dlg_SettingsSaved
-        ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.", // TODO: translate Dlg_TeacherIPSavedMsg
-        ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.", // TODO: translate Lbl_AdminPasswordSettings_Hint
-        ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings", // TODO: translate Lbl_AdminPasswordSettings_Title
-        ["Lbl_ConfirmPassword"] = "Confirm Password", // TODO: translate Lbl_ConfirmPassword
-        ["Lbl_NewPassword"] = "New Password", // TODO: translate Lbl_NewPassword
-        ["Msg_PasswordEmpty"] = "Password cannot be empty.", // TODO: translate Msg_PasswordEmpty
-        ["Msg_PasswordMismatch"] = "Passwords do not match.", // TODO: translate Msg_PasswordMismatch
-        ["Msg_PasswordReset"] = "Reset to built-in default password (nty2026).", // TODO: translate Msg_PasswordReset
-        ["Msg_PasswordSaved"] = "Password updated. Deploy the same hash to student PCs to apply.", // TODO: translate Msg_PasswordSaved
-        ["Msg_PasswordSaveFailed"] = "Failed to save password: {0}", // TODO: translate Msg_PasswordSaveFailed
-        ["Msg_PasswordTooShort"] = "Password must be at least 4 characters.", // TODO: translate Msg_PasswordTooShort
-        ["Btn_ExportRegFile"] = "Export .reg", // TODO: translate Btn_ExportRegFile
-        ["Msg_NoHashToExport"] = "Save a password first before exporting.", // TODO: translate Msg_NoHashToExport
-        ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.", // TODO: translate Msg_RegFileExported
-        ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.", // TODO: translate Tooltip_ExportReg
+        ["Btn_AdminPasswordSettings"] = "Administrator-Passwort",  // TODO: review Btn_AdminPasswordSettings
+        ["Btn_ResetToDefault"] = "Auf Standard zurücksetzen",  // TODO: review Btn_ResetToDefault
+        ["Chat_TeacherIPUpdated"] = "[System] Lehrer-IP aktualisiert. Verbinde erneut…",  // TODO: review Chat_TeacherIPUpdated
+        ["Dlg_SettingsSaved"] = "Einstellungen gespeichert",  // TODO: review Dlg_SettingsSaved
+        ["Dlg_TeacherIPSavedMsg"] = "Lehrer-IP gespeichert. Der Agent verbindet sich mit der neuen Adresse erneut.",  // TODO: review Dlg_TeacherIPSavedMsg
+        ["Lbl_AdminPasswordSettings_Hint"] = "Legen Sie ein Passwort fest, das Schüler eingeben müssen, um die Verbindungseinstellungen auf ihren PCs zu ändern. Der Hash wird unter HKCU auf diesem Computer gespeichert — verwenden Sie Export .reg, um es maschinenweit auf alle Schüler-PCs zu verteilen.",  // TODO: review Lbl_AdminPasswordSettings_Hint
+        ["Lbl_AdminPasswordSettings_HintShort"] = "Legen Sie das Passwort fest, das Schüler eingeben, um die Verbindungseinstellungen zu entsperren.",  // TODO: review
+        ["Lbl_AdminPasswordSettings_Title"] = "Administrator-Passwort-Einstellungen",  // TODO: review Lbl_AdminPasswordSettings_Title
+        ["Lbl_ConfirmPassword"] = "Passwort bestätigen",  // TODO: review Lbl_ConfirmPassword
+        ["Lbl_NewPassword"] = "Neues Passwort",  // TODO: review Lbl_NewPassword
+        ["Msg_PasswordEmpty"] = "Das Passwort darf nicht leer sein.",  // TODO: review Msg_PasswordEmpty
+        ["Msg_PasswordMismatch"] = "Die Passwörter stimmen nicht überein.",  // TODO: review Msg_PasswordMismatch
+        ["Msg_PasswordReset"] = "Auf integriertes Standardpasswort (nty2026) zurückgesetzt.",  // TODO: review Msg_PasswordReset
+        ["Msg_PasswordSaved"] = "Passwort aktualisiert. Verteilen Sie denselben Hash an die Schüler-PCs, um ihn anzuwenden.",  // TODO: review Msg_PasswordSaved
+        ["Msg_PasswordSaveFailed"] = "Passwort konnte nicht gespeichert werden: {0}",  // TODO: review Msg_PasswordSaveFailed
+        ["Msg_PasswordTooShort"] = "Das Passwort muss mindestens 4 Zeichen lang sein.",  // TODO: review Msg_PasswordTooShort
+        ["Btn_ExportRegFile"] = ".reg exportieren",  // TODO: review Btn_ExportRegFile
+        ["Msg_NoHashToExport"] = "Speichern Sie zuerst ein Passwort, bevor Sie exportieren.",  // TODO: review Msg_NoHashToExport
+        ["Msg_RegFileExported"] = ".reg-Datei gespeichert. Auf jedem Schüler-PC mit Administratorrechten ausführen, um es maschinenweit zu verteilen.",  // TODO: review Msg_RegFileExported
+        ["Tooltip_ExportReg"] = "Passwort-Hash als .reg-Datei exportieren. An Schüler-PCs verteilen und als Administrator ausführen, um es anzuwenden.",  // TODO: review Tooltip_ExportReg
         // ===== Phase 1.2 fix-up: machine-translated entries — review tagged =====
         ["Btn_Cancel"] = "Abbrechen", // TODO: review Btn_Cancel
         ["Btn_Save"] = "Speichern", // TODO: review Btn_Save
@@ -3274,13 +3536,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "Prüfungssystem", // TODO: review Lbl_QuizManager
         ["Lbl_QuizEditor"] = "Quiz-Editor", // TODO: review Lbl_QuizEditor
         ["Lbl_QuestionEditor"] = "Frage-Editor", // TODO: review Lbl_QuestionEditor
-        ["Btn_NewQuiz"] = "Neues Quiz", // TODO: review Btn_NewQuiz
-        ["Btn_EditQuiz"] = "Bearbeiten", // TODO: review Btn_EditQuiz
-        ["Btn_DeleteQuiz"] = "Löschen", // TODO: review Btn_DeleteQuiz
-        ["Btn_ImportWord"] = "Aus Word importieren", // TODO: review Btn_ImportWord
-        ["Btn_SendQuiz"] = "An Schüler senden", // TODO: review Btn_SendQuiz
-        ["Btn_ViewResults"] = "Ergebnisse anzeigen", // TODO: review Btn_ViewResults
-        ["Btn_EndExam"] = "Prüfung beenden", // TODO: review Btn_EndExam
+        ["Btn_NewQuiz"] = "➕ Neu", // TODO: review Btn_NewQuiz
+        ["Btn_EditQuiz"] = "✏ Bearbeiten", // TODO: review Btn_EditQuiz
+        ["Btn_DeleteQuiz"] = "🗑 Löschen", // TODO: review Btn_DeleteQuiz
+        ["Btn_ImportWord"] = "📥 Importieren", // TODO: review Btn_ImportWord
+        ["Btn_SendQuiz"] = "📤 Senden", // TODO: review Btn_SendQuiz
+        ["Btn_ViewResults"] = "📊 Ergebnisse", // TODO: review Btn_ViewResults
+        ["Btn_EndExam"] = "⏹ Beenden", // TODO: review Btn_EndExam
         ["Btn_AddQuestion"] = "Frage hinzufügen", // TODO: review Btn_AddQuestion
         ["Btn_EditQuestion"] = "Frage bearbeiten", // TODO: review Btn_EditQuestion
         ["Btn_RemoveQuestion"] = "Entfernen", // TODO: review Btn_RemoveQuestion
@@ -3443,7 +3705,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "Primärfarbe", // TODO: review Lbl_PrimaryColor
         ["Lbl_AccentColor"] = "Akzentfarbe", // TODO: review Lbl_AccentColor
         ["Lbl_Logo"] = "Logo", // TODO: review Lbl_Logo
-        ["Lbl_Wallpaper"] = "Sperrbildschirm-Hintergrund", // TODO: review Lbl_Wallpaper
+        ["Lbl_AppBackground"] = "App-Hintergrund",  // TODO: review
+        ["Lbl_BrandingHint"] = "Passen Sie App-Name, Organisation, Markenfarben, Logo und Sperrbildschirm-Hintergrund an. Änderungen werden live auf alle geöffneten Fenster angewendet.",  // TODO: review
+        ["Lbl_AppBackgroundHint"] = "Legt das Hintergrundbild fest, das hinter dem Schüler-Raster im Hauptfenster der App sichtbar ist. Das Bild wird nur lokal auf diesem Lehrer-PC gespeichert — Schüler-PCs sind nicht betroffen.",  // TODO: review
+        ["Lbl_LivePreview"] = "Live-Vorschau",  // TODO: review
         ["Lbl_AppName_Branding"] = "App-Name", // TODO: review Lbl_AppName_Branding
         ["Lbl_OrgName"] = "Organisationsname", // TODO: review Lbl_OrgName
         ["Lbl_ShowOrgInTitle"] = "Organisationsname im Titel anzeigen", // TODO: review Lbl_ShowOrgInTitle
@@ -3456,6 +3721,39 @@ internal static class LocalizationData
         ["Btn_StartExam"] = "Prüfung starten →", // TODO: review Btn_StartExam
         ["Lbl_FillBeforeExam"] = "Bitte vor Prüfungsbeginn Informationen ausfüllen.", // TODO: review Lbl_FillBeforeExam
         ["Err_FillAllFields"] = "Bitte alle Felder ausfüllen.", // TODO: review Err_FillAllFields
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "Klassenlisten verwalten — Klasse für die Sitzung erstellen, bearbeiten oder aktivieren.", // TODO: review Hint_RosterManager
+        ["Hint_RosterEditor"] = "Schüler zu dieser Klasse hinzufügen. 'Von verbundenen hinzufügen' nimmt alle online auf, oder manuell eintragen.", // TODO: review Hint_RosterEditor
+        ["Hint_QuizEditor"] = "Titel, Dauer und Fragen des Tests festlegen. Klicken Sie auf eine Frage zum Bearbeiten.", // TODO: review Hint_QuizEditor
+        ["Hint_QuestionEditor"] = "Fragetext und Optionen bearbeiten. Richtige Antwort markieren.", // TODO: review Hint_QuestionEditor
+        ["Lbl_RosterCol_Class"] = "Klasse", // TODO: review Lbl_RosterCol_Class
+        ["Lbl_RosterCol_Students"] = "Schüler", // TODO: review Lbl_RosterCol_Students
+        ["Lbl_RosterCol_LastUsed"] = "Zuletzt verwendet", // TODO: review Lbl_RosterCol_LastUsed
+        ["Lbl_RosterCol_Machine"] = "Computer", // TODO: review Lbl_RosterCol_Machine
+        ["Lbl_RosterStudents"] = "Schüler", // TODO: review Lbl_RosterStudents
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "Webcam, Auflösung und Bildrate vor dem Start der Übertragung wählen.", // TODO: review Hint_CameraSelector
+        ["Hint_NetMovie"] = "Videodateien hinzufügen, eine auswählen und auf Play klicken, um sie allen verbundenen Schülern gleichzeitig vorzuspielen.", // TODO: review Hint_NetMovie
+        ["Hint_MicMonitor"] = "Listen pro Schüler aktivieren, um deren Mikrofon zu hören. Audio wird in Echtzeit gemischt.", // TODO: review Hint_MicMonitor
+        ["Btn_Play"] = "▶ Wiedergabe", // TODO: review Btn_Play
+        ["Btn_Pause"] = "⏸ Pause", // TODO: review Btn_Pause
+        ["Btn_Stop"] = "⏹ Stopp", // TODO: review Btn_Stop
+        ["Lbl_MicListen"] = "Listen", // TODO: review Lbl_MicListen
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "Anwesenheit erfassen", // TODO: review Hdr_MarkAttendance
+        ["Lbl_AttendanceStatus"] = "Status", // TODO: review Lbl_AttendanceStatus
+        ["Lbl_Present"] = "Anwesend", // TODO: review Lbl_Present
+        ["Lbl_Absent"] = "Abwesend", // TODO: review Lbl_Absent
+        ["Lbl_Late"] = "Verspätet", // TODO: review Lbl_Late
+        ["Lbl_Excused"] = "Entschuldigt", // TODO: review Lbl_Excused
+        ["Lbl_AttendanceStats"] = "Anwesend: {0} | Abwesend: {1} | Verspätet: {2} | Entsch.: {3}", // TODO: review Lbl_AttendanceStats
+        ["Btn_DeactivateRoster"] = "Deaktivieren", // TODO: review Btn_DeactivateRoster
+        ["Tooltip_NoActiveRoster"] = "Aktivieren Sie zuerst eine Klassenliste", // TODO: review Tooltip_NoActiveRoster
+        ["Msg_AttendanceExported"] = "Anwesenheit gespeichert: {0}", // TODO: review Msg_AttendanceExported
+        ["Lbl_Success"] = "Erfolg", // TODO: review Lbl_Success
     };
 
     private static Dictionary<string, string> Ru() => new()
@@ -3495,11 +3793,11 @@ internal static class LocalizationData
         ["Time_JustNow"] = "Только что", // TODO: review Time_JustNow
         ["Time_MinAgo"] = "{0} мин назад", // TODO: review Time_MinAgo
         ["Time_HourAgo"] = "{0} ч назад", // TODO: review Time_HourAgo
-        ["Hdr_ClassTools"] = "Class Tools", // TODO: translate Hdr_ClassTools
-        ["Hdr_Audio"] = "Audio", // TODO: translate Hdr_Audio
-        ["Hdr_RecordingBreakout"] = "Recording & Breakout", // TODO: translate Hdr_RecordingBreakout
-        ["Hdr_TeachAssess"] = "Teach & Assess", // TODO: translate Hdr_TeachAssess
-        ["Hdr_System"] = "System", // TODO: translate Hdr_System
+        ["Hdr_ClassTools"] = "Инструменты класса",  // TODO: review Hdr_ClassTools
+        ["Hdr_Audio"] = "Аудио",  // TODO: review Hdr_Audio
+        ["Hdr_RecordingBreakout"] = "Запись и группы",  // TODO: review Hdr_RecordingBreakout
+        ["Hdr_TeachAssess"] = "Обучение и оценка",  // TODO: review Hdr_TeachAssess
+        ["Hdr_System"] = "Система",  // TODO: review Hdr_System
         ["Help_ClassTools"] = "Инструменты для управления живым уроком — блокировка экранов учеников, применение ограничений, трансляция камеры, аннотация экрана, воспроизведение медиа и отправка файлов.",  // TODO: review
         ["Help_Audio"] = "Аудиоуправление — переключение звуков и микрофона, трансляция звука компьютера, отключение звука всех учеников, мониторинг микрофонов учеников и регулировка их громкости.",  // TODO: review
         ["Help_RecordingBreakout"] = "Записывайте сессии для последующего просмотра, организуйте класс в небольшие группы или одновременно ведите занятия в нескольких физических кабинетах.",  // TODO: review
@@ -3662,25 +3960,26 @@ internal static class LocalizationData
         ["Lbl_AdaptiveOff"] = "Адаптивный: ВЫКЛ",
 
         // Phase 8 (Bug A) — Admin password + IP-update keys. Values copy English; translator follow-up needed.
-        ["Btn_AdminPasswordSettings"] = "Admin Password", // TODO: translate Btn_AdminPasswordSettings
-        ["Btn_ResetToDefault"] = "Reset to default", // TODO: translate Btn_ResetToDefault
-        ["Chat_TeacherIPUpdated"] = "[System] Teacher IP updated. Reconnecting…", // TODO: translate Chat_TeacherIPUpdated
-        ["Dlg_SettingsSaved"] = "Settings Saved", // TODO: translate Dlg_SettingsSaved
-        ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.", // TODO: translate Dlg_TeacherIPSavedMsg
-        ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.", // TODO: translate Lbl_AdminPasswordSettings_Hint
-        ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings", // TODO: translate Lbl_AdminPasswordSettings_Title
-        ["Lbl_ConfirmPassword"] = "Confirm Password", // TODO: translate Lbl_ConfirmPassword
-        ["Lbl_NewPassword"] = "New Password", // TODO: translate Lbl_NewPassword
-        ["Msg_PasswordEmpty"] = "Password cannot be empty.", // TODO: translate Msg_PasswordEmpty
-        ["Msg_PasswordMismatch"] = "Passwords do not match.", // TODO: translate Msg_PasswordMismatch
-        ["Msg_PasswordReset"] = "Reset to built-in default password (nty2026).", // TODO: translate Msg_PasswordReset
-        ["Msg_PasswordSaved"] = "Password updated. Deploy the same hash to student PCs to apply.", // TODO: translate Msg_PasswordSaved
-        ["Msg_PasswordSaveFailed"] = "Failed to save password: {0}", // TODO: translate Msg_PasswordSaveFailed
-        ["Msg_PasswordTooShort"] = "Password must be at least 4 characters.", // TODO: translate Msg_PasswordTooShort
-        ["Btn_ExportRegFile"] = "Export .reg", // TODO: translate Btn_ExportRegFile
-        ["Msg_NoHashToExport"] = "Save a password first before exporting.", // TODO: translate Msg_NoHashToExport
-        ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.", // TODO: translate Msg_RegFileExported
-        ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.", // TODO: translate Tooltip_ExportReg
+        ["Btn_AdminPasswordSettings"] = "Пароль администратора",  // TODO: review Btn_AdminPasswordSettings
+        ["Btn_ResetToDefault"] = "Сбросить к значениям по умолчанию",  // TODO: review Btn_ResetToDefault
+        ["Chat_TeacherIPUpdated"] = "[Система] IP учителя обновлен. Переподключение…",  // TODO: review Chat_TeacherIPUpdated
+        ["Dlg_SettingsSaved"] = "Настройки сохранены",  // TODO: review Dlg_SettingsSaved
+        ["Dlg_TeacherIPSavedMsg"] = "IP учителя сохранен. Агент переподключится с новым адресом.",  // TODO: review Dlg_TeacherIPSavedMsg
+        ["Lbl_AdminPasswordSettings_Hint"] = "Установите пароль, который ученики должны ввести, чтобы изменить настройки подключения на своих ПК. Хеш сохраняется в HKCU на этой машине — используйте Экспорт .reg для развертывания на все ПК учеников в масштабе всей машины.",  // TODO: review Lbl_AdminPasswordSettings_Hint
+        ["Lbl_AdminPasswordSettings_HintShort"] = "Установите пароль, который ученики вводят, чтобы разблокировать настройки подключения.",  // TODO: review
+        ["Lbl_AdminPasswordSettings_Title"] = "Настройки пароля администратора",  // TODO: review Lbl_AdminPasswordSettings_Title
+        ["Lbl_ConfirmPassword"] = "Подтвердите пароль",  // TODO: review Lbl_ConfirmPassword
+        ["Lbl_NewPassword"] = "Новый пароль",  // TODO: review Lbl_NewPassword
+        ["Msg_PasswordEmpty"] = "Пароль не может быть пустым.",  // TODO: review Msg_PasswordEmpty
+        ["Msg_PasswordMismatch"] = "Пароли не совпадают.",  // TODO: review Msg_PasswordMismatch
+        ["Msg_PasswordReset"] = "Сброшено на встроенный пароль по умолчанию (nty2026).",  // TODO: review Msg_PasswordReset
+        ["Msg_PasswordSaved"] = "Пароль обновлен. Разверните тот же хеш на ПК учеников, чтобы применить.",  // TODO: review Msg_PasswordSaved
+        ["Msg_PasswordSaveFailed"] = "Не удалось сохранить пароль: {0}",  // TODO: review Msg_PasswordSaveFailed
+        ["Msg_PasswordTooShort"] = "Пароль должен содержать не менее 4 символов.",  // TODO: review Msg_PasswordTooShort
+        ["Btn_ExportRegFile"] = "Экспорт .reg",  // TODO: review Btn_ExportRegFile
+        ["Msg_NoHashToExport"] = "Сначала сохраните пароль перед экспортом.",  // TODO: review Msg_NoHashToExport
+        ["Msg_RegFileExported"] = "Файл .reg сохранен. Запустите на каждом ПК ученика с правами администратора для развертывания в масштабе всей машины.",  // TODO: review Msg_RegFileExported
+        ["Tooltip_ExportReg"] = "Экспортировать хеш пароля как файл .reg. Распространите на ПК учеников и запустите от имени администратора для применения.",  // TODO: review Tooltip_ExportReg
         // ===== Phase 1.2 fix-up: machine-translated entries — review tagged =====
         ["Btn_Cancel"] = "Отмена", // TODO: review Btn_Cancel
         ["Btn_Save"] = "Сохранить", // TODO: review Btn_Save
@@ -3689,13 +3988,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "Система экзаменов", // TODO: review Lbl_QuizManager
         ["Lbl_QuizEditor"] = "Редактор теста", // TODO: review Lbl_QuizEditor
         ["Lbl_QuestionEditor"] = "Редактор вопроса", // TODO: review Lbl_QuestionEditor
-        ["Btn_NewQuiz"] = "Новый тест", // TODO: review Btn_NewQuiz
-        ["Btn_EditQuiz"] = "Изменить", // TODO: review Btn_EditQuiz
-        ["Btn_DeleteQuiz"] = "Удалить", // TODO: review Btn_DeleteQuiz
-        ["Btn_ImportWord"] = "Импорт из Word", // TODO: review Btn_ImportWord
-        ["Btn_SendQuiz"] = "Отправить ученикам", // TODO: review Btn_SendQuiz
-        ["Btn_ViewResults"] = "Показать результаты", // TODO: review Btn_ViewResults
-        ["Btn_EndExam"] = "Завершить экзамен", // TODO: review Btn_EndExam
+        ["Btn_NewQuiz"] = "➕ Новый", // TODO: review Btn_NewQuiz
+        ["Btn_EditQuiz"] = "✏ Изменить", // TODO: review Btn_EditQuiz
+        ["Btn_DeleteQuiz"] = "🗑 Удалить", // TODO: review Btn_DeleteQuiz
+        ["Btn_ImportWord"] = "📥 Импорт", // TODO: review Btn_ImportWord
+        ["Btn_SendQuiz"] = "📤 Отправить", // TODO: review Btn_SendQuiz
+        ["Btn_ViewResults"] = "📊 Результаты", // TODO: review Btn_ViewResults
+        ["Btn_EndExam"] = "⏹ Завершить", // TODO: review Btn_EndExam
         ["Btn_AddQuestion"] = "Добавить вопрос", // TODO: review Btn_AddQuestion
         ["Btn_EditQuestion"] = "Изменить вопрос", // TODO: review Btn_EditQuestion
         ["Btn_RemoveQuestion"] = "Удалить", // TODO: review Btn_RemoveQuestion
@@ -3858,7 +4157,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "Основной цвет", // TODO: review Lbl_PrimaryColor
         ["Lbl_AccentColor"] = "Акцентный цвет", // TODO: review Lbl_AccentColor
         ["Lbl_Logo"] = "Логотип", // TODO: review Lbl_Logo
-        ["Lbl_Wallpaper"] = "Обои экрана блокировки", // TODO: review Lbl_Wallpaper
+        ["Lbl_AppBackground"] = "Фон приложения",  // TODO: review
+        ["Lbl_BrandingHint"] = "Настройте имя приложения, организацию, цвета бренда, логотип и обои экрана блокировки. Изменения применяются в реальном времени ко всем открытым окнам.",  // TODO: review
+        ["Lbl_AppBackgroundHint"] = "Устанавливает фоновое изображение, видимое за сеткой учеников в главном окне приложения. Изображение хранится локально только на этом ПК учителя — ПК учеников не затрагиваются.",  // TODO: review
+        ["Lbl_LivePreview"] = "Предпросмотр в реальном времени",  // TODO: review
         ["Lbl_AppName_Branding"] = "Название приложения", // TODO: review Lbl_AppName_Branding
         ["Lbl_OrgName"] = "Название организации", // TODO: review Lbl_OrgName
         ["Lbl_ShowOrgInTitle"] = "Показывать название организации в заголовке", // TODO: review Lbl_ShowOrgInTitle
@@ -3871,6 +4173,39 @@ internal static class LocalizationData
         ["Btn_StartExam"] = "Начать экзамен →", // TODO: review Btn_StartExam
         ["Lbl_FillBeforeExam"] = "Заполните данные перед началом экзамена.", // TODO: review Lbl_FillBeforeExam
         ["Err_FillAllFields"] = "Заполните все поля.", // TODO: review Err_FillAllFields
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "Управление списками классов — создать, изменить или активировать класс для текущей сессии.", // TODO: review Hint_RosterManager
+        ["Hint_RosterEditor"] = "Добавить учеников в этот класс. Используйте 'Добавить из подключённых' для всех онлайн, или введите вручную.", // TODO: review Hint_RosterEditor
+        ["Hint_QuizEditor"] = "Задайте название, длительность и вопросы. Кликните по вопросу для редактирования.", // TODO: review Hint_QuizEditor
+        ["Hint_QuestionEditor"] = "Отредактируйте текст вопроса и варианты ответа. Отметьте правильный ответ.", // TODO: review Hint_QuestionEditor
+        ["Lbl_RosterCol_Class"] = "Класс", // TODO: review Lbl_RosterCol_Class
+        ["Lbl_RosterCol_Students"] = "Ученики", // TODO: review Lbl_RosterCol_Students
+        ["Lbl_RosterCol_LastUsed"] = "Последнее использование", // TODO: review Lbl_RosterCol_LastUsed
+        ["Lbl_RosterCol_Machine"] = "Компьютер", // TODO: review Lbl_RosterCol_Machine
+        ["Lbl_RosterStudents"] = "Ученики", // TODO: review Lbl_RosterStudents
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "Выберите веб-камеру, разрешение и частоту кадров перед началом трансляции.", // TODO: review Hint_CameraSelector
+        ["Hint_NetMovie"] = "Добавьте видеофайлы, выберите один и нажмите Play для одновременной трансляции всем подключённым ученикам.", // TODO: review Hint_NetMovie
+        ["Hint_MicMonitor"] = "Включите Listen у каждого ученика, чтобы слышать его микрофон. Аудио микшируется в реальном времени.", // TODO: review Hint_MicMonitor
+        ["Btn_Play"] = "▶ Воспр.", // TODO: review Btn_Play
+        ["Btn_Pause"] = "⏸ Пауза", // TODO: review Btn_Pause
+        ["Btn_Stop"] = "⏹ Стоп", // TODO: review Btn_Stop
+        ["Lbl_MicListen"] = "Listen", // TODO: review Lbl_MicListen
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "Отметить присутствие", // TODO: review Hdr_MarkAttendance
+        ["Lbl_AttendanceStatus"] = "Статус", // TODO: review Lbl_AttendanceStatus
+        ["Lbl_Present"] = "Присутствует", // TODO: review Lbl_Present
+        ["Lbl_Absent"] = "Отсутствует", // TODO: review Lbl_Absent
+        ["Lbl_Late"] = "Опоздание", // TODO: review Lbl_Late
+        ["Lbl_Excused"] = "По уважит.", // TODO: review Lbl_Excused
+        ["Lbl_AttendanceStats"] = "Присутств.: {0} | Отсутств.: {1} | Опоздан.: {2} | Уваж.: {3}", // TODO: review Lbl_AttendanceStats
+        ["Btn_DeactivateRoster"] = "Деактивировать", // TODO: review Btn_DeactivateRoster
+        ["Tooltip_NoActiveRoster"] = "Сначала активируйте список класса", // TODO: review Tooltip_NoActiveRoster
+        ["Msg_AttendanceExported"] = "Журнал сохранён: {0}", // TODO: review Msg_AttendanceExported
+        ["Lbl_Success"] = "Готово", // TODO: review Lbl_Success
     };
 
     private static Dictionary<string, string> Vi() => new()
@@ -3910,11 +4245,11 @@ internal static class LocalizationData
         ["Time_JustNow"] = "Vừa xong", // TODO: review Time_JustNow
         ["Time_MinAgo"] = "{0} phút trước", // TODO: review Time_MinAgo
         ["Time_HourAgo"] = "{0} giờ trước", // TODO: review Time_HourAgo
-        ["Hdr_ClassTools"] = "Class Tools", // TODO: translate Hdr_ClassTools
-        ["Hdr_Audio"] = "Audio", // TODO: translate Hdr_Audio
-        ["Hdr_RecordingBreakout"] = "Recording & Breakout", // TODO: translate Hdr_RecordingBreakout
-        ["Hdr_TeachAssess"] = "Teach & Assess", // TODO: translate Hdr_TeachAssess
-        ["Hdr_System"] = "System", // TODO: translate Hdr_System
+        ["Hdr_ClassTools"] = "Công cụ lớp học",  // TODO: review Hdr_ClassTools
+        ["Hdr_Audio"] = "Âm thanh",  // TODO: review Hdr_Audio
+        ["Hdr_RecordingBreakout"] = "Ghi & nhóm nhỏ",  // TODO: review Hdr_RecordingBreakout
+        ["Hdr_TeachAssess"] = "Dạy & đánh giá",  // TODO: review Hdr_TeachAssess
+        ["Hdr_System"] = "Hệ thống",  // TODO: review Hdr_System
         ["Help_ClassTools"] = "Công cụ quản lý lớp học trực tiếp — khóa màn hình học sinh, áp dụng hạn chế, phát camera, chú thích trên màn hình, phát media và gửi tệp.",  // TODO: review
         ["Help_Audio"] = "Điều khiển âm thanh — bật/tắt âm thanh và micrô, phát âm thanh máy tính, tắt tiếng tất cả học sinh, theo dõi micrô học sinh và điều chỉnh âm lượng.",  // TODO: review
         ["Help_RecordingBreakout"] = "Ghi lại phiên học để xem lại, chia lớp thành các phòng nhóm nhỏ, hoặc dạy đồng thời nhiều phòng vật lý.",  // TODO: review
@@ -4077,25 +4412,26 @@ internal static class LocalizationData
         ["Lbl_AdaptiveOff"] = "Thích nghi: TẮT",
 
         // Phase 8 (Bug A) — Admin password + IP-update keys. Values copy English; translator follow-up needed.
-        ["Btn_AdminPasswordSettings"] = "Admin Password", // TODO: translate Btn_AdminPasswordSettings
-        ["Btn_ResetToDefault"] = "Reset to default", // TODO: translate Btn_ResetToDefault
-        ["Chat_TeacherIPUpdated"] = "[System] Teacher IP updated. Reconnecting…", // TODO: translate Chat_TeacherIPUpdated
-        ["Dlg_SettingsSaved"] = "Settings Saved", // TODO: translate Dlg_SettingsSaved
-        ["Dlg_TeacherIPSavedMsg"] = "Teacher IP saved. The agent will reconnect using the new address.", // TODO: translate Dlg_TeacherIPSavedMsg
-        ["Lbl_AdminPasswordSettings_Hint"] = "Set a password that students must enter to change connection settings on their PCs. The hash is saved to HKCU on this machine — use Export .reg to deploy machine-wide to all student PCs.", // TODO: translate Lbl_AdminPasswordSettings_Hint
-        ["Lbl_AdminPasswordSettings_Title"] = "Admin Password Settings", // TODO: translate Lbl_AdminPasswordSettings_Title
-        ["Lbl_ConfirmPassword"] = "Confirm Password", // TODO: translate Lbl_ConfirmPassword
-        ["Lbl_NewPassword"] = "New Password", // TODO: translate Lbl_NewPassword
-        ["Msg_PasswordEmpty"] = "Password cannot be empty.", // TODO: translate Msg_PasswordEmpty
-        ["Msg_PasswordMismatch"] = "Passwords do not match.", // TODO: translate Msg_PasswordMismatch
-        ["Msg_PasswordReset"] = "Reset to built-in default password (nty2026).", // TODO: translate Msg_PasswordReset
-        ["Msg_PasswordSaved"] = "Password updated. Deploy the same hash to student PCs to apply.", // TODO: translate Msg_PasswordSaved
-        ["Msg_PasswordSaveFailed"] = "Failed to save password: {0}", // TODO: translate Msg_PasswordSaveFailed
-        ["Msg_PasswordTooShort"] = "Password must be at least 4 characters.", // TODO: translate Msg_PasswordTooShort
-        ["Btn_ExportRegFile"] = "Export .reg", // TODO: translate Btn_ExportRegFile
-        ["Msg_NoHashToExport"] = "Save a password first before exporting.", // TODO: translate Msg_NoHashToExport
-        ["Msg_RegFileExported"] = "Saved .reg file. Run on each student PC with admin rights to deploy machine-wide.", // TODO: translate Msg_RegFileExported
-        ["Tooltip_ExportReg"] = "Export password hash as a .reg file. Distribute to student PCs and run as admin to apply.", // TODO: translate Tooltip_ExportReg
+        ["Btn_AdminPasswordSettings"] = "Mật khẩu quản trị",  // TODO: review Btn_AdminPasswordSettings
+        ["Btn_ResetToDefault"] = "Đặt lại về mặc định",  // TODO: review Btn_ResetToDefault
+        ["Chat_TeacherIPUpdated"] = "[Hệ thống] IP giáo viên đã cập nhật. Đang kết nối lại…",  // TODO: review Chat_TeacherIPUpdated
+        ["Dlg_SettingsSaved"] = "Đã lưu cài đặt",  // TODO: review Dlg_SettingsSaved
+        ["Dlg_TeacherIPSavedMsg"] = "IP giáo viên đã được lưu. Tác nhân sẽ kết nối lại bằng địa chỉ mới.",  // TODO: review Dlg_TeacherIPSavedMsg
+        ["Lbl_AdminPasswordSettings_Hint"] = "Đặt mật khẩu mà học sinh phải nhập để thay đổi cài đặt kết nối trên PC của họ. Hash được lưu vào HKCU trên máy này — sử dụng Xuất .reg để triển khai trên toàn máy cho tất cả PC học sinh.",  // TODO: review Lbl_AdminPasswordSettings_Hint
+        ["Lbl_AdminPasswordSettings_HintShort"] = "Đặt mật khẩu học sinh nhập để mở khóa cài đặt kết nối trên PC của họ.",  // TODO: review
+        ["Lbl_AdminPasswordSettings_Title"] = "Cài đặt mật khẩu quản trị",  // TODO: review Lbl_AdminPasswordSettings_Title
+        ["Lbl_ConfirmPassword"] = "Xác nhận mật khẩu",  // TODO: review Lbl_ConfirmPassword
+        ["Lbl_NewPassword"] = "Mật khẩu mới",  // TODO: review Lbl_NewPassword
+        ["Msg_PasswordEmpty"] = "Mật khẩu không được để trống.",  // TODO: review Msg_PasswordEmpty
+        ["Msg_PasswordMismatch"] = "Mật khẩu không khớp.",  // TODO: review Msg_PasswordMismatch
+        ["Msg_PasswordReset"] = "Đã đặt lại về mật khẩu mặc định tích hợp (nty2026).",  // TODO: review Msg_PasswordReset
+        ["Msg_PasswordSaved"] = "Đã cập nhật mật khẩu. Triển khai cùng một hash đến PC học sinh để áp dụng.",  // TODO: review Msg_PasswordSaved
+        ["Msg_PasswordSaveFailed"] = "Không thể lưu mật khẩu: {0}",  // TODO: review Msg_PasswordSaveFailed
+        ["Msg_PasswordTooShort"] = "Mật khẩu phải có ít nhất 4 ký tự.",  // TODO: review Msg_PasswordTooShort
+        ["Btn_ExportRegFile"] = "Xuất .reg",  // TODO: review Btn_ExportRegFile
+        ["Msg_NoHashToExport"] = "Lưu mật khẩu trước khi xuất.",  // TODO: review Msg_NoHashToExport
+        ["Msg_RegFileExported"] = "Đã lưu tệp .reg. Chạy trên mỗi PC học sinh với quyền admin để triển khai toàn máy.",  // TODO: review Msg_RegFileExported
+        ["Tooltip_ExportReg"] = "Xuất hash mật khẩu dưới dạng tệp .reg. Phân phối đến PC học sinh và chạy với quyền admin để áp dụng.",  // TODO: review Tooltip_ExportReg
         // ===== Phase 1.2 fix-up: machine-translated entries — review tagged =====
         ["Btn_Cancel"] = "Huỷ", // TODO: review Btn_Cancel
         ["Btn_Save"] = "Lưu", // TODO: review Btn_Save
@@ -4104,13 +4440,13 @@ internal static class LocalizationData
         ["Lbl_QuizManager"] = "Hệ thống thi", // TODO: review Lbl_QuizManager
         ["Lbl_QuizEditor"] = "Trình biên soạn bài thi", // TODO: review Lbl_QuizEditor
         ["Lbl_QuestionEditor"] = "Trình biên soạn câu hỏi", // TODO: review Lbl_QuestionEditor
-        ["Btn_NewQuiz"] = "Bài thi mới", // TODO: review Btn_NewQuiz
-        ["Btn_EditQuiz"] = "Sửa", // TODO: review Btn_EditQuiz
-        ["Btn_DeleteQuiz"] = "Xoá", // TODO: review Btn_DeleteQuiz
-        ["Btn_ImportWord"] = "Nhập từ Word", // TODO: review Btn_ImportWord
-        ["Btn_SendQuiz"] = "Gửi cho học sinh", // TODO: review Btn_SendQuiz
-        ["Btn_ViewResults"] = "Xem kết quả", // TODO: review Btn_ViewResults
-        ["Btn_EndExam"] = "Kết thúc kỳ thi", // TODO: review Btn_EndExam
+        ["Btn_NewQuiz"] = "➕ Mới", // TODO: review Btn_NewQuiz
+        ["Btn_EditQuiz"] = "✏ Sửa", // TODO: review Btn_EditQuiz
+        ["Btn_DeleteQuiz"] = "🗑 Xoá", // TODO: review Btn_DeleteQuiz
+        ["Btn_ImportWord"] = "📥 Nhập", // TODO: review Btn_ImportWord
+        ["Btn_SendQuiz"] = "📤 Gửi", // TODO: review Btn_SendQuiz
+        ["Btn_ViewResults"] = "📊 Kết quả", // TODO: review Btn_ViewResults
+        ["Btn_EndExam"] = "⏹ Kết thúc", // TODO: review Btn_EndExam
         ["Btn_AddQuestion"] = "Thêm câu hỏi", // TODO: review Btn_AddQuestion
         ["Btn_EditQuestion"] = "Sửa câu hỏi", // TODO: review Btn_EditQuestion
         ["Btn_RemoveQuestion"] = "Bỏ", // TODO: review Btn_RemoveQuestion
@@ -4273,7 +4609,10 @@ internal static class LocalizationData
         ["Lbl_PrimaryColor"] = "Màu chính", // TODO: review Lbl_PrimaryColor
         ["Lbl_AccentColor"] = "Màu nhấn", // TODO: review Lbl_AccentColor
         ["Lbl_Logo"] = "Logo", // TODO: review Lbl_Logo
-        ["Lbl_Wallpaper"] = "Hình nền màn hình khoá", // TODO: review Lbl_Wallpaper
+        ["Lbl_AppBackground"] = "Hình nền ứng dụng",  // TODO: review
+        ["Lbl_BrandingHint"] = "Tùy chỉnh tên ứng dụng, tổ chức, màu thương hiệu, logo và hình nền màn hình khoá. Các thay đổi áp dụng trực tiếp cho tất cả cửa sổ đang mở.",  // TODO: review
+        ["Lbl_AppBackgroundHint"] = "Đặt hình ảnh nền hiển thị phía sau lưới học sinh trong cửa sổ chính của ứng dụng. Hình ảnh chỉ được lưu cục bộ trên PC giáo viên này — PC học sinh không bị ảnh hưởng.",  // TODO: review
+        ["Lbl_LivePreview"] = "Xem trước trực tiếp",  // TODO: review
         ["Lbl_AppName_Branding"] = "Tên ứng dụng", // TODO: review Lbl_AppName_Branding
         ["Lbl_OrgName"] = "Tên tổ chức", // TODO: review Lbl_OrgName
         ["Lbl_ShowOrgInTitle"] = "Hiển thị tên tổ chức trên tiêu đề", // TODO: review Lbl_ShowOrgInTitle
@@ -4286,5 +4625,38 @@ internal static class LocalizationData
         ["Btn_StartExam"] = "Bắt đầu thi →", // TODO: review Btn_StartExam
         ["Lbl_FillBeforeExam"] = "Hãy điền thông tin trước khi bắt đầu thi.", // TODO: review Lbl_FillBeforeExam
         ["Err_FillAllFields"] = "Hãy điền đầy đủ các trường.", // TODO: review Err_FillAllFields
+
+        // Phase 5 — UI rewrite, dialog redesign hints + roster column headers
+        ["Hint_RosterManager"] = "Quản lý danh sách lớp — tạo, sửa hoặc kích hoạt lớp đang dùng cho phiên.", // TODO: review Hint_RosterManager
+        ["Hint_RosterEditor"] = "Thêm học sinh vào lớp này. Dùng 'Thêm từ đã kết nối' để gộp tất cả người đang trực tuyến, hoặc nhập từng dòng.", // TODO: review Hint_RosterEditor
+        ["Hint_QuizEditor"] = "Đặt tiêu đề, thời lượng và câu hỏi. Bấm vào câu hỏi để sửa.", // TODO: review Hint_QuizEditor
+        ["Hint_QuestionEditor"] = "Sửa nội dung câu hỏi và lựa chọn. Đánh dấu đáp án đúng.", // TODO: review Hint_QuestionEditor
+        ["Lbl_RosterCol_Class"] = "Lớp", // TODO: review Lbl_RosterCol_Class
+        ["Lbl_RosterCol_Students"] = "Học sinh", // TODO: review Lbl_RosterCol_Students
+        ["Lbl_RosterCol_LastUsed"] = "Lần dùng gần nhất", // TODO: review Lbl_RosterCol_LastUsed
+        ["Lbl_RosterCol_Machine"] = "Máy", // TODO: review Lbl_RosterCol_Machine
+        ["Lbl_RosterStudents"] = "Học sinh", // TODO: review Lbl_RosterStudents
+
+        // Phase 6 — Live media monitor windows (Camera/NetMovie/Mic) hints + playback labels
+        ["Hint_CameraSelector"] = "Chọn webcam, độ phân giải và tốc độ khung hình trước khi bắt đầu phát.", // TODO: review Hint_CameraSelector
+        ["Hint_NetMovie"] = "Thêm tệp video, chọn một mục, rồi bấm Play để phát đồng thời cho tất cả học sinh đang kết nối.", // TODO: review Hint_NetMovie
+        ["Hint_MicMonitor"] = "Bật Listen ở mỗi học sinh để nghe micro của họ. Âm thanh được trộn theo thời gian thực.", // TODO: review Hint_MicMonitor
+        ["Btn_Play"] = "▶ Phát", // TODO: review Btn_Play
+        ["Btn_Pause"] = "⏸ Tạm dừng", // TODO: review Btn_Pause
+        ["Btn_Stop"] = "⏹ Dừng", // TODO: review Btn_Stop
+        ["Lbl_MicListen"] = "Listen", // TODO: review Lbl_MicListen
+
+        // Phase 7 Section D — Mark Attendance dialog
+        ["Hdr_MarkAttendance"] = "Điểm danh", // TODO: review Hdr_MarkAttendance
+        ["Lbl_AttendanceStatus"] = "Trạng thái", // TODO: review Lbl_AttendanceStatus
+        ["Lbl_Present"] = "Có mặt", // TODO: review Lbl_Present
+        ["Lbl_Absent"] = "Vắng", // TODO: review Lbl_Absent
+        ["Lbl_Late"] = "Đi trễ", // TODO: review Lbl_Late
+        ["Lbl_Excused"] = "Phép", // TODO: review Lbl_Excused
+        ["Lbl_AttendanceStats"] = "Có mặt: {0} | Vắng: {1} | Trễ: {2} | Phép: {3}", // TODO: review Lbl_AttendanceStats
+        ["Btn_DeactivateRoster"] = "Bỏ kích hoạt", // TODO: review Btn_DeactivateRoster
+        ["Tooltip_NoActiveRoster"] = "Hãy kích hoạt danh sách lớp trước", // TODO: review Tooltip_NoActiveRoster
+        ["Msg_AttendanceExported"] = "Đã lưu điểm danh: {0}", // TODO: review Msg_AttendanceExported
+        ["Lbl_Success"] = "Thành công", // TODO: review Lbl_Success
     };
 }

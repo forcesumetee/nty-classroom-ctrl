@@ -47,8 +47,14 @@
         </Grid.ColumnDefinitions>
 
         <!-- ═════════════════════ HEADER ═════════════════════ -->
+        <!-- Phase 4.2 Issue 3 — header banner now uses BrandPrimaryBrush so the user's
+             Primary color drives a visible "skin" of the app (matches Live Preview's
+             PreviewBanner = Primary mental model from BrandingSettingsWindow).
+             Inline white-on-primary text colors override the theme tokens for elements
+             living inside this banner only; everything below the header still resolves
+             to the regular Light theme tokens. -->
         <Border Grid.Row="0" Grid.ColumnSpan="3"
-                Background="{DynamicResource Surface.Elevated}"
+                Background="{DynamicResource BrandPrimaryBrush}"
                 BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1">
             <Grid Margin="20,0">
                 <Grid.ColumnDefinitions>
@@ -64,26 +70,30 @@
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="{DynamicResource BrandTitleBar}"
                                    FontSize="14" FontWeight="Bold"
-                                   Foreground="{DynamicResource Text.Primary}"/>
+                                   Foreground="{DynamicResource Text.OnAccent}"/>
                         <TextBlock Text="{Binding OrganizationSubtitle}"
                                    FontSize="11"
-                                   Foreground="{DynamicResource Text.Secondary}"/>
+                                   Foreground="#CCFFFFFF"/>
                     </StackPanel>
                 </StackPanel>
 
-                <!-- Connection pill (centered) -->
+                <!-- Connection pill (centered) — stays a white card on primary banner.
+                     Phase 7 Section A — capsule (CornerRadius=999) felt out-of-place
+                     against the rest of the rounded-rect Phase 4-6 surface language;
+                     dropped to CornerRadius=10 to read as a "connection card" instead
+                     of a status pill.  Padding/font sizing from Phase 6 A retained. -->
                 <Border Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
                         Background="{DynamicResource Surface.Card}"
                         BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
-                        CornerRadius="999" Padding="12,6">
+                        CornerRadius="10" Padding="14,5">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="6" Height="6" Fill="{DynamicResource Accent.Success}"
+                        <Ellipse Width="8" Height="8" Fill="{DynamicResource Accent.Success}"
                                  Margin="0,0,8,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{DynamicResource Lbl_ConnectTo}"
-                                   FontSize="12" Foreground="{DynamicResource Text.Secondary}"
+                                   FontSize="13" Foreground="{DynamicResource Text.Secondary}"
                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding LocalIPDisplay}"
-                                   FontFamily="Consolas" FontSize="12"
+                                   FontFamily="Consolas" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{DynamicResource Text.Primary}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
@@ -91,7 +101,9 @@
 
                 <!-- Right side actions -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Background="{DynamicResource Accent.PrimarySubtle}"
+                    <!-- Phase 4.2 Issue 3 — connected count flipped from primary-subtle pill
+                         to a white card so it stays readable on the primary-tinted banner. -->
+                    <Border Background="{DynamicResource Surface.Card}"
                             CornerRadius="8" Padding="10,5" Margin="0,0,8,0"
                             VerticalAlignment="Center">
                         <TextBlock Text="{Binding ConnectedCountText}"
@@ -99,7 +111,10 @@
                                    FontWeight="SemiBold" FontSize="12"
                                    VerticalAlignment="Center"/>
                     </Border>
+                    <!-- Phase 4.2 Issue 3 — explicit Foreground=white so the emoji glyph
+                         and the (rare) outline icon both read against the primary banner. -->
                     <Button Style="{DynamicResource Button.Icon}" Click="CopyIP_Click"
+                            Foreground="{DynamicResource Text.OnAccent}"
                             ToolTip="{DynamicResource Btn_CopyIP}">
                         <TextBlock Text="📋" FontSize="14"/>
                     </Button>
@@ -107,6 +122,7 @@
                          notification count; click marks all read and toggles the popup. -->
                     <Button x:Name="NotificationsBellBtn"
                             Style="{DynamicResource Button.Icon}"
+                            Foreground="{DynamicResource Text.OnAccent}"
                             Click="NotificationsBell_Click"
                             ToolTip="{DynamicResource Tooltip_Notifications}">
                         <Grid>
@@ -200,6 +216,7 @@
                         </Border>
                     </Popup>
                     <Button Style="{DynamicResource Button.Icon}"
+                            Foreground="{DynamicResource Text.OnAccent}"
                             Command="{Binding OpenBrandingSettingsCommand}"
                             ToolTip="{DynamicResource Btn_BrandingSettings}">
                         <TextBlock Text="⚙" FontSize="16"/>
@@ -418,14 +435,36 @@
                                 <TextBlock Text="{DynamicResource Btn_ClassRosters}"
                                            VerticalAlignment="Center" HorizontalAlignment="Left"/>
                             </Button>
-                            <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding MarkAttendanceCommand}">
+                            <!-- Phase 7 Section D — Mark Attendance: opens the new
+                                 AttendanceWindow.  Disabled (with a tooltip) when no
+                                 roster is active so the teacher knows to activate
+                                 one first instead of getting a chat-line error. -->
+                            <Button Style="{DynamicResource Button.SidebarItem}"
+                                    Command="{Binding MarkAttendanceCommand}"
+                                    IsEnabled="{Binding HasActiveRoster}"
+                                    ToolTip="{DynamicResource Tooltip_NoActiveRoster}"
+                                    ToolTipService.ShowOnDisabled="True">
                                 <TextBlock Text="{DynamicResource Btn_MarkAttendance}"
                                            VerticalAlignment="Center" HorizontalAlignment="Left"/>
                             </Button>
-                            <TextBlock Style="{DynamicResource Text.Caption}"
-                                       Text="{Binding ActiveClassName}"
-                                       Visibility="{Binding ActiveClassVisibility}"
-                                       Margin="12,4,12,2"/>
+                            <!-- Active class chip + Deactivate (✕) — only visible when
+                                 a roster is active.  Click ✕ → DeactivateRosterCommand. -->
+                            <DockPanel Visibility="{Binding ActiveClassVisibility}"
+                                       Margin="12,4,12,2">
+                                <Button DockPanel.Dock="Right"
+                                        Style="{DynamicResource Button.Icon}"
+                                        Command="{Binding DeactivateRosterCommand}"
+                                        Padding="2" Width="20" Height="20"
+                                        Margin="4,0,0,0"
+                                        ToolTip="{DynamicResource Btn_DeactivateRoster}">
+                                    <TextBlock Text="✕" FontSize="11"
+                                               Foreground="{DynamicResource Text.Muted}"/>
+                                </Button>
+                                <TextBlock Style="{DynamicResource Text.Caption}"
+                                           Text="{Binding ActiveClassName}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DockPanel>
                         </StackPanel>
 
                         <!-- Group 5: System ───────────────────── -->
@@ -510,6 +549,15 @@
                     </Border>
                 </DockPanel>
             </Border>
+
+            <!-- Phase 4.3 — App Background backplane.  Sits behind the student grid only
+                 (search toolbar at Row 0 and copyright at Row 2 stay on solid Surface.Background).
+                 BrandWallpaperBrush is removed from App.Resources by ApplyBrandingToResources
+                 when the user has no wallpaper file, so this Border falls to the default
+                 Transparent and the parent's Surface.Background shows through unchanged. -->
+            <Border Grid.Row="1"
+                    Background="{DynamicResource BrandWallpaperBrush}"
+                    IsHitTestVisible="False"/>
 
             <!-- Student grid. Phase 1 keeps the legacy DataTemplate intact (with badges, REC button,
                  ContextMenu) so per-student commands keep working; Phase 2 will swap it for a
@@ -636,10 +684,13 @@
 
                 <!-- Phase 3 Section E — conversation tab strip.  Always present at the top
                      of the chat panel; horizontally scrollable when many DM tabs accumulate.
-                     The active tab gets the accent fill via AreEqual MultiBinding. -->
+                     The active tab gets the accent fill via AreEqual MultiBinding.
+                     Phase 5.1 Section C — outer Padding bottom bumped 0→4 so the tab Border
+                     no longer sits flush on the strip's 1px divider; that flush stacking is
+                     what was clipping the bottom of the avatar circle on the Everyone tab. -->
                 <Border DockPanel.Dock="Top"
                         BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1"
-                        Padding="6,6,6,0"
+                        Padding="6,6,6,4"
                         Visibility="{Binding IsChatTabSelected, Converter={StaticResource BoolToVisibility}}">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled">
@@ -651,8 +702,12 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:Conversation}">
+                                    <!-- Phase 5.1 Section C — MinHeight=40 guarantees enough room for
+                                         the 20px avatar circle + new 10/10 button padding so the
+                                         circle never gets clipped at the bottom edge of the tab. -->
                                     <Border CornerRadius="8,8,0,0"
                                             Margin="0,0,2,0"
+                                            MinHeight="40"
                                             BorderThickness="1,1,1,0">
                                         <Border.Style>
                                             <Style TargetType="Border">
@@ -709,14 +764,15 @@
                                             <Button Background="Transparent"
                                                     BorderThickness="0"
                                                     Cursor="Hand"
-                                                    Padding="10,8"
+                                                    Padding="10,10"
                                                     Command="{Binding RelativeSource={RelativeSource AncestorType=Window},
                                                               Path=DataContext.SwitchConversationCommand}"
                                                     CommandParameter="{Binding}">
-                                                <StackPanel Orientation="Horizontal">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                     <Border Width="20" Height="20" CornerRadius="999"
                                                             Background="{DynamicResource Accent.Primary}"
-                                                            Margin="0,0,6,0">
+                                                            Margin="0,0,6,0"
+                                                            VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding Initial}"
                                                                    Foreground="White"
                                                                    FontSize="9" FontWeight="Bold"

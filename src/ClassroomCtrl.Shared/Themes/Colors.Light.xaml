@@ -1,12 +1,13 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Phase UI-Rewrite (Phase 1) — light theme refreshed.
-         Same key names as Colors.Dark.xaml so DynamicResource swap is seamless.
-         Light is opt-in legacy after Phase 8 removed the in-app theme toggle. -->
+    <!-- Phase 4 Section D — light theme is now the default surface palette.
+         Same key set as Colors.Dark.xaml so any DynamicResource binding swaps cleanly.
+         Status / accent identity colors stay vivid on both themes (red bell badge,
+         purple demo banner, ✋ amber on student cards). -->
 
     <!-- ─────────── Surface tier — Color tokens ─────────── -->
-    <Color x:Key="Surface.Background.Color">#F9FAFB</Color>
+    <Color x:Key="Surface.Background.Color">#F8FAFC</Color>
     <Color x:Key="Surface.Elevated.Color">#FFFFFF</Color>
     <Color x:Key="Surface.Card.Color">#FFFFFF</Color>
     <Color x:Key="Surface.Hover.Color">#F1F5F9</Color>
@@ -16,6 +17,7 @@
     <SolidColorBrush x:Key="Surface.Elevated"   Color="{StaticResource Surface.Elevated.Color}"/>
     <SolidColorBrush x:Key="Surface.Card"       Color="{StaticResource Surface.Card.Color}"/>
     <SolidColorBrush x:Key="Surface.Hover"      Color="{StaticResource Surface.Hover.Color}"/>
+    <!-- Legacy alias preserved (Phase 6-13 dialogs / Inputs.xaml) -->
     <SolidColorBrush x:Key="Surface.Overlay"    Color="{StaticResource Surface.Hover.Color}"/>
 
     <!-- ─────────── Border tier ─────────── -->
@@ -23,17 +25,18 @@
     <Color x:Key="Border.Soft.Color">#F1F5F9</Color>
     <SolidColorBrush x:Key="Border.Default" Color="{StaticResource Border.Default.Color}"/>
     <SolidColorBrush x:Key="Border.Soft"    Color="{StaticResource Border.Soft.Color}"/>
+    <!-- Legacy alias — Surface.Border was the original border key. -->
     <SolidColorBrush x:Key="Surface.Border"      Color="{StaticResource Border.Default.Color}"/>
     <SolidColorBrush x:Key="Surface.BorderFocus" Color="#3B82F6"/>
 
-    <!-- ─────────── Accent tier ─────────── -->
+    <!-- ─────────── Accent tier (Primary tier runtime-overridden by BrandingService) ─────────── -->
     <SolidColorBrush x:Key="Accent.Primary"        Color="#3B82F6"/>
     <SolidColorBrush x:Key="Accent.PrimaryHover"   Color="#2563EB"/>
     <SolidColorBrush x:Key="Accent.PrimaryPressed" Color="#1D4ED8"/>
     <!-- Subtle = pale blue tint readable on light surface (Dark uses #1E3A8A navy) -->
     <SolidColorBrush x:Key="Accent.PrimarySubtle"  Color="#DBEAFE"/>
 
-    <!-- ─────────── Semantic tier ─────────── -->
+    <!-- ─────────── Semantic tier (vivid on both themes) ─────────── -->
     <SolidColorBrush x:Key="Accent.Success"      Color="#10B981"/>
     <SolidColorBrush x:Key="Accent.SuccessHover" Color="#059669"/>
     <SolidColorBrush x:Key="Accent.Warning"      Color="#F59E0B"/>
@@ -42,18 +45,18 @@
     <SolidColorBrush x:Key="Accent.DangerHover"  Color="#DC2626"/>
     <SolidColorBrush x:Key="Accent.Info"         Color="#3B82F6"/>
 
-    <!-- ─────────── Text tier (INVERTED for light surfaces) ─────────── -->
-    <SolidColorBrush x:Key="Text.Primary"   Color="#111827"/>
-    <SolidColorBrush x:Key="Text.Secondary" Color="#6B7280"/>
-    <SolidColorBrush x:Key="Text.Tertiary"  Color="#9CA3AF"/>
-    <SolidColorBrush x:Key="Text.Muted"     Color="#9CA3AF"/>
+    <!-- ─────────── Text tier (inverted for light surfaces) ─────────── -->
+    <SolidColorBrush x:Key="Text.Primary"   Color="#0F172A"/>
+    <SolidColorBrush x:Key="Text.Secondary" Color="#475569"/>
+    <SolidColorBrush x:Key="Text.Tertiary"  Color="#94A3B8"/>
+    <SolidColorBrush x:Key="Text.Muted"     Color="#94A3B8"/>
     <SolidColorBrush x:Key="Text.OnAccent"  Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Text.Disabled"  Color="#D1D5DB"/>
+    <SolidColorBrush x:Key="Text.Disabled"  Color="#CBD5E1"/>
 
     <!-- ─────────── Status tier ─────────── -->
     <SolidColorBrush x:Key="Status.Online"    Color="#10B981"/>
     <SolidColorBrush x:Key="Status.Locked"    Color="#F59E0B"/>
-    <SolidColorBrush x:Key="Status.Offline"   Color="#64748B"/>
+    <SolidColorBrush x:Key="Status.Offline"   Color="#94A3B8"/>
     <SolidColorBrush x:Key="Status.Recording" Color="#EF4444"/>
 
 </ResourceDictionary>
