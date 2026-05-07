@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Protocol;
+﻿using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Student.Service.Modules;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -11,7 +11,6 @@ public class ClassroomWorker : BackgroundService
 {
     private readonly ILogger<ClassroomWorker> _logger;
     private readonly IpcServer _ipc;
-    private readonly ProcessSupervisor _supervisor;
     private readonly PolicyEnforcer _policy;
     private readonly ScreenLocker _locker;
     private readonly FileReceiver _fileReceiver;
@@ -24,13 +23,12 @@ public class ClassroomWorker : BackgroundService
 
     public ClassroomWorker(
         ILogger<ClassroomWorker> logger, ILoggerFactory loggerFactory,
-        IpcServer ipc, ProcessSupervisor supervisor, PolicyEnforcer policy,
+        IpcServer ipc, PolicyEnforcer policy,
         ScreenLocker locker, FileReceiver fileReceiver)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
         _ipc = ipc;
-        _supervisor = supervisor;
         _policy = policy;
         _locker = locker;
         _fileReceiver = fileReceiver;
@@ -43,8 +41,52 @@ public class ClassroomWorker : BackgroundService
     {
         _logger.LogInformation("ClassroomService starting (endpoint {Id})", _endpointId);
 
+        // Phase 10.8 — log session/identity context up front.  Console-mode runs
+        // (UserInteractive=true, SessionId=1+, MachineName\<user>) and Service-mode
+        // runs (UserInteractive=false, SessionId=0, NT AUTHORITY\SYSTEM) take very
+        // different code paths inside Windows for pipe ACLs, network namespace,
+        // multicast joins, etc.  Capturing this once at startup makes the bug
+        // tractable — every other "why does this work in console but not service"
+        // question can be answered by reading these four lines.
+        try
+        {
+            var proc = System.Diagnostics.Process.GetCurrentProcess();
+            _logger.LogInformation(
+                "Process: PID={Pid} SessionId={Session} UserInteractive={Interactive} User={User}",
+                proc.Id, proc.SessionId,
+                Environment.UserInteractive,
+                $"{Environment.UserDomainName}\\{Environment.UserName}");
+            _logger.LogInformation("Host: Machine={Machine} OS={OS} CWD={Cwd}",
+                Environment.MachineName, Environment.OSVersion.VersionString,
+                Environment.CurrentDirectory);
+            // List network adapters with IPv4 addresses so we can compare what
+            // SYSTEM (Session 0) sees vs what the user session sees.  In some
+            // VPN/RDP/NIC-teaming setups the two views differ, which would
+            // explain a TCP send that succeeds but never lands at Teacher.
+            foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                var ipv4s = nic.GetIPProperties().UnicastAddresses
+                    .Where(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                    .Select(a => a.Address.ToString())
+                    .ToArray();
+                if (ipv4s.Length == 0) continue;
+                _logger.LogInformation("NIC: Name='{Name}' Type={Type} IPv4=[{Addrs}]",
+                    nic.Name, nic.NetworkInterfaceType, string.Join(",", ipv4s));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to log startup environment");
+        }
+
+        // Phase 10.3 — Service no longer spawns Agent/Watchdog.  Agent runs in
+        // the user session via HKLM Run autorun and connects back here through
+        // the named-pipe IPC.  Spawning from Session 0 produced a respawn loop
+        // (WPF needs a desktop, Agent crashed, supervisor restarted, repeat).
         await _ipc.StartAsync(ct);
-        await _supervisor.SpawnAgentAndWatchdogAsync(ct);
+        _logger.LogInformation("IPC server listening on \\\\.\\pipe\\{Pipe}; waiting for Agent connection.",
+            NetworkConstants.IpcPipeName);
 
         _teacherEndpoint = ClassroomCtrl.Networking.TeacherIPConfig.GetEndpoint();
         var manualConfigured = ClassroomCtrl.Networking.TeacherIPConfig.IsConfigured();
@@ -122,12 +164,15 @@ public class ClassroomWorker : BackgroundService
                 var payload = new byte[len];
                 await ReadExact(stream, payload, len, ct);
                 var msg = Envelope.Deserialize(payload);
+                _logger.LogInformation("Teacher→Service: type={Type} size={Size}", msg.Type, len);
                 await DispatchAsync(msg, ct);
             }
+            _logger.LogInformation("Teacher TCP read loop ended (peer closed or read returned 0).");
         }
         finally
         {
             _teacherStream = null;
+            _logger.LogInformation("Teacher connection closed; will retry per backoff loop.");
         }
     }
 
@@ -147,7 +192,13 @@ public class ClassroomWorker : BackgroundService
     private async Task SendToTeacherAsync(Envelope env, CancellationToken ct)
     {
         var s = _teacherStream;
-        if (s is null) return;
+        if (s is null)
+        {
+            // Phase 10.8 — silent drops here were one of the suspect paths.
+            // Logging the type makes "Teacher saw Hello but no Frames" debuggable.
+            _logger.LogWarning("Service→Teacher dropped (stream null): type={Type}", env.Type);
+            return;
+        }
 
         var body = env.Serialize();
         var len = new byte[4];
@@ -159,6 +210,12 @@ public class ClassroomWorker : BackgroundService
             await s.WriteAsync(len, ct);
             await s.WriteAsync(body, ct);
             await s.FlushAsync(ct);
+            _logger.LogInformation("Service→Teacher: type={Type} size={Size}", env.Type, body.Length);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Service→Teacher write failed: type={Type} size={Size}", env.Type, body.Length);
+            throw;
         }
         finally { _teacherWriteLock.Release(); }
     }

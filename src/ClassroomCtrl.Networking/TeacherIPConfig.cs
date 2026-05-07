@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Protocol;
+﻿using ClassroomCtrl.Shared.Protocol;
 using Microsoft.Win32;
 using System;
 using System.IO;

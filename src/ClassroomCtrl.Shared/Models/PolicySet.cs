@@ -1,4 +1,4 @@
-namespace ClassroomCtrl.Shared.Models;
+﻿namespace ClassroomCtrl.Shared.Models;
 
 public record PolicySet(
     bool BlockUsbStorage = false,

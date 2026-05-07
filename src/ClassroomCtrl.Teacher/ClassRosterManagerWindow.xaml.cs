@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Localization;
+﻿using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Models.Roster;
 using Microsoft.Win32;
 using System;

@@ -1,4 +1,4 @@
-using ClassroomCtrl.Exam.Shared;
+﻿using ClassroomCtrl.Exam.Shared;
 using ClassroomCtrl.Shared.Localization;
 using System.Collections.ObjectModel;
 using System.Windows;

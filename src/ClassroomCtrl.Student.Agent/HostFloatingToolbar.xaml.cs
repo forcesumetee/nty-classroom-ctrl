@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Localization;
+﻿using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Protocol;
 using System.Windows;
 using System.Windows.Input;

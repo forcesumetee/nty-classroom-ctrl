@@ -1,4 +1,4 @@
-<Window x:Class="ClassroomCtrl.Teacher.Dialogs.LanguageDialog"
+﻿<Window Icon="/Assets/logo.png" x:Class="ClassroomCtrl.Teacher.Dialogs.LanguageDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{DynamicResource Btn_Language}"

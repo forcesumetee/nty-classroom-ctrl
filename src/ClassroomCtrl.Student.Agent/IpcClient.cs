@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Protocol;
+﻿using ClassroomCtrl.Shared.Protocol;
 using System.Buffers.Binary;
 using System.IO;
 using System.IO.Pipes;

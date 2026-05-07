@@ -1,4 +1,4 @@
-using ClassroomCtrl.Networking;
+﻿using ClassroomCtrl.Networking;
 using ClassroomCtrl.Shared.Localization;
 using System.Net;
 using System.Text.RegularExpressions;

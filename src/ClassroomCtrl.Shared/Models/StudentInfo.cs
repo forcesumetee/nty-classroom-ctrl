@@ -1,4 +1,4 @@
-namespace ClassroomCtrl.Shared.Models;
+﻿namespace ClassroomCtrl.Shared.Models;
 
 public record StudentInfo(
     Guid EndpointId,

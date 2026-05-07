@@ -1,4 +1,4 @@
-using H264Sharp;
+﻿using H264Sharp;
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;

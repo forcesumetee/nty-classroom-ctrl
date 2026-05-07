@@ -1,4 +1,4 @@
-namespace ClassroomCtrl.Shared.Protocol;
+﻿namespace ClassroomCtrl.Shared.Protocol;
 
 public enum MessageType : ushort
 {

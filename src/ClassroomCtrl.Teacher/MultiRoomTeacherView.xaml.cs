@@ -1,4 +1,4 @@
-using ClassroomCtrl.Teacher.ViewModels;
+﻿using ClassroomCtrl.Teacher.ViewModels;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;

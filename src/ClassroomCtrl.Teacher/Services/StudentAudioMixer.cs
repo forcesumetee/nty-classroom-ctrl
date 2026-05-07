@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Protocol;
+﻿using ClassroomCtrl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;

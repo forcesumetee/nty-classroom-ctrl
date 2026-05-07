@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Protocol;
+﻿using ClassroomCtrl.Shared.Protocol;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;

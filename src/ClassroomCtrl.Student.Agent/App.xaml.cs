@@ -1,4 +1,4 @@
-using ClassroomCtrl.Networking;
+﻿using ClassroomCtrl.Networking;
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Student.Agent.Setup;
 using ClassroomCtrl.Student.Agent.Tray;
@@ -39,8 +39,6 @@ public partial class App : Application
         {
             try { SetProcessDPIAware(); } catch { /* old Windows — accept system DPI */ }
         }
-
-        AllocConsole();
 
         const string mutexName = @"Local\NTY_ClassroomAgent_Mutex";
         bool createdNew;
@@ -88,9 +86,6 @@ public partial class App : Application
         _screenCapturer = new ScreenCapturer();
         _screenCapturer.Start();
     }
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
-    private static extern bool AllocConsole();
 
     protected override void OnExit(ExitEventArgs e)
     {

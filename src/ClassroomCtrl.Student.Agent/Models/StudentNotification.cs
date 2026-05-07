@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Localization;
+﻿using ClassroomCtrl.Shared.Localization;
 using System;
 using System.ComponentModel;
 

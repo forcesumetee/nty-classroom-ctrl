@@ -1,4 +1,4 @@
-using H.NotifyIcon;
+﻿using H.NotifyIcon;
 using System.Windows;
 using System.Windows.Controls;
 using ContextMenu = System.Windows.Controls.ContextMenu;

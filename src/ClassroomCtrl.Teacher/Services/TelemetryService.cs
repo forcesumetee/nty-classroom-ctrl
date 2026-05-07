@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Telemetry;
+﻿using ClassroomCtrl.Shared.Telemetry;
 using Microsoft.Win32;
 using System;
 using System.IO;

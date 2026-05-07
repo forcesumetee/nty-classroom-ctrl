@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Branding;
+﻿using ClassroomCtrl.Shared.Branding;
 using ClassroomCtrl.Shared.Localization;
 using Microsoft.Win32;
 using System.IO;

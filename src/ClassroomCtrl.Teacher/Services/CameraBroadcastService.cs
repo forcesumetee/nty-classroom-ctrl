@@ -1,4 +1,4 @@
-using AForge.Video;
+﻿using AForge.Video;
 using AForge.Video.DirectShow;
 using ClassroomCtrl.Networking;
 using ClassroomCtrl.Shared.Protocol;

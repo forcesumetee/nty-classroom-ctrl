@@ -1,4 +1,4 @@
-using NAudio.Wave;
+﻿using NAudio.Wave;
 using System;
 
 namespace ClassroomCtrl.Student.Agent;

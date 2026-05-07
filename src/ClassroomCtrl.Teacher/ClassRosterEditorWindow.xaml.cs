@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Models.Roster;
+﻿using ClassroomCtrl.Shared.Models.Roster;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;

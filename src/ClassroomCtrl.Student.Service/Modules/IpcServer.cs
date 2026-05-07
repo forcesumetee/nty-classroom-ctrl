@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Protocol;
+﻿using ClassroomCtrl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 using System.Buffers.Binary;
 using System.IO.Pipes;
@@ -42,7 +42,23 @@ public class IpcServer
                     PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
                     PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                 await stream.WaitForConnectionAsync(ct);
-                _logger.LogInformation("Agent connected via IPC");
+                // Phase 10.8 — capture the impersonated client identity.  In Session-0
+                // Service mode this should report the interactive user (e.g.
+                // PC01\\Student) which proves the cross-session connect succeeded.
+                string clientUser = "(unknown)";
+                try
+                {
+                    stream.RunAsClient(() =>
+                    {
+                        clientUser = System.Security.Principal.WindowsIdentity
+                            .GetCurrent().Name;
+                    });
+                }
+                catch (Exception idEx)
+                {
+                    clientUser = "(impersonation failed: " + idEx.Message + ")";
+                }
+                _logger.LogInformation("Agent connected via IPC (client identity={User})", clientUser);
                 _agentStream = stream;
                 _ = Task.Run(() => HandleClient(stream, ct), ct);
             }
@@ -84,7 +100,7 @@ public class IpcServer
                 try
                 {
                     var env = Envelope.Deserialize(payload);
-                    _logger.LogInformation("IPC from Agent: type={Type}", env.Type);
+                    _logger.LogInformation("Agent→Service (IPC): type={Type} size={Size}", env.Type, len);
                     AgentMessageReceived?.Invoke(this, env);
                 }
                 catch (Exception ex)
@@ -108,7 +124,17 @@ public class IpcServer
     public async Task ForwardToAgentAsync(Envelope env, CancellationToken ct)
     {
         var stream = _agentStream;
-        if (stream is null || !stream.IsConnected) return;
+        if (stream is null || !stream.IsConnected)
+        {
+            // Phase 10.8 — silent drops here were one of the suspect paths in the
+            // Service-mode-only regression.  When this fires it means a Teacher
+            // command arrived but the Agent isn't connected yet (boot race) or
+            // its pipe just dropped.  Without this log the failure was invisible.
+            _logger.LogWarning(
+                "Service→Agent (IPC) dropped (pipe {State}): type={Type}",
+                stream is null ? "null" : "disconnected", env.Type);
+            return;
+        }
 
         var body = env.Serialize();
         var len = new byte[4];
@@ -120,10 +146,12 @@ public class IpcServer
             await stream.WriteAsync(len, ct);
             await stream.WriteAsync(body, ct);
             await stream.FlushAsync(ct);
+            _logger.LogInformation("Service→Agent (IPC): type={Type} size={Size}", env.Type, body.Length);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Forward to Agent failed");
+            _logger.LogWarning(ex, "Service→Agent (IPC) write failed: type={Type} size={Size}",
+                env.Type, body.Length);
         }
         finally { _writeLock.Release(); }
     }

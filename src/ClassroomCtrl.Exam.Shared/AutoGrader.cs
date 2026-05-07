@@ -1,4 +1,4 @@
-namespace ClassroomCtrl.Exam.Shared;
+﻿namespace ClassroomCtrl.Exam.Shared;
 
 public static class AutoGrader
 {

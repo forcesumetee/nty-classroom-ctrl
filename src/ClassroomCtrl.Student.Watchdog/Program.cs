@@ -1,9 +1,13 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 // Watchdog process — Spec §3.2.3, §7.2
-// Simplified: just monitors that Agent process is alive.
-// Heartbeat mechanism removed for now (was conflicting with Agent's IPC pipe).
-// Service spawns/respawns Agent on its own (already verified working).
+// Phase 10.3: Service no longer spawns Agent or Watchdog (the Session-0
+// respawn loop was the source of the "Agent started PID=..." log spam).
+// Agent is launched by the HKLM Run autorun in the user session.  Watchdog
+// has no privileged operations and currently only logs missing-Agent state;
+// to actually run alongside the Agent again it must be added to the HKLM
+// Run autorun (planned installer change for v1.1).  Until then this exe is
+// effectively dormant — kept around so the spec-mandated process exists.
 
 const string AgentExeName = "ClassroomCtrl.Student.Agent";
 

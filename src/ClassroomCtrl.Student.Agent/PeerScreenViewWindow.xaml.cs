@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Codec;
+﻿using ClassroomCtrl.Shared.Codec;
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Protocol;
 using H264Sharp;

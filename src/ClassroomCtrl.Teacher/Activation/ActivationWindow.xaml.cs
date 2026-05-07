@@ -1,4 +1,4 @@
-using ClassroomCtrl.Licensing;
+﻿using ClassroomCtrl.Licensing;
 using ClassroomCtrl.Shared.Localization;
 using System;
 using System.Windows;

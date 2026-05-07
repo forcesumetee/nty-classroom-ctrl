@@ -40,3 +40,7 @@ Desktop.ini
 # MSI build
 *.msi
 *.wixpdb
+
+# Phase 10 - Inno Setup installer outputs (publish/ already covered above)
+installer/output/
+*.iss.bak

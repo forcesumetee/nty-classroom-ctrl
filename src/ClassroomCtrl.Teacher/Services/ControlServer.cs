@@ -1,4 +1,4 @@
-using ClassroomCtrl.Networking;
+﻿using ClassroomCtrl.Networking;
 using ClassroomCtrl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 using System.IO;

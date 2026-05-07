@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Models.Roster;
+﻿using ClassroomCtrl.Shared.Models.Roster;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

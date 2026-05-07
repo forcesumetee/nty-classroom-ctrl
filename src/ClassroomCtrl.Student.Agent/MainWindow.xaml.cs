@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Localization;
+﻿using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Student.Agent.Dialogs;
 using ClassroomCtrl.Student.Agent.Models;

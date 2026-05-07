@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Discovery;
+﻿using ClassroomCtrl.Shared.Discovery;
 using Microsoft.Win32;
 using System;
 using System.Net;

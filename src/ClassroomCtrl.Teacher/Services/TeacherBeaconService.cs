@@ -1,4 +1,4 @@
-using ClassroomCtrl.Shared.Discovery;
+﻿using ClassroomCtrl.Shared.Discovery;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using System;

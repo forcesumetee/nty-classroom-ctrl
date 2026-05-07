@@ -1,4 +1,4 @@
-using ClassroomCtrl.Exam.Shared;
+﻿using ClassroomCtrl.Exam.Shared;
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Protocol;
 using ExamModel = ClassroomCtrl.Exam.Shared.Exam;

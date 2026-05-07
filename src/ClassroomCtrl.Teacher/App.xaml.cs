@@ -1,4 +1,4 @@
-using ClassroomCtrl.Licensing;
+﻿using ClassroomCtrl.Licensing;
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Teacher.Activation;
