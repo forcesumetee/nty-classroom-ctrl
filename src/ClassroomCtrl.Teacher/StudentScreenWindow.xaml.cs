@@ -361,7 +361,19 @@ public partial class StudentScreenWindow : Window
 
     private void OnStudentFrame(object? sender, (Guid StudentId, ScreenStreamFrameMessage Frame) e)
     {
-        if (e.StudentId != _studentId) return;
+        // Phase 10.15 BUG-001 — log id-match outcome so we can tell apart
+        // (a) frame arrived for the wrong window from (b) frame matched but
+        // rendering still failed.  Logged only for first 5 frames + every
+        // keyframe to keep log noise low.
+        bool idMatch = e.StudentId == _studentId;
+        if (e.Frame.FrameSeq <= 5 || e.Frame.IsKeyframe || !idMatch)
+        {
+            // ScreenStreamFrameMessage.FrameData has `= Array.Empty<byte>()` initializer
+            // so it's never null on the receive side; .Length is safe.
+            App.LogDebug($"[StudentScreenWindow.OnStudentFrame] sender={e.StudentId} my={_studentId} match={idMatch} seq={e.Frame.FrameSeq} codec={e.Frame.Codec} bytes={e.Frame.FrameData.Length} keyframe={e.Frame.IsKeyframe}");
+        }
+
+        if (!idMatch) return;
 
         Dispatcher.Invoke(() =>
         {
@@ -370,6 +382,13 @@ public partial class StudentScreenWindow : Window
                 bool rendered = e.Frame.Codec == VideoCodec.H264
                     ? RenderH264(e.Frame.FrameData)
                     : RenderMjpeg(e.Frame.FrameData);
+
+                // Phase 10.15 BUG-001 — log render outcome at the Dispatcher boundary
+                // so we can correlate received-frame vs displayed-frame.
+                if (e.Frame.FrameSeq <= 5 || e.Frame.IsKeyframe || !rendered)
+                {
+                    App.LogDebug($"[StudentScreenWindow.Render] seq={e.Frame.FrameSeq} codec={e.Frame.Codec} rendered={rendered}");
+                }
 
                 if (!rendered) return;
 
@@ -430,15 +449,33 @@ public partial class StudentScreenWindow : Window
 
     private bool RenderH264(byte[] nal)
     {
+        // Phase 10.15 BUG-001 — file-logged drop diagnostics.  Was Debug.WriteLine,
+        // which never surfaced in customer logs (no debugger attached).  Now uses
+        // App.LogDebug so the drop trail is persisted at %TEMP%\teacher-debug.log.
+        // Also logs first 16 bytes hex so we can compare encoder output vs decoder
+        // input — any divergence here points at the transport/framing layer.
+        bool decoderWasCreated = _h264 != null;
         _h264 ??= TryCreateDecoder();
-        if (_h264 == null) return false;
+        if (_h264 == null)
+        {
+            App.LogDebug($"[StudentScreenWindow.RenderH264] decoder create FAILED — abandoning frame ({nal.Length} bytes)");
+            return false;
+        }
+        if (!decoderWasCreated)
+        {
+            App.LogDebug($"[StudentScreenWindow.RenderH264] decoder LAZY-CREATED on first frame ({nal.Length} bytes)");
+        }
 
         if (!_h264.TryDecode(nal, out var rgb, out int w, out int h, out var fmt))
         {
-            // Decoder may legitimately reject early non-IDR frames before the first keyframe.
-            // Log first few drops so we can tell if decoder never produces output at all.
             if (_h264FrameCount < 3)
-                System.Diagnostics.Debug.WriteLine($"[StudentScreenWindow] H.264 decode dropped (incoming bytes={nal.Length})");
+            {
+                int previewLen = Math.Min(16, nal.Length);
+                var hex = previewLen > 0
+                    ? BitConverter.ToString(nal, 0, previewLen).Replace("-", " ")
+                    : "(empty)";
+                App.LogDebug($"[StudentScreenWindow.RenderH264] DECODE DROPPED bytes={nal.Length} first16=[{hex}]");
+            }
             return false;
         }
 

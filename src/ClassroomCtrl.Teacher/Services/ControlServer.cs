@@ -778,6 +778,21 @@ public class ControlServer : IDisposable
                 try
                 {
                     var frame = MessagePack.MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(env.Payload);
+
+                    // Phase 10.15 BUG-001 — log every received student stream frame at the TCP
+                    // boundary so we can see whether frames make it across the network at all.
+                    // Includes the post-deserialize codec field so we catch a wrong-codec bug
+                    // (e.g. default falling back to Mjpeg if the field is lost on the wire).
+                    // ScreenStreamFrameMessage.FrameData has `= Array.Empty<byte>()` initializer
+                    // so it's never null on the receive side after deserialize.
+                    int previewLen = Math.Min(16, frame.FrameData.Length);
+                    var preview = previewLen > 0 ? frame.FrameData.AsSpan(0, previewLen).ToArray() : Array.Empty<byte>();
+                    var hex = previewLen > 0 ? BitConverter.ToString(preview).Replace("-", " ") : "(empty)";
+                    if (frame.FrameSeq <= 5 || frame.IsKeyframe)
+                    {
+                        App.LogDebug($"[ControlServer.RX] StudentStreamFrame sender={env.SenderId} seq={frame.FrameSeq} codec={frame.Codec} bytes={frame.FrameData.Length} keyframe={frame.IsKeyframe} first16=[{hex}]");
+                    }
+
                     StudentStreamFrameReceived?.Invoke(this, (env.SenderId, frame));
 
                     // Phase 9.1: if this sender is the demo source, rebroadcast as DemoFrame.
@@ -790,6 +805,7 @@ public class ControlServer : IDisposable
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to decode StudentStreamFrame");
+                    App.LogDebug($"[ControlServer.RX] StudentStreamFrame DESERIALIZE FAILED: {ex.GetType().Name}: {ex.Message}");
                 }
                 break;
 

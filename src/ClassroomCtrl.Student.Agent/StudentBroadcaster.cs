@@ -141,7 +141,13 @@ public class StudentBroadcaster : IDisposable
                         }
                         else if (_frameSeq < 5 || isKeyframe)
                         {
-                            IpcClient.LogToFile($"[StudentBroadcaster] H.264 frame seq={_frameSeq + 1} bytes={data.Length} keyframe={isKeyframe}");
+                            // Phase 10.15 BUG-001 — hex-dump the first 16 bytes so we can verify the
+                            // encoder is emitting Annex B start codes (00 00 00 01 or 00 00 01) and
+                            // diagnose decoder-side rejection vs encoder-side corruption.  Logged
+                            // only for first 5 frames + every keyframe to keep noise low.
+                            var preview = data.Length >= 16 ? data.AsSpan(0, 16).ToArray() : data;
+                            var hex = BitConverter.ToString(preview).Replace("-", " ");
+                            IpcClient.LogToFile($"[StudentBroadcaster] H.264 frame seq={_frameSeq + 1} bytes={data.Length} keyframe={isKeyframe} first16=[{hex}]");
                         }
                     }
                     else
