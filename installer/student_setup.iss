@@ -41,7 +41,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "..\publish\Student.Service\*";  DestDir: "{app}";  Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\publish\Student.Agent\*";    DestDir: "{app}";  Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\publish\Student.Watchdog\*"; DestDir: "{app}";  Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "ClassroomCtrlService.xml";       DestDir: "{app}";  Flags: ignoreversion; AfterInstall: ReplaceXmlTokens
+; Phase 10.11 — XML for the scheduled task is no longer copied (Phase 10.9's
+; schtasks /Create approach was disabled).  Kept here as a comment + the
+; ReplaceXmlTokens [Code] procedure left intact so a future Phase 10.12 can
+; re-enable both with a single uncomment + root-cause the original failure.
+;Source: "ClassroomCtrlService.xml";       DestDir: "{app}";  Flags: ignoreversion; AfterInstall: ReplaceXmlTokens
 
 [Run]
 ; Section E — clean up Phase 10.0/10.2 Windows Service if present.  Both
@@ -50,19 +54,46 @@ Source: "ClassroomCtrlService.xml";       DestDir: "{app}";  Flags: ignoreversio
 Filename: "{sys}\sc.exe"; Parameters: "stop {#MyServiceName}"; Flags: runhidden; StatusMsg: "Cleaning up legacy Windows Service..."
 Filename: "{sys}\sc.exe"; Parameters: "delete {#MyServiceName}"; Flags: runhidden
 
-; Section A — register Task Scheduler entry (XML defines logon trigger + Users group).
-; Idempotent via /F (force overwrite if task already exists from a previous install).
-Filename: "{sys}\schtasks.exe"; Parameters: "/Create /TN ""{#MyTaskName}"" /XML ""{app}\ClassroomCtrlService.xml"" /F"; Flags: runhidden; StatusMsg: "Registering scheduled task..."
+; Phase 10.11 — disabled scheduled task approach.  schtasks /Create was failing
+; silently on tester machines (Get-ScheduledTask -TaskPath '\NTY\*' returned
+; empty after install), and Inno Setup's [Run] phase doesn't surface non-zero
+; exits as install errors — so the whole install reported success while the
+; Service had no autostart hook at all.  Replaced with HKLM Run + immediate
+; launch further down, the same pattern that already works for the Agent.
+; Kept (commented) for rollback / debug history; do not uncomment without
+; first root-causing the schtasks failure (likely XML token replacement or
+; UTF-8/UTF-16 BOM mismatch — see Phase 10.12 future work).
+;Filename: "{sys}\schtasks.exe"; Parameters: "/Create /TN ""{#MyTaskName}"" /XML ""{app}\ClassroomCtrlService.xml"" /F"; Flags: runhidden; StatusMsg: "Registering scheduled task..."
 
 ; HKLM Run for Agent (unchanged from Phase 10.2).
 Filename: "{sys}\reg.exe"; Parameters: "add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""ClassroomCtrlAgent"" /t REG_SZ /d ""\""{app}\ClassroomCtrl.Student.Agent.exe\"""" /f"; Flags: runhidden
 
+; Phase 10.11 — HKLM Run for Service.exe (replaces the failed scheduled task).
+; Auto-starts at every user logon, same mechanism as the Agent.  Service runs
+; in the user's interactive session, which is the path that was confirmed
+; working end-to-end by manual launch.
+Filename: "{sys}\reg.exe"; Parameters: "add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""ClassroomCtrlService"" /t REG_SZ /d ""\""{app}\ClassroomCtrl.Student.Service.exe\"""" /f"; Flags: runhidden
+
 ; Outbound firewall rule for Agent (unchanged from Phase 10.0).
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""ClassroomCtrl Student Agent"" dir=out action=allow program=""{app}\ClassroomCtrl.Student.Agent.exe"" profile=any"; Flags: runhidden
 
-; First-time start so the customer doesn't have to logout/login post-install.
-; The LogonTrigger fires automatically on every subsequent login.
-Filename: "{sys}\schtasks.exe"; Parameters: "/Run /TN ""{#MyTaskName}"""; Flags: runhidden; StatusMsg: "Starting Classroom Service..."
+; Phase 10.11 — inbound UDP 7778 for the discovery beacon.  Covers what Phase
+; 10.10 Fix 4's runtime StudentFirewallService.EnsureRules also adds — the two
+; coexist (idempotent + different rule names) so the install path is robust
+; even if the runtime helper hasn't run yet on first launch.
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""ClassroomCtrl Student UDP"" dir=in action=allow protocol=UDP localport=7778 profile=any"; Flags: runhidden
+
+; Phase 10.11 — outbound rule scoped to Service.exe (TCP control channel to Teacher).
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""ClassroomCtrl Student Service"" dir=out action=allow program=""{app}\ClassroomCtrl.Student.Service.exe"" profile=any"; Flags: runhidden
+
+; Phase 10.11 — start Service.exe immediately so the tester doesn't need to
+; logoff/login post-install.  nowait so the wizard doesn't block waiting for
+; the long-running Service process; runhidden so no stray console flashes.
+Filename: "{app}\ClassroomCtrl.Student.Service.exe"; Flags: nowait runhidden
+
+; Phase 10.11 — disabled (paired with the /Create above).  Service is now
+; launched directly via the postinstall step a few lines below.
+;Filename: "{sys}\schtasks.exe"; Parameters: "/Run /TN ""{#MyTaskName}"""; Flags: runhidden; StatusMsg: "Starting Classroom Service..."
 
 ; Launch Agent so the postinstall UI prompt has somewhere to appear.
 Filename: "{app}\ClassroomCtrl.Student.Agent.exe"; Flags: nowait postinstall skipifsilent
@@ -79,6 +110,14 @@ Filename: "{sys}\sc.exe"; Parameters: "stop {#MyServiceName}"; Flags: runhidden;
 Filename: "{sys}\sc.exe"; Parameters: "delete {#MyServiceName}"; Flags: runhidden; RunOnceId: "LegacySvcDelete"
 
 Filename: "{sys}\reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""ClassroomCtrlAgent"" /f"; Flags: runhidden; RunOnceId: "DelAgentRun"
+
+; Phase 10.11 — clean up the Service HKLM Run entry + the two new firewall
+; rules added by Phase 10.11.  Each command gets a unique RunOnceId so it
+; runs at most once even if the uninstaller is invoked multiple times.
+Filename: "{sys}\reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""ClassroomCtrlService"" /f"; Flags: runhidden; RunOnceId: "DelServiceRun"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""ClassroomCtrl Student UDP"""; Flags: runhidden; RunOnceId: "DelFwUdpInbound"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""ClassroomCtrl Student Service"""; Flags: runhidden; RunOnceId: "DelFwSvcOutbound"
+
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM ClassroomCtrl.Student.Service.exe"; Flags: runhidden; RunOnceId: "KillService"
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM ClassroomCtrl.Student.Agent.exe"; Flags: runhidden; RunOnceId: "KillAgent"
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM ClassroomCtrl.Student.Watchdog.exe"; Flags: runhidden; RunOnceId: "KillWatchdog"
