@@ -33,6 +33,11 @@ public partial class App : Application
     /// <summary>Phase 9.5: Webcam capture + JPEG broadcast.</summary>
     public static CameraBroadcastService? Camera { get; private set; }
 
+    /// <summary>Phase 10.14 (Item 9): minimal tray notifier — provides Windows-toast
+    /// surface for incoming student chat when Teacher window is hidden / minimized /
+    /// unfocused.  See <see cref="TrayNotifier"/>.</summary>
+    public static TrayNotifier? Notifier { get; private set; }
+
     /// <summary>Phase 4 Part 4: Global video codec selection (default Mjpeg). Read by encoders on Start.</summary>
     public static VideoCodec SelectedCodec { get; set; } = VideoCodec.Mjpeg;
 
@@ -174,6 +179,12 @@ public partial class App : Application
         ClassroomCtrl.Shared.Branding.BrandingService.Changed += ApplyBrandingToResources;
         ApplyBrandingToResources();
 
+        // Phase 10.14 (Item 9) — tray notifier (notification-only).  Init after
+        // Branding.ApplyTheme so the pack:// URI for classroom_icon.ico resolves
+        // against a fully-loaded App.Resources tree.
+        Notifier = new TrayNotifier();
+        Notifier.Initialize();
+
         var main = new MainWindow();
         main.Show();
     }
@@ -190,6 +201,9 @@ public partial class App : Application
         AudioBroadcaster?.Dispose();
         ScreenBroadcaster?.Dispose();
         Server?.Dispose();
+        // Phase 10.14 (Item 9) — clean up tray icon so it doesn't linger as a
+        // ghost icon in the notification area after process exit.
+        Notifier?.Dispose();
         base.OnExit(e);
     }
 

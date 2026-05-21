@@ -1,5 +1,4 @@
 ﻿using NAudio.Wave;
-using NAudio.Wave.SampleProviders;
 using System;
 
 namespace ClassroomCtrl.Student.Agent;
@@ -9,36 +8,14 @@ namespace ClassroomCtrl.Student.Agent;
 ///
 /// BufferedWaveProvider buffers incoming PCM data, WaveOutEvent plays it back.
 /// AutoStart on first frame; lazy-creates output device when format is known.
-///
-/// Phase 10.14 (Item 2a) — wrapped pipeline with VolumeSampleProvider so the
-/// student can adjust playback level from the Agent UI.  Pattern mirrors
-/// Teacher's StudentAudioMixer; _pendingVolume buffers the setting across the
-/// reset that happens when stream format changes mid-session.
 /// </summary>
 public class AudioPlayer : IDisposable
 {
     private WaveOutEvent? _output;
     private BufferedWaveProvider? _buffer;
-    private VolumeSampleProvider? _volume;
     private WaveFormat? _currentFormat;
-    private float _pendingVolume = 1.0f;
 
     public bool IsPlaying => _output != null;
-
-    /// <summary>
-    /// Phase 10.14 (Item 2a) — playback gain (0.0–2.0; 1.0 = unity).  Set before the first
-    /// frame to apply at init; set after to adjust live.  Survives format-change resets via
-    /// _pendingVolume.  Above 1.0 may clip per NAudio docs (gain is unbounded; clipping at WaveOut).
-    /// </summary>
-    public float Volume
-    {
-        get => _volume?.Volume ?? _pendingVolume;
-        set
-        {
-            _pendingVolume = value;
-            if (_volume != null) _volume.Volume = value;
-        }
-    }
 
     /// <summary>
     /// Push a PCM frame for playback. Initializes the output device on the first frame.
@@ -62,14 +39,10 @@ public class AudioPlayer : IDisposable
                     BufferDuration = TimeSpan.FromSeconds(2),
                     DiscardOnBufferOverflow = true,
                 };
-                // Phase 10.14 (Item 2a) — pipeline: buffer → ToSampleProvider → VolumeSampleProvider
-                // → ToWaveProvider16 → _output.  ToSampleProvider() converts 16-bit PCM → float,
-                // gain applies in float space, ToWaveProvider16() converts back to 16-bit PCM for WaveOut.
-                _volume = new VolumeSampleProvider(_buffer.ToSampleProvider()) { Volume = _pendingVolume };
                 _output = new WaveOutEvent { DesiredLatency = 200 };
-                _output.Init(_volume.ToWaveProvider16());
+                _output.Init(_buffer);
                 _output.Play();
-                IpcClient.LogToFile($"[AudioPlayer] Started playback {sampleRate}Hz/{bitsPerSample}-bit/{channels}ch vol={_pendingVolume:F2}");
+                IpcClient.LogToFile($"[AudioPlayer] Started playback {sampleRate}Hz/{bitsPerSample}-bit/{channels}ch");
             }
 
             _buffer!.AddSamples(pcmData, 0, pcmData.Length);
@@ -92,7 +65,6 @@ public class AudioPlayer : IDisposable
         _output?.Dispose();
         _output = null;
         _buffer = null;
-        _volume = null;
         _currentFormat = null;
     }
 

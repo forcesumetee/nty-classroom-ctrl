@@ -1440,6 +1440,7 @@ public partial class MainViewModel : ObservableObject
                 {
                     // Unknown sender — fall back to Everyone so the message isn't dropped.
                     AppendStudentChat(chat.SenderName, chat.Text);
+                    ShowChatToastIfNotActive(chat.SenderName, chat.Text);
                     return;
                 }
                 var conv = Conversations.FirstOrDefault(c =>
@@ -1462,12 +1463,35 @@ public partial class MainViewModel : ObservableObject
                     MessageText = chat.Text,
                 });
                 if (ActiveConversation != conv) conv.UnreadCount++;
+                // Phase 10.14 (Item 9) — toast for the DM path too; sender name carries
+                // the student identity, body is the message verbatim (truncate in helper).
+                ShowChatToastIfNotActive(displayName, chat.Text);
                 return;
             }
 
             var prefix = chat.RoomId.HasValue ? "[Room] " : "";
             AppendStudentChat(chat.SenderName, prefix + chat.Text);
+            ShowChatToastIfNotActive(chat.SenderName, prefix + chat.Text);
         });
+    }
+
+    /// <summary>Phase 10.14 (Item 9) — Windows toast when an incoming student chat arrives
+    /// while the Teacher window is hidden, minimized, or unfocused.  Title shows the
+    /// student name; body is the message body, truncated at 120 chars for legibility.
+    /// Guard mirrors the Student-side helper from 10.13.1/10.14 Item 5 so behavior is
+    /// symmetric across both apps.  Caller is expected to be on the UI thread (chat
+    /// receive is dispatched via Application.Current.Dispatcher above).</summary>
+    private static void ShowChatToastIfNotActive(string senderName, string text)
+    {
+        var window = System.Windows.Application.Current?.MainWindow;
+        if (window != null && window.IsVisible && window.IsActive
+            && window.WindowState != System.Windows.WindowState.Minimized) return;
+
+        var template = Loc.Get("Toast_ChatFromStudent");
+        var title = template.Replace("{0}", senderName ?? "");
+        var trimmed = text ?? "";
+        if (trimmed.Length > 120) trimmed = trimmed.Substring(0, 117) + "...";
+        App.Notifier?.ShowBalloon(title, trimmed);
     }
 
     private void OnHandRaiseReceived(object? sender, ClassroomCtrl.Shared.Protocol.HandRaiseMessage hr)

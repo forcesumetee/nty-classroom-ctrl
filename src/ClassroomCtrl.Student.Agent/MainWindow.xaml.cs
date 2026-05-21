@@ -83,15 +83,6 @@ public partial class MainWindow : Window
         Notifications.CollectionChanged += OnNotificationsChanged;
         Activated += (_, _) => ResetBellBadge();
         UpdateNoNotificationsPlaceholder();
-
-        // Phase 10.14 (Item 4) — restore Do-Not-Disturb from registry on startup.
-        DndToggle.IsChecked = LoadDndSetting();
-
-        // Phase 10.14 (Item 2a) — restore playback volume.  Set on the slider so the
-        // ValueChanged handler fires once and seeds _audioPlayer's _pendingVolume
-        // before the first frame arrives.  Default 1.0 stays on read failure.
-        var savedVol = LoadPlaybackVolume();
-        if (savedVol.HasValue) PlaybackVolumeSlider.Value = savedVol.Value;
     }
 
     /// <summary>Phase 9.1 Section C — single entry point for system events.
@@ -120,12 +111,6 @@ public partial class MainWindow : Window
     /// dispatcher-affined) — every call site is already inside Dispatcher.Invoke.</summary>
     private void ShowChatToastIfHidden(MessageType kind, string body)
     {
-        // Phase 10.14 (Item 4) — DND toggle suppresses the toast popup entirely.
-        // The message still went into ChatList in the caller, so opening the
-        // window later reveals it.  Read directly from the ToggleButton state
-        // rather than caching to a field — single source of truth.
-        if (DndToggle?.IsChecked == true) return;
-
         // Phase 10.14 (Item 5) — added IsActive so we also toast when the window is
         // open in the background and another app has focus. The customer reported
         // "I was using Word and missed a chat" after 10.13.1 shipped.
@@ -146,92 +131,6 @@ public partial class MainWindow : Window
         var trimmed = body ?? "";
         if (trimmed.Length > 120) trimmed = trimmed.Substring(0, 117) + "...";
         App.Tray?.ShowBalloon(title, trimmed);
-    }
-
-    // Phase 10.14 (Item 4) — DND toggle Click handler + registry persistence.
-    // Stored at HKCU\Software\NTY\ClassroomCtrl\Student\Settings\Dnd as a DWORD
-    // (0 or 1).  Per-user preference, not classroom-wide infrastructure, so
-    // HKCU only — no HKLM mirror like ChannelIdRegistry.
-    private const string DndRegSubKey = @"Software\NTY\ClassroomCtrl\Student\Settings";
-    private const string DndRegValueName = "Dnd";
-
-    private void DndToggle_Click(object sender, RoutedEventArgs e)
-    {
-        SaveDndSetting(DndToggle.IsChecked == true);
-    }
-
-    private static void SaveDndSetting(bool on)
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(DndRegSubKey);
-            key?.SetValue(DndRegValueName, on ? 1 : 0, Microsoft.Win32.RegistryValueKind.DWord);
-        }
-        catch
-        {
-            // Non-fatal: DND setting falls back to default (off) on next launch.
-        }
-    }
-
-    private static bool LoadDndSetting()
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(DndRegSubKey);
-            if (key?.GetValue(DndRegValueName) is int v) return v != 0;
-        }
-        catch { /* fall through to default */ }
-        return false;
-    }
-
-    // Phase 10.14 (Item 2a) — Student playback volume Slider + persistence.
-    // Reuses the DndRegSubKey path (same Student\Settings node), stores volume
-    // as InvariantCulture string so a th-TH comma-decimal locale doesn't corrupt
-    // the value at write time.  Slider's ValueChanged fires once on startup load
-    // and on every drag — both paths flow into ApplyAndSavePlaybackVolume.
-    private const string PlaybackVolumeRegValueName = "PlaybackVolume";
-
-    private void PlaybackVolumeSlider_ValueChanged(object sender,
-        System.Windows.RoutedPropertyChangedEventArgs<double> e)
-    {
-        var v = (float)e.NewValue;
-        // _audioPlayer may not exist yet (it's lazy-created on first audio frame);
-        // setting Volume on a null player is a no-op, the saved value will be
-        // picked up via the field default on next AudioPlayer construction.
-        if (_audioPlayer != null) _audioPlayer.Volume = v;
-        SavePlaybackVolume(e.NewValue);
-    }
-
-    private static double? LoadPlaybackVolume()
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(DndRegSubKey);
-            if (key?.GetValue(PlaybackVolumeRegValueName) is string s
-                && double.TryParse(s, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var v)
-                && v >= 0 && v <= 2.0)
-            {
-                return v;
-            }
-        }
-        catch { /* fall through to default */ }
-        return null;
-    }
-
-    private static void SavePlaybackVolume(double value)
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(DndRegSubKey);
-            key?.SetValue(PlaybackVolumeRegValueName,
-                value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                Microsoft.Win32.RegistryValueKind.String);
-        }
-        catch
-        {
-            // Non-fatal: setting falls back to default 1.0 on next launch.
-        }
     }
 
     private void OnNotificationsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -750,10 +649,6 @@ public partial class MainWindow : Window
                 Dispatcher.Invoke(() =>
                 {
                     _audioPlayer ??= new AudioPlayer();
-                    // Phase 10.14 (Item 2a) — seed the freshly-created player from the slider
-                    // so the saved volume takes effect on the first frame instead of
-                    // waiting for the user to nudge the slider.
-                    _audioPlayer.Volume = (float)PlaybackVolumeSlider.Value;
                     AddSystemNotification(Loc.Get("Chat_AudioStarted"), "🔊");
                 });
                 break;
@@ -763,11 +658,7 @@ public partial class MainWindow : Window
                     var frame = MessagePack.MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(env.Payload);
                     Dispatcher.Invoke(() =>
                     {
-                        // Phase 10.14 (Item 2a) — same lazy seed as the START case above.
-                        // Path matters when the user opens the app already mid-stream.
-                        var freshlyCreated = _audioPlayer == null;
                         _audioPlayer ??= new AudioPlayer();
-                        if (freshlyCreated) _audioPlayer.Volume = (float)PlaybackVolumeSlider.Value;
                         _audioPlayer.PushFrame(frame.PcmData, frame.SampleRate, frame.Channels, frame.BitsPerSample);
                     });
                 }

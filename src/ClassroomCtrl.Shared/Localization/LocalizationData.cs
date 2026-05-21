@@ -557,11 +557,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "Direct message from teacher",
         ["Toast_ChatRoom"] = "Classroom message",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "Do not disturb — silence chat popups",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "Chat from {0}",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "Playback volume",
     };
 
     private static Dictionary<string, string> Th() => new()
@@ -1073,11 +1071,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "ข้อความส่วนตัวจากครู",
         ["Toast_ChatRoom"] = "ข้อความในห้องเรียน",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "ห้ามรบกวน — ปิดป๊อปอัพแชท",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "ข้อความจาก {0}",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "ระดับเสียงที่ได้ยิน",
     };
 
     private static Dictionary<string, string> Zh() => new()
@@ -1543,11 +1539,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "来自老师的私信",
         ["Toast_ChatRoom"] = "教室消息",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "勿扰 — 静音聊天弹窗",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "来自 {0} 的消息",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "播放音量",
     };
 
     private static Dictionary<string, string> Ja() => new()
@@ -2013,11 +2007,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "先生からのダイレクトメッセージ",
         ["Toast_ChatRoom"] = "教室のメッセージ",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "おやすみモード — チャットの通知をミュート",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "{0} さんからのメッセージ",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "再生音量",
     };
 
     private static Dictionary<string, string> Ko() => new()
@@ -2483,11 +2475,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "선생님 개인 메시지",
         ["Toast_ChatRoom"] = "교실 메시지",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "방해 금지 — 채팅 팝업 끄기",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "{0}님의 메시지",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "재생 볼륨",
     };
 
     private static Dictionary<string, string> Es() => new()
@@ -2953,11 +2943,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "Mensaje directo del profesor",
         ["Toast_ChatRoom"] = "Mensaje del aula",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "No molestar — silenciar avisos de chat",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "Mensaje de {0}",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "Volumen de reproducción",
     };
 
     private static Dictionary<string, string> Fr() => new()
@@ -3423,11 +3411,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "Message direct du professeur",
         ["Toast_ChatRoom"] = "Message de la classe",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "Ne pas déranger — couper les notifications de chat",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "Message de {0}",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "Volume de lecture",
     };
 
     private static Dictionary<string, string> De() => new()
@@ -3893,11 +3879,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "Direkte Nachricht vom Lehrer",
         ["Toast_ChatRoom"] = "Klassennachricht",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "Nicht stören — Chat-Pop-ups stummschalten",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "Nachricht von {0}",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "Wiedergabelautstärke",
     };
 
     private static Dictionary<string, string> Ru() => new()
@@ -4363,11 +4347,9 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "Личное сообщение от учителя",
         ["Toast_ChatRoom"] = "Сообщение в классе",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "Не беспокоить — отключить всплывающие чаты",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "Сообщение от {0}",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "Громкость воспроизведения",
     };
 
     private static Dictionary<string, string> Vi() => new()
@@ -4833,10 +4815,8 @@ internal static class LocalizationData
         ["Toast_ChatDirect"] = "Tin nhắn riêng từ giáo viên",
         ["Toast_ChatRoom"] = "Tin nhắn lớp học",
 
-        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
-        ["Tooltip_Dnd"] = "Không làm phiền — tắt thông báo trò chuyện",
+        // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
+        ["Toast_ChatFromStudent"] = "Tin nhắn từ {0}",
 
-        // Phase 10.14 (Item 2a) — Student playback volume slider label.
-        ["Lbl_PlaybackVolume"] = "Âm lượng phát",
     };
 }
