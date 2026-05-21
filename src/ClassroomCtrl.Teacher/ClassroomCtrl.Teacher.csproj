@@ -4,11 +4,18 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>ClassroomCtrl.Teacher</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
+    <!-- Phase 10.13 — switched primary .ico to multi-resolution classroom_icon.ico
+         (added in commit 2e321bb). The old logo.ico stays on disk for legacy refs. -->
+    <ApplicationIcon>Assets\classroom_icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\logo.png" />
+    <!-- Phase 10.13 — embed classroom_icon.ico as a WPF Resource for window-chrome use. -->
+    <Resource Include="Assets\classroom_icon.ico" />
     <None Include="Assets\logo.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Assets\classroom_icon.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

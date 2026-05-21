@@ -74,6 +74,27 @@ Filename: "{sys}\reg.exe"; Parameters: "add ""HKLM\SOFTWARE\Microsoft\Windows\Cu
 ; working end-to-end by manual launch.
 Filename: "{sys}\reg.exe"; Parameters: "add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""ClassroomCtrlService"" /t REG_SZ /d ""\""{app}\ClassroomCtrl.Student.Service.exe\"""" /f"; Flags: runhidden
 
+; Phase 10.13 — HKLM Run for Watchdog (mirrors Service + Agent pattern).
+; Watchdog now actively respawns Service on crash (Phase 10.13 rewrite of
+; Watchdog\Program.cs from a dormant stub into a real monitor).  Without an
+; autostart hook it never gets a chance to do its job.
+Filename: "{sys}\reg.exe"; Parameters: "add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""ClassroomCtrlWatchdog"" /t REG_SZ /d ""\""{app}\ClassroomCtrl.Student.Watchdog.exe\"""" /f"; Flags: runhidden
+
+; Phase 10.13 — auto-enable Microphone access for desktop apps (system-wide).
+; Default in Windows 10+ blocks desktop apps from mic; without this, the
+; Service can't capture student mic for the Mic Monitor feature, and the
+; admin has to flip Settings > Privacy > Microphone on every PC by hand.
+; Three keys cover the legacy HKLM machine policy, the HKCU per-user copy
+; that Settings UI writes, and the NonPackaged subkey that gates desktop
+; (non-UWP) apps specifically.
+; WARNING: if the customer is under Group Policy that enforces mic block,
+; this registry is overwritten every reboot — IT must coordinate the GPO.
+; Deliberately NOT reverted in [UninstallRun]: these are system-level
+; settings the user may have configured for other apps.
+Filename: "{sys}\reg.exe"; Parameters: "add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone"" /v ""Value"" /t REG_SZ /d ""Allow"" /f"; Flags: runhidden
+Filename: "{sys}\reg.exe"; Parameters: "add ""HKCU\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone"" /v ""Value"" /t REG_SZ /d ""Allow"" /f"; Flags: runhidden
+Filename: "{sys}\reg.exe"; Parameters: "add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\NonPackaged"" /v ""Value"" /t REG_SZ /d ""Allow"" /f"; Flags: runhidden
+
 ; Outbound firewall rule for Agent (unchanged from Phase 10.0).
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""ClassroomCtrl Student Agent"" dir=out action=allow program=""{app}\ClassroomCtrl.Student.Agent.exe"" profile=any"; Flags: runhidden
 
@@ -90,6 +111,10 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""C
 ; logoff/login post-install.  nowait so the wizard doesn't block waiting for
 ; the long-running Service process; runhidden so no stray console flashes.
 Filename: "{app}\ClassroomCtrl.Student.Service.exe"; Flags: nowait runhidden
+
+; Phase 10.13 — start Watchdog immediately too so the respawn guarantee kicks
+; in without requiring a reboot.  Same nowait + runhidden pattern as Service.
+Filename: "{app}\ClassroomCtrl.Student.Watchdog.exe"; Flags: nowait runhidden
 
 ; Phase 10.11 — disabled (paired with the /Create above).  Service is now
 ; launched directly via the postinstall step a few lines below.
@@ -117,6 +142,9 @@ Filename: "{sys}\reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Microsoft\Windows
 Filename: "{sys}\reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""ClassroomCtrlService"" /f"; Flags: runhidden; RunOnceId: "DelServiceRun"
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""ClassroomCtrl Student UDP"""; Flags: runhidden; RunOnceId: "DelFwUdpInbound"
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""ClassroomCtrl Student Service"""; Flags: runhidden; RunOnceId: "DelFwSvcOutbound"
+
+; Phase 10.13 — remove Watchdog HKLM Run entry on uninstall.
+Filename: "{sys}\reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v ""ClassroomCtrlWatchdog"" /f"; Flags: runhidden; RunOnceId: "DelWatchdogRun"
 
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM ClassroomCtrl.Student.Service.exe"; Flags: runhidden; RunOnceId: "KillService"
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM ClassroomCtrl.Student.Agent.exe"; Flags: runhidden; RunOnceId: "KillAgent"

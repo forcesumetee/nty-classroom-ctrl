@@ -6,12 +6,9 @@ using System.IO;
 namespace ClassroomCtrl.Student.Service.Modules;
 
 /// <summary>
-/// Reassembles file chunks (Spec §6.4) and saves to per-user Documents\Classroom\.
-/// 
-/// Design:
-///   - Buffer chunks in memory until FileComplete arrives
-///   - On complete: write all chunks to disk in order
-///   - Path: %PUBLIC%\Documents\Classroom\{filename} (LocalSystem-friendly)
+/// Reassembles file chunks (Spec §6.4) and saves to user's Desktop\ClassroomFiles\.
+/// Phase 10.13 changed from %PUBLIC%\Documents\Classroom because Phase 10.9 moved
+/// Service from LocalSystem (Session 0) to user session — can write user Desktop directly.
 /// </summary>
 public class FileReceiver
 {
@@ -62,9 +59,10 @@ public class FileReceiver
 
         try
         {
-            // Save under Public Documents (works for LocalSystem and any user)
-            var publicDocs = Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments);
-            var classroomDir = Path.Combine(publicDocs, "Classroom");
+            // Phase 10.13 — save to user's Desktop for visibility (Service now runs in user
+            // session per Phase 10.9; was %PUBLIC%\Documents\Classroom\ when Service was LocalSystem).
+            var userDesktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            var classroomDir = Path.Combine(userDesktop, "ClassroomFiles");
             Directory.CreateDirectory(classroomDir);
 
             var safeName = Path.GetFileName(t.FileName); // strip any path

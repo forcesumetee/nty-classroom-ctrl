@@ -40,16 +40,16 @@ public class TeacherBeaconService : IDisposable
     private const int BeaconPort = 7778;
     private const int IntervalMs = 2000;
 
-    /// <summary>How often (in seconds) to log the chosen local IP at Info level.
-    /// Per-iteration logging would spam every 2 seconds; 30 s gives enough trail
-    /// to diagnose deployments without filling the log.</summary>
-    private const int LocalIpLogIntervalSec = 30;
-
     private readonly ILogger<TeacherBeaconService>? _logger;
     private readonly UdpClient _udp;
     private CancellationTokenSource? _cts;
     private Task? _loop;
-    private DateTime _nextLocalIpLogUtc = DateTime.MinValue;
+
+    // Phase 10.13 — value-based gate for MaybeLogLocalIp (replaces the prior
+    // 30s time-based throttle).  We now log only when the primary IP actually
+    // changes, so the steady-state log is silent and a DHCP lease / NIC swap
+    // / VPN attach produces exactly one info line documenting the transition.
+    private string? _lastLoggedPrimaryIp;
 
     public string ChannelId { get; set; } = "1234";
     public string ClassName { get; set; } = "";
@@ -185,13 +185,20 @@ public class TeacherBeaconService : IDisposable
         TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
     };
 
+    // Phase 10.13 — replaced time-based rate limit (LocalIpLogIntervalSec) with
+    // value-based: log only when the chosen primary IP changes between iterations.
+    // During steady-state operation the log is silent; when DHCP lease, NIC swap,
+    // or VPN attach changes the selection, we get exactly one info line documenting it.
     private void MaybeLogLocalIp(string ip, int fanout)
     {
-        var now = DateTime.UtcNow;
-        if (now < _nextLocalIpLogUtc) return;
-        _nextLocalIpLogUtc = now.AddSeconds(LocalIpLogIntervalSec);
-        _logger?.LogInformation("Beacon broadcasting (channel={Channel} primaryIp={Ip} fanout={Fanout})",
-            ChannelId, ip, fanout);
+        if (ip == _lastLoggedPrimaryIp) return;
+        var transition = _lastLoggedPrimaryIp == null
+            ? "initial"
+            : $"{_lastLoggedPrimaryIp} -> {ip}";
+        _lastLoggedPrimaryIp = ip;
+        _logger?.LogInformation(
+            "Beacon broadcasting (channel={Channel} primaryIp={Ip} fanout={Fanout} transition={Transition})",
+            ChannelId, ip, fanout, transition);
     }
 
     public void Dispose()

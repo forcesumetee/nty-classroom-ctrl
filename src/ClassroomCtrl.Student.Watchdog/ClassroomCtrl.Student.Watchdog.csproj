@@ -1,9 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- Phase 10.13 — WinExe so no console window appears when Watchdog autostarts
+         from HKLM Run at logon. Runtime logs go to Serilog file sink (see Program.cs). -->
+    <OutputType>WinExe</OutputType>
     <RootNamespace>ClassroomCtrl.Student.Watchdog</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ClassroomCtrl.Shared\ClassroomCtrl.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Phase 10.13 — Serilog file sink so the WinExe-output Watchdog still
+         produces tractable logs at %PROGRAMDATA%\NTY\ClassroomCtrl\logs\watchdog-.log. -->
+    <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
   </ItemGroup>
 </Project>

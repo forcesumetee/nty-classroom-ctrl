@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- Phase 10.13 — WinExe so no console window flashes when Service is launched
+         from HKLM Run at logon. Service has a Serilog file sink (Program.cs) so the
+         dropped console sink is acceptable. -->
+    <OutputType>WinExe</OutputType>
     <RootNamespace>ClassroomCtrl.Student.Service</RootNamespace>
     <UserSecretsId>dotnet-classroom-svc</UserSecretsId>
   </PropertyGroup>

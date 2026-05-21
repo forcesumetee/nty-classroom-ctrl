@@ -24,8 +24,28 @@ public class TrayIconManager : IDisposable
         _icon = new TaskbarIcon
         {
             ToolTipText = "Classroom Control (active)",
-            // Icon = ... (TODO: embed .ico via resources)
         };
+
+        // Phase 10.13 — the previous TODO left _icon.Icon unset, so the tray showed
+        // an empty box. Load classroom_icon.ico from the embedded WPF Resource added
+        // in the .csproj. H.NotifyIcon.TaskbarIcon.Icon is a System.Drawing.Icon; once
+        // assigned, WinForms deep-copies the handle, so disposing the source stream
+        // immediately is safe.
+        try
+        {
+            var iconUri = new Uri("pack://application:,,,/Assets/classroom_icon.ico", UriKind.Absolute);
+            var iconStreamInfo = Application.GetResourceStream(iconUri);
+            if (iconStreamInfo != null)
+            {
+                using var iconStream = iconStreamInfo.Stream;
+                _icon.Icon = new System.Drawing.Icon(iconStream);
+            }
+        }
+        catch
+        {
+            // Non-fatal: tray still works (just shows default empty box) if the
+            // resource is missing in an unusual build configuration.
+        }
 
         var menu = new ContextMenu();
 

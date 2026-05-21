@@ -1,4 +1,6 @@
-﻿<Window Icon="/Assets/logo.png" x:Class="ClassroomCtrl.Teacher.MainWindow"
+﻿<!-- Phase 10.13 — window chrome icon switched from logo.png to the multi-resolution
+     classroom_icon.ico added in commit 2e321bb. -->
+<Window Icon="/Assets/classroom_icon.ico" x:Class="ClassroomCtrl.Teacher.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"

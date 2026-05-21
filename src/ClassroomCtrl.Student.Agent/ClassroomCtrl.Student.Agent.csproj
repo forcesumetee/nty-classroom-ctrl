@@ -7,11 +7,20 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- DPI awareness: Windows Forms requires the project property, not manifest tags (WFO0003). -->
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
+    <!-- Phase 10.13 — switched primary .ico to multi-resolution classroom_icon.ico
+         (added in commit 2e321bb). The old logo.ico is kept on disk in case other code
+         references it, but new shortcuts/window chrome use the new icon. -->
+    <ApplicationIcon>Assets\classroom_icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\logo.png" />
+    <!-- Phase 10.13 — embed classroom_icon.ico as a WPF Resource so TrayIconManager
+         can load it via pack:// URI (fixing the empty-box tray icon TODO). -->
+    <Resource Include="Assets\classroom_icon.ico" />
     <None Include="Assets\logo.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Assets\classroom_icon.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

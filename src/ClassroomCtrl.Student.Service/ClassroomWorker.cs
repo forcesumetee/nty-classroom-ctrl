@@ -21,6 +21,10 @@ public class ClassroomWorker : BackgroundService
     private IPEndPoint? _teacherEndpoint;
     private NetworkStream? _teacherStream;
 
+    // Phase 10.13 — remember last beacon endpoint to log only on actual IP change,
+    // instead of every 30s beacon iteration (was flooding student log).
+    private IPEndPoint? _lastBeaconEndpoint;
+
     public ClassroomWorker(
         ILogger<ClassroomWorker> logger, ILoggerFactory loggerFactory,
         IpcServer ipc, PolicyEnforcer policy,
@@ -114,7 +118,18 @@ public class ClassroomWorker : BackgroundService
                     if (found != null)
                     {
                         _teacherEndpoint = found;
-                        _logger.LogInformation("Beacon discovered teacher at {Endpoint}", found);
+                        // Phase 10.13 — log only on actual IP change so customer-side debug
+                        // is tractable when Teacher's DHCP lease changes or they switch NIC.
+                        if (_lastBeaconEndpoint == null)
+                        {
+                            _logger.LogInformation("Beacon discovered teacher at {Endpoint}", found);
+                        }
+                        else if (!_lastBeaconEndpoint.Equals(found))
+                        {
+                            _logger.LogInformation("Teacher IP changed: {Old} -> {New} (will reconnect)",
+                                _lastBeaconEndpoint, found);
+                        }
+                        _lastBeaconEndpoint = found;
                     }
                 }
 
