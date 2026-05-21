@@ -121,6 +121,12 @@ public sealed class H264DecoderWrapper : IDisposable
             }
 
             rgb = _rgbImage.GetBytes();
+            for (int i = 0; i + 2 < rgb.Length; i += 4)
+            {
+                byte tmp = rgb[i];
+                rgb[i] = rgb[i + 2];
+                rgb[i + 2] = tmp;
+            }
             return width > 0 && height > 0 && rgb.Length > 0;
         }
         catch (Exception ex)
