@@ -103,6 +103,30 @@ public partial class MainWindow : Window
         });
     }
 
+    /// <summary>Phase 10.13.1 — Windows toast when chat arrives but MainWindow is hidden in tray
+    /// or minimized.  Uses the existing TrayIconManager.ShowBalloon (H.NotifyIcon-based);
+    /// Windows 10/11 surfaces it as a modern toast with the default notification sound.
+    /// DND toggle, custom overlay UI, reply-from-popup all deferred to Phase 10.14.
+    /// Caller is responsible for invoking on the UI thread (IsVisible/WindowState are
+    /// dispatcher-affined) — every call site is already inside Dispatcher.Invoke.</summary>
+    private void ShowChatToastIfHidden(MessageType kind, string body)
+    {
+        if (IsVisible && WindowState != WindowState.Minimized) return;
+
+        var title = kind switch
+        {
+            MessageType.ChatBroadcast => "ข้อความจากครู",
+            MessageType.ChatDirect => "ข้อความส่วนตัวจากครู",
+            MessageType.ChatRoom => "ข้อความในห้องเรียน",
+            _ => "ข้อความใหม่",
+        };
+        // Truncate so the toast doesn't get clipped mid-sentence by Windows;
+        // 120 chars leaves room for the title + ellipsis on a one-line toast.
+        var trimmed = body ?? "";
+        if (trimmed.Length > 120) trimmed = trimmed.Substring(0, 117) + "...";
+        App.Tray?.ShowBalloon(title, trimmed);
+    }
+
     private void OnNotificationsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
         UpdateNoNotificationsPlaceholder();
@@ -181,6 +205,7 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         ChatList.Items.Add($"[{chat.SenderName}] {chat.Text}");
+                        ShowChatToastIfHidden(MessageType.ChatBroadcast, chat.Text);
                     });
                 }
                 break;
@@ -191,6 +216,7 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         ChatList.Items.Add($"[DM from {chat.SenderName}] {chat.Text}");
+                        ShowChatToastIfHidden(MessageType.ChatDirect, chat.Text);
                     });
                 }
                 break;
@@ -201,6 +227,7 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         ChatList.Items.Add($"[Room] [{chat.SenderName}] {chat.Text}");
+                        ShowChatToastIfHidden(MessageType.ChatRoom, chat.Text);
                     });
                 }
                 break;
