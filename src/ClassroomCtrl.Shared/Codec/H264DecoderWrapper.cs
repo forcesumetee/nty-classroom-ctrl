@@ -8,17 +8,22 @@ namespace ClassroomCtrl.Shared.Codec;
 /// Phase 4 Part 4: Thin wrapper around H264Sharp decoder for screen viewing.
 /// Accepts H.264 NAL bytes, outputs RGB pixel data (caller decides pixel format mapping for WPF).
 ///
-/// Phase 10.15.1 — BUG-001 fix.  The previous implementation passed <c>noDelay=false</c>
-/// to <c>H264Decoder.Decode</c>, which the H264Sharp library docs explicitly call out as
-/// the non-recommended setting (the XML doc on the Decode method says noDelay
-/// "is a Cisco feature and its reccomended to be set to true").  With <c>false</c>,
-/// OpenH264 buffers output waiting for future reference frames that never arrive in our
-/// per-window viewer flow, so every TryDecode call returned false — including the keyframe
-/// that contained SPS+PPS+IDR.  Confirmed via Phase 10.15 diagnostic logging at four
-/// pipeline boundaries: encoder produced valid Annex B (NAL header 0x67 = SPS), the bytes
-/// arrived at Teacher byte-for-byte intact, the event fired with match=true, the decoder
-/// was created successfully, but every Decode returned false.  Switching to <c>true</c>
-/// is consistent with the live-streaming use case (Baseline profile, no B-frames).
+/// Phase 10.15.1 — first BUG-001 attempt.  Flipped <c>noDelay=false</c> to <c>true</c> per
+/// the H264Sharp XML doc recommendation ("This is a Cisco feature and its reccomended to be
+/// set to true").  Necessary, not sufficient — every Decode still returned false on real
+/// hardware.
+///
+/// Phase 10.15.2 — actual BUG-001 fix.  The library docs on the RgbImage Decode overload
+/// say "Decodes encoded data into the requested RGB color space defined in ImageFormat of
+/// RgbImage."  Our wrapper passed <c>RgbImage? img = null</c>, so the decoder had no format
+/// hint and no destination buffer — and silently returned false.  The README in the
+/// upstream H264Sharp repo (commit b9a97bf) shows the correct pattern: pre-allocate the
+/// <c>RgbImage</c> with explicit <c>ImageFormat</c> + <c>width</c> + <c>height</c>, and
+/// reuse the same instance across decode calls (decoder fills the buffer rather than
+/// reassigning the ref).  We pre-allocate <c>Bgra32</c> at <c>1920×1080</c> to match
+/// both <c>StudentBroadcaster</c> and <c>ScreenBroadcaster</c>'s fixed target dimensions
+/// and the format both <c>StudentScreenWindow.MapFormat</c> and the per-student recording
+/// tee already expect.
 ///
 /// TODO: Migrate to Firefox-style runtime download from ciscobinary.openh264.org
 ///       if shipping volume exceeds the MPEG-LA AVC pool 100K units/year free tier.
@@ -28,19 +33,50 @@ public sealed class H264DecoderWrapper : IDisposable
     private readonly H264Decoder _decoder = new();
     private bool _disposed;
 
+    /// <summary>Phase 10.15.2 — pre-allocated RGB destination buffer for Decode.  See class
+    /// doc for the BUG-001 story.  Reused across every TryDecode call for the wrapper's
+    /// lifetime; the decoder writes pixels into this buffer rather than reassigning the
+    /// ref (matches the upstream README example pattern).  Disposed in <see cref="Dispose"/>.
+    /// </summary>
+    private RgbImage _rgbImage;
+
+    /// <summary>Phase 10.15.2 — dimensions the buffer was sized for.  Logged once if the
+    /// decoder ever reports a different actual frame size, which would indicate either a
+    /// new broadcaster resolution or buffer-overflow risk.</summary>
+    private readonly int _bufferWidth;
+    private readonly int _bufferHeight;
+
     /// <summary>Phase 10.15.1 — count of failed decodes; we log the DecodingState
     /// returned by OpenH264 for the first few drops so a future BUG-001-style regression
     /// surfaces its actual error code instead of a silent <c>return false</c>.</summary>
     private int _failedDecodes;
 
-    public H264DecoderWrapper()
+    private bool _dimensionMismatchLogged;
+
+    /// <summary>
+    /// Default ctor — pre-allocates a <c>Bgra32 1920×1080</c> buffer that matches the
+    /// fixed target dimensions both broadcasters in this codebase encode at.  Callers
+    /// that need a different size can use the (width, height) overload.
+    /// </summary>
+    public H264DecoderWrapper() : this(1920, 1080) { }
+
+    public H264DecoderWrapper(int width, int height)
     {
+        _bufferWidth = width;
+        _bufferHeight = height;
+
         var rc = _decoder.Initialize();
         if (rc != 0)
         {
             _decoder.Dispose();
             throw new InvalidOperationException($"OpenH264 decoder Initialize failed (code {rc})");
         }
+
+        // Phase 10.15.2 — pre-allocate Bgra32 at the broadcaster's fixed target size.
+        // The Decode RgbImage overload reads .Format off this buffer to decide which
+        // color space to convert YUV into; passing null (the pre-10.15.2 behavior)
+        // silently fails because the decoder has no format to convert to.
+        _rgbImage = new RgbImage(ImageFormat.Bgra, width, height);
     }
 
     /// <summary>
@@ -59,24 +95,32 @@ public sealed class H264DecoderWrapper : IDisposable
 
         try
         {
-            // RgbImage overload of Decode uses `ref` (not `out`) — must pre-declare.
-            // The decoder reassigns/allocates the image; we just hand it a starting reference.
-            RgbImage? img = null;
             DecodingState state;
-            // Phase 10.15.1 — noDelay=true per H264Sharp library recommendation.  See class
-            // doc above for the full BUG-001 root-cause story.
-            bool ok = _decoder.Decode(nal, 0, nal.Length, true, out state, ref img!);
-            if (!ok || img == null)
+            // Phase 10.15.2 — pass the pre-allocated _rgbImage; the decoder writes into
+            // its buffer and updates Width/Height/Format reflecting the actual frame.
+            // Phase 10.15.1 — noDelay=true per H264Sharp recommendation.
+            bool ok = _decoder.Decode(nal, 0, nal.Length, true, out state, ref _rgbImage);
+            if (!ok)
             {
                 LogDecodeFailure(state, nal.Length);
                 return false;
             }
 
-            width = img.Width;
-            height = img.Height;
-            format = img.Format;
-            rgb = img.GetBytes();
-            img.Dispose();
+            width = _rgbImage.Width;
+            height = _rgbImage.Height;
+            format = _rgbImage.Format;
+
+            // Phase 10.15.2 — defensive: log once if the decoded frame dimensions don't
+            // match what we pre-allocated for.  Our broadcasters fix 1920×1080 so this
+            // shouldn't fire, but if a future broadcaster change forgets to update the
+            // wrapper too, the log will catch the overflow risk.
+            if (!_dimensionMismatchLogged && (width != _bufferWidth || height != _bufferHeight))
+            {
+                _dimensionMismatchLogged = true;
+                TryAppendLog($"Decoded frame {width}x{height} differs from pre-allocated buffer {_bufferWidth}x{_bufferHeight}");
+            }
+
+            rgb = _rgbImage.GetBytes();
             return width > 0 && height > 0 && rgb.Length > 0;
         }
         catch (Exception ex)
@@ -124,6 +168,8 @@ public sealed class H264DecoderWrapper : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        // Phase 10.15.2 — release the pre-allocated native RGB buffer too (~8 MB at 1920×1080 Bgra32).
+        try { _rgbImage?.Dispose(); } catch { }
         try { _decoder.Dispose(); } catch { }
     }
 }
