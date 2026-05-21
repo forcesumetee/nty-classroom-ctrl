@@ -8,6 +8,12 @@ public enum MessageType : ushort
     Heartbeat = 0x0003,
     Goodbye = 0x0004,
 
+    // Phase 10.10 Fix 7 — application-level keepalive.  Heartbeat (0x0003) is
+    // legacy/unused; new ping/pong machinery lives at 0x0005/0x0006 to avoid
+    // any chance of clashing with stray code that still emits 0x0003.
+    Ping = 0x0005,
+    Pong = 0x0006,
+
     // Chat (0x0100-0x01FF)
     ChatBroadcast = 0x0100,
     ChatDirect = 0x0101,

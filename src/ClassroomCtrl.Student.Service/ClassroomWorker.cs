@@ -80,6 +80,12 @@ public class ClassroomWorker : BackgroundService
             _logger.LogWarning(ex, "Failed to log startup environment");
         }
 
+        // Phase 10.10 Fix 4 — install Student firewall rules before any networking.
+        // Idempotent (no-op when rules already present).  We're either LocalSystem
+        // (Windows Service mode) or running with HighestAvailable via the Phase 10.9
+        // scheduled task; both have netsh privilege without a UAC prompt.
+        StudentFirewallService.EnsureRules(_logger);
+
         // Phase 10.3 — Service no longer spawns Agent/Watchdog.  Agent runs in
         // the user session via HKLM Run autorun and connects back here through
         // the named-pipe IPC.  Spawning from Session 0 produced a respawn loop
@@ -135,12 +141,37 @@ public class ClassroomWorker : BackgroundService
     {
         if (ep == null) return;
         using var client = new TcpClient();
-        await client.ConnectAsync(ep.Address, ep.Port, ct);
+
+        // Phase 10.10 Fix 6 — bound the connect attempt at 5 s.  Without this,
+        // a wrong / unreachable Teacher IP would block on the OS SYN timeout
+        // (~21 s) before each retry, multiplied by exponential backoff —
+        // students could appear "frozen" for over a minute waiting on a stale
+        // address.  Using a linked CTS turns the TCP connect into an explicit
+        // TimeoutException so the outer catch routes through the existing
+        // backoff path.
+        const int ConnectTimeoutMs = 5000;
+        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        connectCts.CancelAfter(ConnectTimeoutMs);
+        try
+        {
+            await client.ConnectAsync(ep.Address, ep.Port, connectCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // The outer ct wasn't cancelled — this means our timeout fired.
+            throw new TimeoutException($"Connect to {ep} timed out after {ConnectTimeoutMs} ms");
+        }
         _logger.LogInformation("Connected to Teacher at {Endpoint}", ep);
 
         var stream = client.GetStream();
         _teacherStream = stream;
 
+        // Phase 10.10 Fix 7 — heartbeat loop runs alongside the read loop while
+        // the TCP connection is live.  Sends an empty-payload Ping every 5 s so
+        // a silent Wi-Fi drop on the student side becomes visible to Teacher
+        // within ~15 s (StaleAfterMs in TcpControlServer).
+        using var pingCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var pingTask = Task.Run(() => HeartbeatLoopAsync(pingCts.Token), pingCts.Token);
         try
         {
             var hello = new HelloMessage
@@ -164,15 +195,49 @@ public class ClassroomWorker : BackgroundService
                 var payload = new byte[len];
                 await ReadExact(stream, payload, len, ct);
                 var msg = Envelope.Deserialize(payload);
-                _logger.LogInformation("Teacher→Service: type={Type} size={Size}", msg.Type, len);
+
+                // Phase 10.10 Fix 7 — Pong replies are silent (Teacher uses them
+                // for liveness only; Student doesn't act on them).  Skip the
+                // info-level log so steady-state traffic stays quiet.
+                if (msg.Type != MessageType.Pong)
+                {
+                    _logger.LogInformation("Teacher→Service: type={Type} size={Size}", msg.Type, len);
+                }
                 await DispatchAsync(msg, ct);
             }
             _logger.LogInformation("Teacher TCP read loop ended (peer closed or read returned 0).");
         }
         finally
         {
+            try { pingCts.Cancel(); } catch { }
+            try { await pingTask.ConfigureAwait(false); } catch { /* expected on cancel */ }
             _teacherStream = null;
             _logger.LogInformation("Teacher connection closed; will retry per backoff loop.");
+        }
+    }
+
+    /// <summary>
+    /// Phase 10.10 Fix 7 — periodic Ping every 5 s while connected.  Fire-and-
+    /// forget; transient send errors are logged but don't crash the worker —
+    /// the read loop will detect a real disconnect and tear down.
+    /// </summary>
+    private async Task HeartbeatLoopAsync(CancellationToken ct)
+    {
+        var interval = TimeSpan.FromSeconds(5);
+        while (!ct.IsCancellationRequested)
+        {
+            try { await Task.Delay(interval, ct); }
+            catch (OperationCanceledException) { return; }
+
+            try
+            {
+                var ping = Envelope.Create(MessageType.Ping, Array.Empty<byte>(), _endpointId);
+                await SendToTeacherAsync(ping, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Heartbeat ping send failed (will keep trying)");
+            }
         }
     }
 
@@ -210,7 +275,12 @@ public class ClassroomWorker : BackgroundService
             await s.WriteAsync(len, ct);
             await s.WriteAsync(body, ct);
             await s.FlushAsync(ct);
-            _logger.LogInformation("Service→Teacher: type={Type} size={Size}", env.Type, body.Length);
+            // Phase 10.10 Fix 7 — Ping is sent every 5 s; logging at Info would
+            // bury everything else.  Demote to Debug for keepalive frames.
+            if (env.Type == MessageType.Ping)
+                _logger.LogDebug("Service→Teacher: Ping size={Size}", body.Length);
+            else
+                _logger.LogInformation("Service→Teacher: type={Type} size={Size}", env.Type, body.Length);
         }
         catch (Exception ex)
         {
@@ -227,6 +297,15 @@ public class ClassroomWorker : BackgroundService
     {
         switch (env.Type)
         {
+            // Phase 10.10 Fix 7 — heartbeat traffic is connection-level.  We
+            // handle it here so the default-case Debug "Unhandled" log doesn't
+            // fire on every Pong reply.  No further action required: the read
+            // loop already updated the implicit liveness signal by virtue of
+            // having received the frame.
+            case MessageType.Ping:
+            case MessageType.Pong:
+                return;
+
             case MessageType.LockScreen:
             case MessageType.UnlockScreen:
                 if (!IsForMe(env))
