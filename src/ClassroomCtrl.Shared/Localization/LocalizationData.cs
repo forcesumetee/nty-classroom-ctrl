@@ -551,6 +551,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "Notifications",
         ["Tooltip_Notifications"] = "Recent system messages",
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "Message from teacher",
+        ["Toast_ChatDirect"] = "Direct message from teacher",
+        ["Toast_ChatRoom"] = "Classroom message",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "Do not disturb — silence chat popups",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "Playback volume",
     };
 
     private static Dictionary<string, string> Th() => new()
@@ -1056,6 +1067,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "การแจ้งเตือน",
         ["Tooltip_Notifications"] = "ข้อความระบบล่าสุด",
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "ข้อความจากครู",
+        ["Toast_ChatDirect"] = "ข้อความส่วนตัวจากครู",
+        ["Toast_ChatRoom"] = "ข้อความในห้องเรียน",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "ห้ามรบกวน — ปิดป๊อปอัพแชท",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "ระดับเสียงที่ได้ยิน",
     };
 
     private static Dictionary<string, string> Zh() => new()
@@ -1515,6 +1537,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "通知", // TODO: review Hdr_Notifications
         ["Tooltip_Notifications"] = "最近的系统消息", // TODO: review Tooltip_Notifications
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "来自老师的消息",
+        ["Toast_ChatDirect"] = "来自老师的私信",
+        ["Toast_ChatRoom"] = "教室消息",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "勿扰 — 静音聊天弹窗",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "播放音量",
     };
 
     private static Dictionary<string, string> Ja() => new()
@@ -1974,6 +2007,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "通知", // TODO: review Hdr_Notifications
         ["Tooltip_Notifications"] = "最近のシステムメッセージ", // TODO: review Tooltip_Notifications
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "先生からのメッセージ",
+        ["Toast_ChatDirect"] = "先生からのダイレクトメッセージ",
+        ["Toast_ChatRoom"] = "教室のメッセージ",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "おやすみモード — チャットの通知をミュート",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "再生音量",
     };
 
     private static Dictionary<string, string> Ko() => new()
@@ -2433,6 +2477,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "알림", // TODO: review Hdr_Notifications
         ["Tooltip_Notifications"] = "최근 시스템 메시지", // TODO: review Tooltip_Notifications
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "선생님 메시지",
+        ["Toast_ChatDirect"] = "선생님 개인 메시지",
+        ["Toast_ChatRoom"] = "교실 메시지",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "방해 금지 — 채팅 팝업 끄기",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "재생 볼륨",
     };
 
     private static Dictionary<string, string> Es() => new()
@@ -2892,6 +2947,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "Notificaciones", // TODO: review Hdr_Notifications
         ["Tooltip_Notifications"] = "Mensajes del sistema recientes", // TODO: review Tooltip_Notifications
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "Mensaje del profesor",
+        ["Toast_ChatDirect"] = "Mensaje directo del profesor",
+        ["Toast_ChatRoom"] = "Mensaje del aula",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "No molestar — silenciar avisos de chat",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "Volumen de reproducción",
     };
 
     private static Dictionary<string, string> Fr() => new()
@@ -3351,6 +3417,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "Notifications", // TODO: review Hdr_Notifications
         ["Tooltip_Notifications"] = "Messages système récents", // TODO: review Tooltip_Notifications
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "Message du professeur",
+        ["Toast_ChatDirect"] = "Message direct du professeur",
+        ["Toast_ChatRoom"] = "Message de la classe",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "Ne pas déranger — couper les notifications de chat",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "Volume de lecture",
     };
 
     private static Dictionary<string, string> De() => new()
@@ -3810,6 +3887,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "Benachrichtigungen", // TODO: review Hdr_Notifications
         ["Tooltip_Notifications"] = "Letzte Systemnachrichten", // TODO: review Tooltip_Notifications
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "Nachricht vom Lehrer",
+        ["Toast_ChatDirect"] = "Direkte Nachricht vom Lehrer",
+        ["Toast_ChatRoom"] = "Klassennachricht",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "Nicht stören — Chat-Pop-ups stummschalten",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "Wiedergabelautstärke",
     };
 
     private static Dictionary<string, string> Ru() => new()
@@ -4269,6 +4357,17 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "Уведомления", // TODO: review Hdr_Notifications
         ["Tooltip_Notifications"] = "Последние системные сообщения", // TODO: review Tooltip_Notifications
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "Сообщение от учителя",
+        ["Toast_ChatDirect"] = "Личное сообщение от учителя",
+        ["Toast_ChatRoom"] = "Сообщение в классе",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "Не беспокоить — отключить всплывающие чаты",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "Громкость воспроизведения",
     };
 
     private static Dictionary<string, string> Vi() => new()
@@ -4728,5 +4827,16 @@ internal static class LocalizationData
         // Phase 9.1 Section B — Student.Agent bell-popup notifications panel
         ["Hdr_Notifications"] = "Thông báo", // TODO: review Hdr_Notifications
         ["Tooltip_Notifications"] = "Tin nhắn hệ thống gần đây", // TODO: review Tooltip_Notifications
+
+        // Phase 10.14 (Item 8) — toast titles for chat notifications.
+        ["Toast_ChatBroadcast"] = "Tin nhắn từ giáo viên",
+        ["Toast_ChatDirect"] = "Tin nhắn riêng từ giáo viên",
+        ["Toast_ChatRoom"] = "Tin nhắn lớp học",
+
+        // Phase 10.14 (Item 4) — Do-Not-Disturb toggle tooltip.
+        ["Tooltip_Dnd"] = "Không làm phiền — tắt thông báo trò chuyện",
+
+        // Phase 10.14 (Item 2a) — Student playback volume slider label.
+        ["Lbl_PlaybackVolume"] = "Âm lượng phát",
     };
 }

@@ -35,8 +35,14 @@ public class StudentBroadcaster : IDisposable
     /// <summary>
     /// Capture rate. Bumped to 4 FPS in Part 4 — OpenH264 doesn't behave reliably below ~3 FPS
     /// (frame-skip + IDR-interval interactions can leave the decoder waiting forever).
+    /// Phase 10.14 (Item 3) — bumped to 6 FPS for noticeably smoother live view at Teacher
+    /// (perceived ~50% smoother).  Effectively MJPEG-only in practice: Teacher's MainViewModel
+    /// forces MJPEG for ViewStudentScreen as the BUG-001 workaround, so the H.264 path is
+    /// dormant.  Safe to revert to 4 if/when BUG-001 is fixed and H.264 turns out to be
+    /// FPS-sensitive at the new rate.  Bandwidth at 1920×1080 q60 ≈ 30–50 KB/frame × 6 =
+    /// ~180–300 KB/s per student; 30 students ≈ 9 MB/s, comfortable on 802.11n+ Wi-Fi.
     /// </summary>
-    public int FramesPerSecond { get; set; } = 4;
+    public int FramesPerSecond { get; set; } = 6;
 
     /// <summary>Codec used for current/next stream — set by MainWindow before Start.</summary>
     public VideoCodec Codec { get; set; } = VideoCodec.Mjpeg;

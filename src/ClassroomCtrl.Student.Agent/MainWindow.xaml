@@ -150,6 +150,20 @@
                         </Border>
                     </Popup>
                 </Grid>
+                <!-- Phase 10.14 (Item 4) — Do-Not-Disturb toggle.  When checked,
+                     ShowChatToastIfHidden returns early so no Windows toast pops up
+                     for arriving chat; the chat list still updates normally. State
+                     persists in HKCU\Software\NTY\ClassroomCtrl\Student\Settings. -->
+                <ToggleButton x:Name="DndToggle" DockPanel.Dock="Right"
+                              Content="🌙"
+                              Click="DndToggle_Click"
+                              ToolTip="{DynamicResource Tooltip_Dnd}"
+                              Width="36" Height="36"
+                              Margin="0,0,8,0"
+                              FontSize="14"
+                              VerticalAlignment="Center"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"/>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="{DynamicResource Lbl_ClassroomConnected}"
                                Style="{DynamicResource Text.H2}"/>
@@ -170,18 +184,34 @@
              confusing.  Mic always-on-when-unmuted suffices for both
              scenarios — peers in the same breakout room hear the mic stream
              through the same broadcaster pipeline. -->
-        <Grid Grid.Row="1" Margin="16,12,16,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" Content="{DynamicResource Btn_RaiseHand}"
-                    Style="{DynamicResource Button.Primary}"
-                    Margin="0,0,4,0" Click="RaiseHand_Click"/>
-            <Button x:Name="MicButton" Grid.Column="1"
-                    Style="{DynamicResource Button.Secondary}"
-                    Margin="4,0,0,0" Click="ToggleMic_Click"/>
-        </Grid>
+        <StackPanel Grid.Row="1" Margin="16,12,16,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="{DynamicResource Btn_RaiseHand}"
+                        Style="{DynamicResource Button.Primary}"
+                        Margin="0,0,4,0" Click="RaiseHand_Click"/>
+                <Button x:Name="MicButton" Grid.Column="1"
+                        Style="{DynamicResource Button.Secondary}"
+                        Margin="4,0,0,0" Click="ToggleMic_Click"/>
+            </Grid>
+            <!-- Phase 10.14 (Item 2a) — Student playback volume.  Controls how loudly
+                 THIS student hears the teacher's voice; does not affect the mic upstream.
+                 Persists to HKCU\Software\NTY\ClassroomCtrl\Student\Settings\PlaybackVolume.
+                 Range 0-2 (same as Teacher pre-Item 1B); +6dB headroom is enough for the
+                 customer's mid-range hardware without risking clipping at the WaveOut layer. -->
+            <TextBlock Text="{DynamicResource Lbl_PlaybackVolume}"
+                       FontSize="11"
+                       Foreground="{DynamicResource Text.Secondary}"
+                       Margin="0,8,0,2"/>
+            <Slider x:Name="PlaybackVolumeSlider"
+                    Minimum="0" Maximum="2" Value="1"
+                    TickFrequency="0.25" IsSnapToTickEnabled="False"
+                    ValueChanged="PlaybackVolumeSlider_ValueChanged"
+                    ToolTip="{DynamicResource Lbl_PlaybackVolume}"/>
+        </StackPanel>
 
         <!-- Chat / system messages — wrapped in Surface.Card per Phase 4-7 design -->
         <Border Grid.Row="2" Margin="16,4"

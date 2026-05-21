@@ -30,7 +30,9 @@ Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
-    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+    // Phase 10.14 (Item 7) — explicit UTF-8, same reason as Service.Program.cs.
+    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7,
+        encoding: System.Text.Encoding.UTF8)
     .CreateLogger();
 
 // Watchdog respawns Service.exe from its own install directory.  AppContext.BaseDirectory

@@ -456,6 +456,12 @@ public partial class MainViewModel : ObservableObject
         // is intentionally skipped — only whole-class state is persisted.
         LoadAppliedPolicyState();
 
+        // Phase 10.14 (Item 1A) — restore MasterVolume from HKCU.  Sets the backing field
+        // via the generated property so OnMasterVolumeChanged fires and pushes the value
+        // into App.StudentAudioMixer (if it exists yet).  Default stays at 1.0 on failure.
+        var savedVolume = LoadMasterVolume();
+        if (savedVolume.HasValue) MasterVolume = savedVolume.Value;
+
         if (App.Server != null)
         {
             App.Server.StudentJoined += OnStudentJoined;
@@ -710,6 +716,48 @@ public partial class MainViewModel : ObservableObject
     {
         if (App.StudentAudioMixer != null)
             App.StudentAudioMixer.Volume = (float)value;
+        // Phase 10.14 (Item 1A) — persist so slider doesn't reset on each Teacher launch.
+        SaveMasterVolume(value);
+    }
+
+    // Phase 10.14 (Item 1A) — MasterVolume persistence helpers.  Pattern mirrors
+    // ChannelIdRegistry but inlined since this is a single per-user preference
+    // (not a classroom-wide infrastructure value); HKCU only, no HKLM mirror.
+    // Stored as string under InvariantCulture so a Thai/comma-decimal regional
+    // setting on the customer machine doesn't corrupt the value at write time.
+    private const string TeacherSettingsRegSubKey = @"Software\NTY\ClassroomCtrl\Teacher\Settings";
+    private const string MasterVolumeRegValueName = "MasterVolume";
+
+    private static double? LoadMasterVolume()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(TeacherSettingsRegSubKey);
+            if (key?.GetValue(MasterVolumeRegValueName) is string s
+                && double.TryParse(s, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var v)
+                && v >= 0 && v <= 4.0)
+            {
+                return v;
+            }
+        }
+        catch { /* fall back to default */ }
+        return null;
+    }
+
+    private static void SaveMasterVolume(double value)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(TeacherSettingsRegSubKey);
+            key?.SetValue(MasterVolumeRegValueName,
+                value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Microsoft.Win32.RegistryValueKind.String);
+        }
+        catch
+        {
+            // Non-fatal: slider falls back to default on next launch.
+        }
     }
 
     private async void MuteAllStudents()

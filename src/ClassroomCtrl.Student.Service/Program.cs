@@ -16,7 +16,12 @@ Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console()
-    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+    // Phase 10.14 (Item 7) — explicit UTF-8 so Thai characters and em-dashes
+    // (— used throughout our log messages) don't render as `โ€` / `เน€เธ”`
+    // when opened from a Thai-locale Windows console or text editor that
+    // default-guesses cp874 / Windows-1252.
+    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7,
+        encoding: System.Text.Encoding.UTF8)
     .CreateLogger();
 
 try

@@ -355,8 +355,14 @@
                             <TextBlock Style="{DynamicResource Text.Caption}"
                                        Text="{DynamicResource Lbl_MasterVolume}"
                                        Margin="12,8,12,2"/>
-                            <Slider Minimum="0" Maximum="2" Value="{Binding MasterVolume, Mode=TwoWay}"
-                                    TickFrequency="0.25" IsSnapToTickEnabled="False"
+                            <!-- Phase 10.14 (Item 1B) — Maximum bumped from 2 to 4 so the
+                                 teacher can boost quiet students up to +12 dB.  Anything
+                                 above 1.0 risks clipping (the VolumeSampleProvider gain is
+                                 unbounded; clamping happens at WaveOut PCM conversion); the
+                                 caption below 1.0 is unity, the rest is boost.  See
+                                 OnMasterVolumeChanged for the persistence path (Item 1A). -->
+                            <Slider Minimum="0" Maximum="4" Value="{Binding MasterVolume, Mode=TwoWay}"
+                                    TickFrequency="0.5" IsSnapToTickEnabled="False"
                                     Margin="14,0,14,4"
                                     ToolTip="{DynamicResource Lbl_MasterVolume}"/>
                         </StackPanel>
