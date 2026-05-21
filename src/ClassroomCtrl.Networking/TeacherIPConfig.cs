@@ -88,16 +88,46 @@ public static class TeacherIPConfig
         catch { /* not admin; the registry value lingers but Read() ignores it */ }
     }
 
-    /// <summary>Returns the configured Teacher endpoint, or 127.0.0.1 fallback for dev.</summary>
+    /// <summary>
+    /// Resolve the configured Teacher endpoint.  Accepts both "IP" (default port from
+    /// <see cref="NetworkConstants.ControlTcpPort"/>) and "IP:port" formats.
+    ///
+    /// Phase 10.14 hotfix — added IPEndPoint.TryParse fallback because the Setup
+    /// dialog only accepts plain IP, but a hand-edited config.txt with "IP:port"
+    /// used to silently fall back to loopback while IsConfigured() reported true.
+    /// Better to honor what the user actually wrote, or fail loudly via
+    /// IsConfigured()=false (callers then re-prompt the dialog or fall back to
+    /// UDP beacon discovery — both strictly better than connecting to 127.0.0.1).
+    /// </summary>
     public static IPEndPoint GetEndpoint()
     {
-        var ipString = Read();
-        if (!string.IsNullOrWhiteSpace(ipString) && IPAddress.TryParse(ipString, out var ip))
-        {
+        var raw = Read()?.Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return new IPEndPoint(IPAddress.Loopback, NetworkConstants.ControlTcpPort);
+
+        // Common case: plain "192.168.1.153" — use default port.
+        if (IPAddress.TryParse(raw, out var ip))
             return new IPEndPoint(ip, NetworkConstants.ControlTcpPort);
-        }
+
+        // Defensive: "192.168.1.153:7777" — honor the port explicitly.
+        if (IPEndPoint.TryParse(raw, out var endpoint))
+            return endpoint;
+
+        // Garbage in config.txt — fall back to loopback; IsConfigured() returns
+        // false below so the caller knows the config is broken.
         return new IPEndPoint(IPAddress.Loopback, NetworkConstants.ControlTcpPort);
     }
 
-    public static bool IsConfigured() => !string.IsNullOrWhiteSpace(Read());
+    /// <summary>
+    /// Phase 10.14 hotfix — true only when the configured value parses as a valid
+    /// IP or IP:port.  Previously this returned true for any non-empty string,
+    /// which caused a misleading "configured: true" log line even when GetEndpoint()
+    /// silently fell back to 127.0.0.1.
+    /// </summary>
+    public static bool IsConfigured()
+    {
+        var raw = Read()?.Trim();
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        return IPAddress.TryParse(raw, out _) || IPEndPoint.TryParse(raw, out _);
+    }
 }
