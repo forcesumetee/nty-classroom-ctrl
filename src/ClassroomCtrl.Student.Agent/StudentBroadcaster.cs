@@ -48,7 +48,7 @@ public class StudentBroadcaster : IDisposable
     public VideoCodec Codec { get; set; } = VideoCodec.Mjpeg;
 
     /// <summary>Target bitrate for H.264 mode (CBR). Ignored for MJPEG.</summary>
-    public int H264BitrateBps { get; set; } = 500_000;
+    public int H264BitrateBps { get; set; } = 1_500_000;
 
     private VideoCodec _activeCodec = VideoCodec.Mjpeg;
     private H264EncoderWrapper? _h264;

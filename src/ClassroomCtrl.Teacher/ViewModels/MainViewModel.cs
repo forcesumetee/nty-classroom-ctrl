@@ -1066,7 +1066,7 @@ public partial class MainViewModel : ObservableObject
             // Investigation areas: StudentBroadcaster H.264 init lifecycle, IPC pipeline frame routing,
             // or StudentScreenWindow decoder receiving frames but not rendering.
             // TODO: Deferred to post-launch debugging session.
-            await App.Server.RequestStudentStreamAsync(s.EndpointId, ClassroomCtrl.Shared.Protocol.VideoCodec.Mjpeg, System.Threading.CancellationToken.None);
+            await App.Server.RequestStudentStreamAsync(s.EndpointId, App.SelectedCodec, System.Threading.CancellationToken.None);
             AppendSystemChat(Loc.Format("Chat_ViewingStudentScreen", s.DisplayName));
         }
         catch (System.Exception ex)
