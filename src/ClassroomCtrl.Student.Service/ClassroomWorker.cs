@@ -25,6 +25,12 @@ public class ClassroomWorker : BackgroundService
     // instead of every 30s beacon iteration (was flooding student log).
     private IPEndPoint? _lastBeaconEndpoint;
 
+    // Phase 10.16 — remember last manually-configured endpoint we logged so the
+    // re-read-config-each-iteration loop body (below) doesn't spam the log when
+    // nothing has changed.  Mirrors the _lastBeaconEndpoint pattern.
+    private IPEndPoint? _lastManualEndpoint;
+    private bool? _lastManualConfigured;
+
     public ClassroomWorker(
         ILogger<ClassroomWorker> logger, ILoggerFactory loggerFactory,
         IpcServer ipc, PolicyEnforcer policy,
@@ -98,16 +104,32 @@ public class ClassroomWorker : BackgroundService
         _logger.LogInformation("IPC server listening on \\\\.\\pipe\\{Pipe}; waiting for Agent connection.",
             NetworkConstants.IpcPipeName);
 
-        _teacherEndpoint = ClassroomCtrl.Networking.TeacherIPConfig.GetEndpoint();
-        var manualConfigured = ClassroomCtrl.Networking.TeacherIPConfig.IsConfigured();
-        _logger.LogInformation("Teacher endpoint: {Endpoint} (configured: {Configured})",
-            _teacherEndpoint, manualConfigured);
-
         int backoffMs = 1000;
         while (!ct.IsCancellationRequested)
         {
             try
             {
+                // Phase 10.16 — re-read config each iteration so a Teacher IP change
+                // made via the Agent's tray Settings dialog is picked up automatically,
+                // without restarting the Service task.  config.txt is a tiny file;
+                // reading it once per retry cycle (≤30 s in steady state) is negligible.
+                //
+                // Note: while ConnectAndPumpAsync is running we're blocked inside it, so
+                // the new value only takes effect after the existing connection drops.
+                // For the customer scenario ("connection is broken, fix IP") this is
+                // fine — the loop is already cycling.  An IPC ReloadConfig signal would
+                // cover the rare "change IP while still connected" case (deferred).
+                _teacherEndpoint = ClassroomCtrl.Networking.TeacherIPConfig.GetEndpoint();
+                var manualConfigured = ClassroomCtrl.Networking.TeacherIPConfig.IsConfigured();
+                if (_lastManualConfigured != manualConfigured
+                    || !object.Equals(_lastManualEndpoint, _teacherEndpoint))
+                {
+                    _logger.LogInformation("Teacher endpoint: {Endpoint} (configured: {Configured})",
+                        _teacherEndpoint, manualConfigured);
+                    _lastManualEndpoint = _teacherEndpoint;
+                    _lastManualConfigured = manualConfigured;
+                }
+
                 // Phase 9.4: Auto-discover via UDP beacon when no manual IP is configured.
                 if (!manualConfigured)
                 {

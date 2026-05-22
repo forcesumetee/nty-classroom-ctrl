@@ -73,8 +73,27 @@ public class TrayIconManager : IDisposable
 
     private void OpenSettings()
     {
-        // TODO: show Settings window with "Quit" option behind admin-password prompt (Spec §7.4)
-        MessageBox.Show("Settings — admin password required to quit.");
+        // Phase 10.16 — Settings now opens TeacherIPDialog so IT can re-point the
+        // student at a new Teacher IP without editing config.txt by hand.  The
+        // dialog ctor already pre-fills from TeacherIPConfig.Read(), so it
+        // doubles as first-run setup and later edit.  Quit-behind-password is
+        // still pending (Spec §7.4) and would be a separate menu item.
+        var dlg = new ClassroomCtrl.Student.Agent.Setup.TeacherIPDialog
+        {
+            Owner = _mainWindow,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+        var result = dlg.ShowDialog();
+
+        if (result == true && dlg.Saved)
+        {
+            // config.txt updated.  The Service picks up the new IP on its next
+            // retry cycle (Phase 10.16 Part B re-reads inside the connect loop).
+            // Tell the user it may take a few seconds rather than appear instant.
+            ShowBalloon(
+                ClassroomCtrl.Shared.Localization.Loc.Get("Toast_TeacherIPSaved_Title"),
+                ClassroomCtrl.Shared.Localization.Loc.Get("Toast_TeacherIPSaved_Body"));
+        }
     }
 
     /// <summary>Phase 5b: show a Windows toast / balloon from the tray icon.</summary>

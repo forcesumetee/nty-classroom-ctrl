@@ -560,6 +560,12 @@ internal static class LocalizationData
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "Chat from {0}",
 
+        // Phase 10.16 — toast shown after the user saves a new Teacher IP via the
+        // tray Settings menu.  Body explains that the Service reconnects within
+        // ~30 s; some customers expected instant effect.
+        ["Toast_TeacherIPSaved_Title"] = "Teacher IP saved",
+        ["Toast_TeacherIPSaved_Body"] = "Reconnecting — this may take a few seconds",
+
     };
 
     private static Dictionary<string, string> Th() => new()
@@ -1074,6 +1080,10 @@ internal static class LocalizationData
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "ข้อความจาก {0}",
 
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "บันทึก Teacher IP แล้ว",
+        ["Toast_TeacherIPSaved_Body"] = "กำลังเชื่อมต่อใหม่ อาจใช้เวลาสักครู่",
+
     };
 
     private static Dictionary<string, string> Zh() => new()
@@ -1541,6 +1551,10 @@ internal static class LocalizationData
 
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "来自 {0} 的消息",
+
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "已保存教师 IP",
+        ["Toast_TeacherIPSaved_Body"] = "正在重新连接 — 可能需要几秒",
 
     };
 
@@ -2010,6 +2024,10 @@ internal static class LocalizationData
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "{0} さんからのメッセージ",
 
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "先生の IP を保存しました",
+        ["Toast_TeacherIPSaved_Body"] = "再接続中 — 数秒かかる場合があります",
+
     };
 
     private static Dictionary<string, string> Ko() => new()
@@ -2477,6 +2495,10 @@ internal static class LocalizationData
 
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "{0}님의 메시지",
+
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "선생님 IP가 저장되었습니다",
+        ["Toast_TeacherIPSaved_Body"] = "재연결 중 — 몇 초 걸릴 수 있습니다",
 
     };
 
@@ -2946,6 +2968,10 @@ internal static class LocalizationData
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "Mensaje de {0}",
 
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "IP del profesor guardada",
+        ["Toast_TeacherIPSaved_Body"] = "Reconectando — esto puede tardar unos segundos",
+
     };
 
     private static Dictionary<string, string> Fr() => new()
@@ -3413,6 +3439,10 @@ internal static class LocalizationData
 
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "Message de {0}",
+
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "IP du professeur enregistrée",
+        ["Toast_TeacherIPSaved_Body"] = "Reconnexion en cours — cela peut prendre quelques secondes",
 
     };
 
@@ -3882,6 +3912,10 @@ internal static class LocalizationData
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "Nachricht von {0}",
 
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "Lehrer-IP gespeichert",
+        ["Toast_TeacherIPSaved_Body"] = "Neuverbindung — das kann ein paar Sekunden dauern",
+
     };
 
     private static Dictionary<string, string> Ru() => new()
@@ -4350,6 +4384,10 @@ internal static class LocalizationData
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "Сообщение от {0}",
 
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "IP учителя сохранён",
+        ["Toast_TeacherIPSaved_Body"] = "Переподключение — это может занять несколько секунд",
+
     };
 
     private static Dictionary<string, string> Vi() => new()
@@ -4817,6 +4855,10 @@ internal static class LocalizationData
 
         // Phase 10.14 (Item 9) — Teacher-side toast title; {0} = student name.
         ["Toast_ChatFromStudent"] = "Tin nhắn từ {0}",
+
+        // Phase 10.16 — tray Settings save toast.
+        ["Toast_TeacherIPSaved_Title"] = "Đã lưu IP của giáo viên",
+        ["Toast_TeacherIPSaved_Body"] = "Đang kết nối lại — có thể mất vài giây",
 
     };
 }
