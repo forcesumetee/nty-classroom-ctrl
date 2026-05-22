@@ -7,9 +7,11 @@
         Background="{DynamicResource Surface.Background}"
         TextElement.Foreground="{DynamicResource Text.Primary}"
         FontFamily="Segoe UI">
-    <!-- Phase 5 Section B â€” restructured: header / body (form fields + dynamic
+    <!-- Phase 5 Section B - restructured: header / body (form fields + dynamic
          choices/short-answer pane) / pinned footer.  Choices grid row uses
-         Height="*" so the inline ItemsControl scrolls within a Surface.Card. -->
+         Height="*" so the inline ItemsControl scrolls within a Surface.Card.
+         Phase 10.18 - replaced corrupted em-dash mojibake with ASCII so a
+         future double-encode pass can't garble this comment again. -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -25,7 +27,7 @@
                 <Border DockPanel.Dock="Left" Width="36" Height="36"
                         Background="{DynamicResource Accent.PrimarySubtle}"
                         CornerRadius="8" Margin="0,0,12,0">
-                    <TextBlock Text="â“" FontSize="18"
+                    <TextBlock Text="&#x2753;" FontSize="18"
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <StackPanel VerticalAlignment="Center">
@@ -136,7 +138,7 @@
                                                 Width="32" Height="32"
                                                 Margin="4,0,0,0"
                                                 ToolTip="{DynamicResource Btn_RemoveChoice}">
-                                            <TextBlock Text="âœ•" FontSize="14" FontWeight="Bold"
+                                            <TextBlock Text="&#x2715;" FontSize="14" FontWeight="Bold"
                                                        Foreground="{DynamicResource Accent.Danger}"
                                                        HorizontalAlignment="Center"
                                                        VerticalAlignment="Center"/>

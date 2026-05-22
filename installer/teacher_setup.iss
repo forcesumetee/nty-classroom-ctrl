@@ -3,7 +3,7 @@
 ; Compile with: ISCC.exe teacher_setup.iss
 
 #define MyAppName "NTY Classroom Control - Teacher"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.1"
 #define MyAppPublisher "NTY MULTIMEDIA CO.,LTD"
 #define MyAppExeName "ClassroomCtrl.Teacher.exe"
 

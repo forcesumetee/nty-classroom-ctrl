@@ -3,7 +3,7 @@
 ; Installs 3 components: Service + Agent + Watchdog
 
 #define MyAppName "NTY Classroom Control - Student"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.1"
 #define MyAppPublisher "NTY MULTIMEDIA CO.,LTD"
 #define MyServiceName "NTYClassroomService"
 
