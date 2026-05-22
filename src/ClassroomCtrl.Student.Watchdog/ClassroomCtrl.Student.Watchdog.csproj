@@ -10,8 +10,15 @@
   </ItemGroup>
   <ItemGroup>
     <!-- Phase 10.13 — Serilog file sink so the WinExe-output Watchdog still
-         produces tractable logs at %PROGRAMDATA%\NTY\ClassroomCtrl\logs\watchdog-.log. -->
-    <PackageReference Include="Serilog" Version="3.1.1" />
+         produces tractable logs at %PROGRAMDATA%\NTY\ClassroomCtrl\logs\watchdog-.log.
+         Phase 10.17 — bumped Serilog 3.1.1 → 4.0.0 to match Service.  Both projects
+         publish into one installer folder ({app}\) and last-write-wins on Serilog.dll
+         was leaving the customer with 3.1.1 while Service.exe was built against 4.0.0,
+         causing Service to crash with FileNotFoundException on every startup.
+         Service's transitive resolution requires Serilog ≥ 4.0.0 because its
+         Serilog.Sinks.Console 6.1.1 dependency has that as its floor; bumping
+         Watchdog to the same version makes the merged folder consistent. -->
+    <PackageReference Include="Serilog" Version="4.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
   </ItemGroup>
 </Project>

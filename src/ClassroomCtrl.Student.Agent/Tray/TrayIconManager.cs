@@ -80,9 +80,21 @@ public class TrayIconManager : IDisposable
         // still pending (Spec §7.4) and would be a separate menu item.
         var dlg = new ClassroomCtrl.Student.Agent.Setup.TeacherIPDialog
         {
-            Owner = _mainWindow,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
         };
+
+        // Phase 10.17 — only set Owner when the MainWindow has actually been shown.
+        // The Agent normally lives in the tray with MainWindow never shown, and WPF
+        // throws "Cannot set Owner ... not been shown previously" otherwise — which
+        // crashed the entire Agent process the first time customer IT clicked
+        // tray → Settings.  An ownerless modal is allowed in WPF; we just lose the
+        // CenterOwner placement (handled by the CenterScreen default above).
+        if (_mainWindow is { IsVisible: true })
+        {
+            dlg.Owner = _mainWindow;
+            dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        }
+
         var result = dlg.ShowDialog();
 
         if (result == true && dlg.Saved)
