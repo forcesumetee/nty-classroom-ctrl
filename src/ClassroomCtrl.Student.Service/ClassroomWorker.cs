@@ -18,6 +18,14 @@ public class ClassroomWorker : BackgroundService
     private readonly Guid _endpointId;
     private readonly SemaphoreSlim _teacherWriteLock = new(1, 1);
 
+    /// <summary>Phase 13-B (Tier 1) — local mirror of this student's current
+    /// breakout-room id (null = main classroom).  Updated when BreakoutAssign
+    /// arrives from the teacher; consulted by <see cref="IsForMe"/> so
+    /// group-targeted envelopes (Envelope.TargetGroupId set) can be filtered
+    /// at the Service boundary before crossing IPC to the Agent — avoids
+    /// shipping every group-screen frame across IPC just to drop it later.</summary>
+    private Guid? _myRoomId;
+
     private IPEndPoint? _teacherEndpoint;
     private NetworkStream? _teacherStream;
 
@@ -328,7 +336,20 @@ public class ClassroomWorker : BackgroundService
     }
 
     private bool IsForMe(Envelope env)
-        => env.TargetEndpointId == Guid.Empty || env.TargetEndpointId == _endpointId;
+    {
+        // Phase 13-B (Tier 1) — extended for group routing.  Order matters: an
+        // explicit endpoint target always wins (a teacher message addressed to
+        // ONE student in a group is still for that student even if the group
+        // field is set differently).  A group-target match makes the envelope
+        // for-me when I'm currently a member of that group.  An empty
+        // endpoint target with no group target = whole-class broadcast.
+        if (env.TargetEndpointId == _endpointId) return true;
+        if (env.TargetGroupId.HasValue && _myRoomId.HasValue
+            && env.TargetGroupId.Value == _myRoomId.Value) return true;
+        if (env.TargetEndpointId == Guid.Empty
+            && !env.TargetGroupId.HasValue) return true;
+        return false;
+    }
 
     private async Task DispatchAsync(Envelope env, CancellationToken ct)
     {
@@ -411,7 +432,33 @@ public class ClassroomWorker : BackgroundService
 
             case MessageType.BreakoutAssign:
                 if (!IsForMe(env)) return;
-                _logger.LogInformation("Breakout assign received (target={Target})", env.TargetEndpointId);
+                // Phase 13-B (Tier 1) — mirror room state at Service boundary
+                // so the IsForMe filter can drop wrong-group envelopes before
+                // they cross IPC.  Empty RoomId in the payload = returned to
+                // main classroom (= clear _myRoomId).
+                try
+                {
+                    var ba = MessagePack.MessagePackSerializer.Deserialize<BreakoutAssignMessage>(env.Payload);
+                    _myRoomId = ba.RoomId == Guid.Empty ? (Guid?)null : ba.RoomId;
+                    _logger.LogInformation("Breakout assign: roomId={Room} name={Name}", _myRoomId, ba.RoomName);
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "BreakoutAssign decode failed; _myRoomId unchanged"); }
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
+            // Phase 13-B (Tier 1) — group lifecycle / signaling.  All
+            // group-targeted; IsForMe filter relies on _myRoomId mirror above.
+            case MessageType.GroupSnapshot:
+            case MessageType.GroupTeacherJoined:
+            case MessageType.GroupTeacherLeft:
+                // Whole-class informational; everyone sees who teacher joined.
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
+            case MessageType.GroupScreenStreamStart:
+            case MessageType.GroupScreenStreamFrame:
+            case MessageType.GroupScreenStreamStop:
+                if (!IsForMe(env)) return;
                 await _ipc.ForwardToAgentAsync(env, ct);
                 break;
 

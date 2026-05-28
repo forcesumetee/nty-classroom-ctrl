@@ -102,6 +102,58 @@ public class BreakoutHostSetMessage
     [Key(1)] public Guid? HostStudentId { get; set; }
 }
 
+// Phase 13-B step 2 — Tier 1 Breakout Rooms DTOs.  See
+// docs/breakout-rooms-architecture.md §4 and tier1-design.md §3 for the spec.
+
+[MessagePackObject]
+public class GroupDescriptor
+{
+    [Key(0)] public Guid Id { get; set; }
+    [Key(1)] public string Name { get; set; } = "";
+    [Key(2)] public List<Guid> MemberIds { get; set; } = new();
+    [Key(3)] public Guid? HostId { get; set; }
+}
+
+/// <summary>Atomic group-state refresh.  Sent on every mutation and on
+/// Hello-ack to a joining peer (recovery path after teacher restart or late
+/// joiner).  Clients replace their local group view wholesale on receipt;
+/// per-student BreakoutAssign deltas remain for grep-friendly logs but the
+/// snapshot is authoritative.</summary>
+[MessagePackObject]
+public class GroupSnapshotMessage
+{
+    [Key(0)] public List<GroupDescriptor> Groups { get; set; } = new();
+    /// <summary>Which group (if any) the teacher is currently joined to.
+    /// Null = teacher is viewing the whole class.</summary>
+    [Key(1)] public Guid? TeacherJoinedGroupId { get; set; }
+}
+
+[MessagePackObject]
+public class GroupTeacherJoinedMessage
+{
+    [Key(0)] public Guid GroupId { get; set; }
+    [Key(1)] public string GroupName { get; set; } = "";
+}
+
+[MessagePackObject]
+public class GroupTeacherLeftMessage
+{
+    [Key(0)] public Guid GroupId { get; set; }
+}
+
+/// <summary>Carries the start/stop signal for group-targeted teacher screen
+/// share.  Codec is included so the receiver can configure its decoder before
+/// frames arrive (matches the existing whole-class ScreenStreamStart path).
+/// GroupScreenStreamFrame envelopes carry an unchanged ScreenStreamFrameMessage
+/// payload — only the MessageType + Envelope.TargetGroupId differ.</summary>
+[MessagePackObject]
+public class GroupScreenStreamControlMessage
+{
+    [Key(0)] public Guid GroupId { get; set; }
+    [Key(1)] public bool Start { get; set; }
+    [Key(2)] public VideoCodec Codec { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]

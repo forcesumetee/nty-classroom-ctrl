@@ -133,4 +133,16 @@ public enum MessageType : ushort
     QuizAnswerSubmit = 0x0701,  // S→T: student answers
     QuizEnd = 0x0702,           // T→S broadcast: exam ended, unlock everyone
     QuizUnlockEarly = 0x0703,   // T→S targeted: unlock one early
+
+    // Phase 13-B (Tier 1): Breakout Rooms — group lifecycle + teacher join/leave +
+    // group-targeted teacher screen share.  Routes through the existing 4 per-peer
+    // channels (no new transport channel for Tier 1).  Group-state and signaling
+    // ride _reliableOutbox; frame fan-out rides _outbox (same DropOldest cap-16 as
+    // whole-class screen share).  See docs/breakout-rooms-architecture.md §4.
+    GroupSnapshot          = 0x0620,   // T→all, atomic state refresh
+    GroupTeacherJoined     = 0x0621,   // T→all
+    GroupTeacherLeft       = 0x0622,   // T→all
+    GroupScreenStreamStart = 0x0623,   // T→group
+    GroupScreenStreamFrame = 0x0624,   // T→group (reuses ScreenStreamFrameMessage payload)
+    GroupScreenStreamStop  = 0x0625,   // T→group
 }

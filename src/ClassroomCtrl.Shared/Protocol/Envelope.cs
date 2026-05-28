@@ -17,6 +17,19 @@ public class Envelope
     /// </summary>
     [Key(5)] public Guid TargetEndpointId { get; set; } = Guid.Empty;
 
+    /// <summary>
+    /// Phase 13-B (Tier 1) — Optional: when set, the message targets every peer
+    /// whose current breakout-room id matches this value.  Receiver-side
+    /// <c>IsForMe</c> extends to also match this field against the student's
+    /// <c>_myRoomId</c>.  Null (default) = not group-targeted; standard
+    /// TargetEndpointId / broadcast routing applies.
+    ///
+    /// WIRE-COMPAT: this field appended at [Key(6)] (next available index).
+    /// Older clients without this field decode as null on the receiver,
+    /// older receivers reading newer payloads simply ignore the extra key.
+    /// </summary>
+    [Key(6)] public Guid? TargetGroupId { get; set; } = null;
+
     public static Envelope Create(MessageType type, byte[] payload, Guid senderId) => new()
     {
         MessageId = (ulong)Random.Shared.NextInt64(),
@@ -35,6 +48,19 @@ public class Envelope
         SenderId = senderId,
         Payload = payload,
         TargetEndpointId = targetEndpointId,
+    };
+
+    /// <summary>Phase 13-B (Tier 1) — convenience for group-targeted envelopes.
+    /// Receivers route via the new TargetGroupId field + IsForMe extension.</summary>
+    public static Envelope CreateGroupTargeted(MessageType type, byte[] payload, Guid senderId, Guid targetGroupId) => new()
+    {
+        MessageId = (ulong)Random.Shared.NextInt64(),
+        Type = type,
+        TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        SenderId = senderId,
+        Payload = payload,
+        TargetEndpointId = Guid.Empty,
+        TargetGroupId = targetGroupId,
     };
 
     public byte[] Serialize() => MessagePackSerializer.Serialize(this);
