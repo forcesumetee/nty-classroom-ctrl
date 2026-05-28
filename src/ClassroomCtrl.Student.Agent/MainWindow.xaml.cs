@@ -918,11 +918,10 @@ public partial class MainWindow : Window
     // channel was always coupled to the mic broadcaster anyway (Phase 9 C
     // analysis: ToggleVoice auto-started _studentAudio if not running), so
     // the simplification doesn't lose talkback in breakout rooms — the same
-    // mic stream reaches peers in the same room.  RoomVoiceJoin /
-    // RoomVoiceLeave protocol messages remain in MessageType.cs but are no
-    // longer driven from the Agent UI; if a future phase wants per-student
-    // breakout voice opt-in, a different mechanism (auto-on-room-assign or
-    // breakout-toolbar) can re-introduce them.
+    // mic stream reaches peers in the same room.  Phase 13-B step 1 removed the
+    // never-wired RoomVoiceJoin/Leave placeholders entirely; Tier 3 group voice
+    // uses fresh codepoints in the 0x064x range with a dedicated _voiceOutbox
+    // (see docs/breakout-rooms-tier3-design.md).
 
     // Phase 8 Section A — Settings_Click removed at customer request.  The
     // first-run TeacherIPDialog is still launched from App startup when no

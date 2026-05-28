@@ -124,9 +124,9 @@ public enum MessageType : ushort
     MicMonitorStart = 0x0490,
     MicMonitorStop = 0x0491,
 
-    // Phase 9.7: Voice Chat in Breakout Rooms (reuse 0x032F-0x0330)
-    RoomVoiceJoin = 0x032F,
-    RoomVoiceLeave = 0x0330,
+    // Phase 9.7 placeholders RoomVoiceJoin (0x032F) / RoomVoiceLeave (0x0330)
+    // removed in Phase 13-B step 1: never reached production wiring; Tier 3
+    // group voice uses fresh codepoints in 0x064x.
 
     // Phase 13: Exam System (0x0700-0x07FF)
     QuizStart = 0x0700,         // T→S: includes Exam payload + locks student in

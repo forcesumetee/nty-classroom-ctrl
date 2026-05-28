@@ -26,9 +26,6 @@ public class ControlServer : IDisposable
     private Guid? _currentDemoSourceId;
     private string _currentDemoSourceName = "";
 
-    // Phase 9.7: Voice Chat in Breakout Rooms — set of student IDs currently joined to room voice.
-    private readonly HashSet<Guid> _roomVoiceMembers = new();
-
     // Phase 4.6: Live Mic Monitor — students whose audio the teacher is listening to.
     private readonly HashSet<Guid> _micMonitorTargets = new();
 
@@ -870,22 +867,10 @@ public class ControlServer : IDisposable
             case MessageType.StudentAudioStreamFrame:
                 try
                 {
-                    // Phase 9.7: if sender is in room voice → relay to OTHER room members and skip teacher audio mixer.
-                    if (_roomVoiceMembers.Contains(env.SenderId)
-                        && _studentRoomMap.TryGetValue(env.SenderId, out var senderRoom) && senderRoom != null)
-                    {
-                        var roomGuid = senderRoom.Value;
-                        foreach (var kv in _studentRoomMap)
-                        {
-                            if (kv.Key == env.SenderId) continue;
-                            if (kv.Value != roomGuid) continue;
-                            if (!_roomVoiceMembers.Contains(kv.Key)) continue;
-                            var relay = Envelope.CreateTargeted(MessageType.StudentAudioStreamFrame, env.Payload, env.SenderId, kv.Key);
-                            _ = _tcp.BroadcastAsync(relay, CancellationToken.None);
-                        }
-                        break;
-                    }
-
+                    // Phase 13-B step 1: removed Phase 9.7 room-voice relay gate
+                    // (depended on _roomVoiceMembers which was never populated;
+                    //  branch was unreachable).  Tier 3 group voice replaces this
+                    //  with VoiceAudioFrame (0x0640) on a dedicated _voiceOutbox.
                     var audio = MessagePack.MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(env.Payload);
                     StudentAudioFrameReceived?.Invoke(this, (env.SenderId, audio));
                 }
@@ -898,16 +883,6 @@ public class ControlServer : IDisposable
             case MessageType.StudentAudioStreamStop:
                 _logger.LogInformation("Student {Id} mic OFF", env.SenderId);
                 StudentAudioStreamStopped?.Invoke(this, env.SenderId);
-                break;
-
-            case MessageType.RoomVoiceJoin:
-                _roomVoiceMembers.Add(env.SenderId);
-                _logger.LogInformation("Student {Id} joined room voice", env.SenderId);
-                break;
-
-            case MessageType.RoomVoiceLeave:
-                _roomVoiceMembers.Remove(env.SenderId);
-                _logger.LogInformation("Student {Id} left room voice", env.SenderId);
                 break;
 
             // ─────── Phase 8.5: Host action relay ───────

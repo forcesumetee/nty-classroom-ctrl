@@ -76,6 +76,32 @@ public class BreakoutAssignMessage
     [Key(3)] public Guid? HostStudentId { get; set; }
 }
 
+// Phase 13-B step 1 — wire previously-dead Breakout messages so the protocol
+// stays grep-friendly (atomic refresh still rides GroupSnapshot in Tier 1;
+// these explicit deltas just make logs/audits useful).
+
+[MessagePackObject]
+public class BreakoutCreateMessage
+{
+    [Key(0)] public Guid GroupId { get; set; }
+    [Key(1)] public string Name { get; set; } = "";
+}
+
+[MessagePackObject]
+public class BreakoutDissolveMessage
+{
+    /// <summary>Dissolve a specific group; if empty, dissolve all.</summary>
+    [Key(0)] public Guid GroupId { get; set; }
+}
+
+[MessagePackObject]
+public class BreakoutHostSetMessage
+{
+    [Key(0)] public Guid GroupId { get; set; }
+    /// <summary>Null = clear host.</summary>
+    [Key(1)] public Guid? HostStudentId { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]
