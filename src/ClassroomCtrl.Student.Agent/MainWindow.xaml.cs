@@ -470,6 +470,9 @@ public partial class MainWindow : Window
                 try
                 {
                     var mp = MessagePack.MessagePackSerializer.Deserialize<MoviePlayMessage>(env.Payload);
+                    // Phase 10.20 — was silent catch; now logged so future
+                    // Net Movie failures show up in agent-debug.log.
+                    IpcClient.LogToFile($"[MainWindow] MoviePlay received: file='{mp.FileName}' seek={mp.SeekTime} playAtMs={mp.PlayAtTimestampMs}");
                     Dispatcher.Invoke(() =>
                     {
                         if (_movieWindow == null)
@@ -481,28 +484,40 @@ public partial class MainWindow : Window
                         _movieWindow.Play(mp.FileName, mp.SeekTime, mp.PlayAtTimestampMs);
                     });
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] MoviePlay handler threw: {ex.GetType().Name}: {ex.Message}");
+                }
                 break;
 
             case MessageType.MoviePause:
                 try
                 {
                     var ms = MessagePack.MessagePackSerializer.Deserialize<MovieSeekMessage>(env.Payload);
+                    IpcClient.LogToFile($"[MainWindow] MoviePause received: seek={ms.SeekTime}");
                     Dispatcher.Invoke(() => _movieWindow?.Pause(ms.SeekTime));
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] MoviePause handler threw: {ex.GetType().Name}: {ex.Message}");
+                }
                 break;
 
             case MessageType.MovieSeek:
                 try
                 {
                     var ms = MessagePack.MessagePackSerializer.Deserialize<MovieSeekMessage>(env.Payload);
+                    IpcClient.LogToFile($"[MainWindow] MovieSeek received: seek={ms.SeekTime}");
                     Dispatcher.Invoke(() => _movieWindow?.Seek(ms.SeekTime));
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] MovieSeek handler threw: {ex.GetType().Name}: {ex.Message}");
+                }
                 break;
 
             case MessageType.MovieStop:
+                IpcClient.LogToFile("[MainWindow] MovieStop received");
                 Dispatcher.Invoke(() =>
                 {
                     _movieWindow?.StopPlay();

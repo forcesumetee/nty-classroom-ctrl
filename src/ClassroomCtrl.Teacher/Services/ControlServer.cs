@@ -673,6 +673,13 @@ public class ControlServer : IDisposable
         var size = fileInfo.Length;
         var chunkCount = (int)((size + ChunkSize - 1) / ChunkSize);
 
+        // Phase 10.20 — Net Movie investigation showed the Serilog _logger output
+        // landed in %PROGRAMDATA%\NTY\ClassroomCtrl\logs\teacher-*.log and the dev
+        // was checking %TEMP%\teacher-debug.log instead, so the entire feature
+        // looked silent.  Mirror the milestones to App.LogDebug so future
+        // investigators see the activity in either log file.
+        App.LogDebug($"[BroadcastFile] start: file='{fileName}' size={size} chunks={chunkCount} transferId={transferId}");
+
         string sha256Hex;
         using (var fs = File.OpenRead(filePath))
         using (var sha = SHA256.Create())
@@ -694,6 +701,7 @@ public class ControlServer : IDisposable
         await _tcp.BroadcastAsync(Envelope.Create(MessageType.FileAnnounce, announceBytes, _teacherId), ct);
         _logger.LogInformation("File announce: {Name} ({Size} bytes, {Chunks} chunks)",
             fileName, size, chunkCount);
+        App.LogDebug($"[BroadcastFile] FileAnnounce sent: sha256={sha256Hex[..16]}...");
 
         using (var fs = File.OpenRead(filePath))
         {
@@ -721,6 +729,7 @@ public class ControlServer : IDisposable
         var completeBytes = MessagePack.MessagePackSerializer.Serialize(complete);
         await _tcp.BroadcastAsync(Envelope.Create(MessageType.FileComplete, completeBytes, _teacherId), ct);
         _logger.LogInformation("File transfer complete: {Name}", fileName);
+        App.LogDebug($"[BroadcastFile] complete: file='{fileName}' chunksSent={chunkCount}");
     }
 
     private void OnMessage(object? sender, Envelope env)
