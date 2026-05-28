@@ -386,12 +386,16 @@ public class ControlServer : IDisposable
         return _tcp.BroadcastAsync(env, ct);
     }
 
-    /// <summary>Send a single audio frame to all students.</summary>
+    /// <summary>Send a single audio frame to all students.
+    /// Phase 11-C — routed through the dedicated audio channel (separate from
+    /// the lossy video queue) so a 20 FPS H.264 burst can't evict un-played
+    /// audio.  See <see cref="TcpControlServer.BroadcastAudioAsync"/> for the
+    /// queue-policy rationale.</summary>
     public Task BroadcastAudioFrameAsync(AudioStreamFrameMessage frame, CancellationToken ct)
     {
         var bytes = MessagePack.MessagePackSerializer.Serialize(frame);
         var env = Envelope.Create(MessageType.AudioStreamFrame, bytes, _teacherId);
-        return _tcp.BroadcastAsync(env, ct);
+        return _tcp.BroadcastAudioAsync(env, ct);
     }
 
     // ─────── Phase 4 Part 3c: Master mute ───────

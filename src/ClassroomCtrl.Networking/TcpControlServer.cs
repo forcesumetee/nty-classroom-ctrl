@@ -153,6 +153,24 @@ public class TcpControlServer : ITransport
     }
 
     /// <summary>
+    /// Phase 11-C — broadcast a screen-share audio frame to every peer via the
+    /// dedicated audio channel (3-deep, DropOldest).  Same fan-out shape as
+    /// <see cref="BroadcastAsync"/> but each peer's <c>EnqueueAudioOrDrop</c>
+    /// pushes into its own audio queue, not the lossy video queue.  This is the
+    /// 11-C structural fix for the stutter+desync symptom: audio is no longer
+    /// evicted by 20 FPS H.264 video bursts on the shared queue.
+    /// </summary>
+    public Task BroadcastAudioAsync(Envelope env, CancellationToken ct)
+    {
+        var bytes = env.Serialize();
+        foreach (var p in _peers.Values)
+        {
+            p.EnqueueAudioOrDrop(bytes);
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Phase 10.21 — reliable per-peer broadcast for file chunks (and any
     /// other traffic where dropping a frame corrupts state).  Fans out the
     /// serialized envelope to every peer's reliable channel; each peer's
@@ -209,6 +227,23 @@ internal class PeerConnection : IDisposable
     /// </summary>
     private const int ReliableQueueCapacity = 4;
 
+    /// <summary>
+    /// Phase 11-C — third per-peer channel, exclusively for screen-share audio
+    /// frames.  Cap of 3 ≈ 300 ms at 100 ms/frame.  DropOldest semantics:
+    /// in normal operation the writer drains this queue near-instantly (audio
+    /// is ~32 KB/s) so it sits near-empty, effectively lossless; if a peer's
+    /// TCP write stalls, dropping audio older than ~300 ms is correct because
+    /// stale audio is musically worthless — skip ahead beats holding silence.
+    /// CRUCIALLY: this is separate from <see cref="_outbox"/>, so a burst of
+    /// 20 FPS H.264 video frames can no longer evict un-played audio (the
+    /// inc4-introduced regression behind the 11-C stutter+desync symptom).
+    /// We deliberately do NOT use <see cref="_reliableOutbox"/> for audio —
+    /// FullMode.Wait there would back-pressure the audio pump to the slowest
+    /// student, making every student stutter.  Audio wants its own drop-stale
+    /// channel, not the file-transfer channel's drop-nothing semantics.
+    /// </summary>
+    private const int AudioQueueCapacity = 3;
+
     private readonly Guid _id;
     private readonly TcpClient _client;
     private readonly TcpControlServer _server;
@@ -219,6 +254,8 @@ internal class PeerConnection : IDisposable
     private readonly Channel<byte[]> _outbox;
     // Phase 10.21 — second outbound queue for reliable traffic.
     private readonly Channel<byte[]> _reliableOutbox;
+    // Phase 11-C — third outbound queue for audio (drop-stale, separate from video).
+    private readonly Channel<byte[]> _audioOutbox;
     private readonly Task _writerTask;
     private readonly CancellationTokenSource _connCts = new();
 
@@ -255,6 +292,15 @@ internal class PeerConnection : IDisposable
             SingleReader = true,
             SingleWriter = false,
         });
+        // Phase 11-C — audio gets its own bounded DropOldest channel so a
+        // 20 FPS H.264 burst can't push un-played audio out of the queue.
+        // See the AudioQueueCapacity comment for the policy rationale.
+        _audioOutbox = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(AudioQueueCapacity)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = true,
+            SingleWriter = false,
+        });
         _writerTask = Task.Run(() => WriterLoopAsync(_connCts.Token));
     }
 
@@ -266,6 +312,23 @@ internal class PeerConnection : IDisposable
     /// </summary>
     public ValueTask EnqueueReliableAsync(byte[] body, CancellationToken ct)
         => _reliableOutbox.Writer.WriteAsync(body, ct);
+
+    /// <summary>
+    /// Phase 11-C — non-blocking enqueue for audio frames.  Backed by a 3-deep
+    /// DropOldest channel separate from <see cref="_outbox"/>, so a video burst
+    /// can't push un-played audio frames out of the queue.  When this channel
+    /// is full (a peer's TCP write is genuinely stalled), the oldest queued
+    /// audio frame is evicted — the right behavior because stale audio is
+    /// musically worthless: skip ahead to "now" beats holding a 3-second
+    /// silence-gap behind a backlog.
+    /// </summary>
+    public void EnqueueAudioOrDrop(byte[] body)
+    {
+        // Same shape as EnqueueOrDrop — TryWrite returns false only when the
+        // channel is Complete()d (i.e. teardown).  Under DropOldest a full
+        // channel still accepts the write (and evicts the oldest item).
+        _audioOutbox.Writer.TryWrite(body);
+    }
 
     public async Task RunAsync(CancellationToken ct)
     {
@@ -355,27 +418,41 @@ internal class PeerConnection : IDisposable
 
     private async Task WriterLoopAsync(CancellationToken ct)
     {
-        // Phase 10.21 — drains both _reliableOutbox (priority) and _outbox
-        // (best-effort).  Wait until either channel has data, then drain all
-        // ready reliable items before processing one lossy item.  Reliable
-        // never starves lossy because we always advance one lossy item per
-        // outer iteration once reliable is empty.  Teardown is signalled by
-        // _connCts.Cancel() in Dispose, which trips the OperationCanceledException
-        // catch below — we don't need to detect channel completion separately.
+        // Phase 10.21 — drains _reliableOutbox (priority) and _outbox
+        // (best-effort).  Reliable never starves lossy because we always
+        // advance one lossy item per outer iteration once reliable is empty.
+        // Phase 11-C — third tier added between them: _audioOutbox.  Audio
+        // is small (3 KB/frame), latency-critical, and capped at 3 frames,
+        // so draining ALL queued audio per iteration is at most ~9 KB total
+        // and finishes in microseconds — it cannot starve video.  Order:
+        //   1. ALL reliable (file chunks — must arrive).
+        //   2. ALL audio   (latency-critical, ~9 KB max per iteration).
+        //   3. ONE lossy   (screen-share video — drop-old semantics already
+        //                   handled by _outbox itself).
+        // Teardown is signalled by _connCts.Cancel() in Dispose, which trips
+        // the OperationCanceledException catch below.
         try
         {
             while (!ct.IsCancellationRequested)
             {
                 var reliableWait = _reliableOutbox.Reader.WaitToReadAsync(ct).AsTask();
-                var lossyWait = _outbox.Reader.WaitToReadAsync(ct).AsTask();
-                await Task.WhenAny(reliableWait, lossyWait);
+                var audioWait    = _audioOutbox.Reader.WaitToReadAsync(ct).AsTask();
+                var lossyWait    = _outbox.Reader.WaitToReadAsync(ct).AsTask();
+                await Task.WhenAny(reliableWait, audioWait, lossyWait);
 
-                // Priority drain: ALL ready reliable items first.
+                // Priority 1 — ALL ready reliable items.
                 while (_reliableOutbox.Reader.TryRead(out var rbody))
                 {
                     if (!await TryWriteFrameAsync(rbody, ct)) return;
                 }
-                // Then ONE lossy item, so reliable can't starve screen-share.
+                // Priority 2 — ALL ready audio items.  Cap=3 bounds this loop;
+                // video can't be starved.
+                while (_audioOutbox.Reader.TryRead(out var abody))
+                {
+                    if (!await TryWriteFrameAsync(abody, ct)) return;
+                }
+                // Priority 3 — ONE lossy (video) item.  Keeps reliable/audio
+                // from starving the screen-share stream.
                 if (_outbox.Reader.TryRead(out var lbody))
                 {
                     if (!await TryWriteFrameAsync(lbody, ct)) return;
@@ -433,6 +510,7 @@ internal class PeerConnection : IDisposable
         try { _connCts.Cancel(); } catch { }
         try { _outbox.Writer.TryComplete(); } catch { }
         try { _reliableOutbox.Writer.TryComplete(); } catch { }
+        try { _audioOutbox.Writer.TryComplete(); } catch { }
         try { _client.Dispose(); } catch { }
     }
 }

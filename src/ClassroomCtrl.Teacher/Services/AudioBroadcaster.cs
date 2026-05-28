@@ -21,6 +21,19 @@ namespace ClassroomCtrl.Teacher.Services;
 ///                                              ├→ MixingSampleProvider (16 kHz mono float)
 ///   Loopback (native rate → 16 kHz mono)     ┘
 ///   → 100 ms read (1600 samples) → PCM 16-bit → TCP broadcast.
+///
+/// Phase 11-C v2 Step 1 — data-driven pump.  The original pump woke on a fixed
+/// <c>Task.Delay(100ms)</c> while reading 100 ms of mixer time per tick.  Under
+/// CPU load each tick ran &gt; 100 ms wall, so the pump consumed audio slower
+/// than the WASAPI capture sources produced it; the 2-second capture
+/// BufferedWaveProvider saturated and the emitted audio fell ~2 s behind real
+/// time (confirmed empirically by a pause-test: audio kept playing ~3 s after
+/// the source stopped, independent of video codec).  The pump is now woken by
+/// the capture clock itself — mic/loopback <c>DataAvailable</c> events
+/// <c>Release</c> a SemaphoreSlim — and drains every full 100 ms frame already
+/// buffered before going back to wait, so production tracks real wall-clock
+/// time and stops drifting under load.  Capture buffer cap dropped 2 s → 300 ms
+/// so it physically cannot hold seconds of stale audio.
 /// </summary>
 public class AudioBroadcaster : IDisposable
 {
@@ -28,11 +41,27 @@ public class AudioBroadcaster : IDisposable
     private readonly ControlServer _server;
     private readonly object _stateLock = new();
 
+    /// <summary>Phase 11-C v2 Step 1 — bound on the capture-side
+    /// BufferedWaveProvider depth.  Picked to be ~3× one frame so a transient
+    /// pump stall doesn't immediately overflow, but well under the 2-second
+    /// limit that allowed seconds of stale audio under the timer-based pump.
+    /// If the data-driven pump is healthy, steady-state depth oscillates close
+    /// to 0; a sustained value near this cap indicates the pump can't keep up
+    /// (CPU-bound or downstream stall — a different bug to investigate).</summary>
+    private const int CaptureBufferCapMs = 300;
+
     // Pump state
     private CancellationTokenSource? _cts;
     private Task? _pumpTask;
     private MixingSampleProvider? _mixer;
     private int _frameSeq;
+    /// <summary>Phase 11-C v2 Step 1 — signaled by capture-source
+    /// <c>DataAvailable</c> handlers; awaited by the pump loop in place of the
+    /// old <c>Task.Delay(100ms)</c>.  Capacity 1 because the pump drains
+    /// all available frames per wake — extra signals while draining are
+    /// redundant and harmlessly swallowed by the TryRelease-and-ignore
+    /// pattern in <see cref="SignalCaptureLocked"/>.</summary>
+    private SemaphoreSlim? _captureSignal;
 
     // Mic source
     private WaveInEvent? _micCapture;
@@ -124,24 +153,42 @@ public class AudioBroadcaster : IDisposable
         _frameSeq = 0;
         var fmt = WaveFormat.CreateIeeeFloatWaveFormat(TargetSampleRate, TargetChannels);
         _mixer = new MixingSampleProvider(fmt) { ReadFully = true };
+        // Phase 11-C v2 Step 1 — capture-clock signal.  Initial count 0:
+        // pump blocks until a source delivers data.
+        _captureSignal = new SemaphoreSlim(0, 1);
         _ = _server.BroadcastAudioStreamControlAsync(start: true, _cts.Token);
         _pumpTask = Task.Run(() => PumpLoopAsync(_cts.Token));
-        _logger.LogInformation("Audio pump started ({Rate}Hz mono PCM, {Ms}ms frames)",
-            TargetSampleRate, FrameDurationMs);
+        _logger.LogInformation("Audio pump started ({Rate}Hz mono PCM, {Ms}ms frames, capture cap={Cap}ms)",
+            TargetSampleRate, FrameDurationMs, CaptureBufferCapMs);
     }
 
     private void StopPumpLocked()
     {
         _cts?.Cancel();
+        // Wake the pump out of its semaphore wait so cancellation takes effect
+        // immediately.  Safe because the wait observes the cancellation token.
+        try { _captureSignal?.Release(); } catch (SemaphoreFullException) { }
         try { _pumpTask?.Wait(2000); } catch { }
         _pumpTask = null;
 
         RemoveMicLocked();
         RemoveLoopbackLocked();
         _mixer = null;
+        _captureSignal?.Dispose();
+        _captureSignal = null;
 
         _ = _server.BroadcastAudioStreamControlAsync(start: false, CancellationToken.None);
         _logger.LogInformation("Audio pump stopped (sent {Frames} frames)", _frameSeq);
+    }
+
+    /// <summary>Phase 11-C v2 Step 1 — invoked from capture <c>DataAvailable</c>
+    /// handlers.  TryRelease + swallow SemaphoreFullException: if the pump is
+    /// already pending a wake, redundant signals are harmless (the pump drains
+    /// every full frame already buffered on each wake, so an extra signal
+    /// during a drain would just no-op the next wait).</summary>
+    private void SignalCapture()
+    {
+        try { _captureSignal?.Release(); } catch (SemaphoreFullException) { }
     }
 
     private void AddMicLocked()
@@ -158,10 +205,18 @@ public class AudioBroadcaster : IDisposable
             _micCapture = new WaveInEvent { WaveFormat = fmt, BufferMilliseconds = 50 };
             _micBuffer = new BufferedWaveProvider(fmt)
             {
-                BufferDuration = TimeSpan.FromSeconds(2),
+                // Phase 11-C v2 Step 1 — 300 ms cap (was 2 s).  A healthy
+                // data-driven pump keeps depth near 0; this cap exists only as
+                // a safety bound against the catastrophic "audio falls seconds
+                // behind real time" failure mode the old timer pump produced.
+                BufferDuration = TimeSpan.FromMilliseconds(CaptureBufferCapMs),
                 DiscardOnBufferOverflow = true,
             };
-            _micCapture.DataAvailable += (_, e) => _micBuffer?.AddSamples(e.Buffer, 0, e.BytesRecorded);
+            _micCapture.DataAvailable += (_, e) =>
+            {
+                _micBuffer?.AddSamples(e.Buffer, 0, e.BytesRecorded);
+                SignalCapture();
+            };
             _micMixerInput = new VolumeSampleProvider(_micBuffer.ToSampleProvider()) { Volume = 0.5f };
             _mixer!.AddMixerInput(_micMixerInput);
             _micCapture.StartRecording();
@@ -199,10 +254,18 @@ public class AudioBroadcaster : IDisposable
             var native = _loopbackCapture.WaveFormat;
             _loopbackBuffer = new BufferedWaveProvider(native)
             {
-                BufferDuration = TimeSpan.FromSeconds(2),
+                // Phase 11-C v2 Step 1 — same 300 ms safety cap as the mic
+                // path.  WASAPI loopback fires DataAvailable roughly every
+                // 10 ms with native-rate chunks, so 30 callbacks worth of
+                // headroom is plenty against transient pump latency.
+                BufferDuration = TimeSpan.FromMilliseconds(CaptureBufferCapMs),
                 DiscardOnBufferOverflow = true,
             };
-            _loopbackCapture.DataAvailable += (_, e) => _loopbackBuffer?.AddSamples(e.Buffer, 0, e.BytesRecorded);
+            _loopbackCapture.DataAvailable += (_, e) =>
+            {
+                _loopbackBuffer?.AddSamples(e.Buffer, 0, e.BytesRecorded);
+                SignalCapture();
+            };
 
             ISampleProvider sp = _loopbackBuffer.ToSampleProvider();
             if (sp.WaveFormat.Channels > 1) sp = sp.ToMono();
@@ -247,12 +310,31 @@ public class AudioBroadcaster : IDisposable
         {
             try
             {
+                // Phase 11-C v2 Step 1 — wait for the capture clock instead of
+                // a fixed Task.Delay.  Capture DataAvailable handlers release
+                // the semaphore as soon as new audio is buffered; we wake,
+                // drain every full frame that's already ready, then go back to
+                // wait.  The 200 ms timeout is a safety net: it lets the loop
+                // periodically observe cancellation and re-evaluate even if
+                // signaling somehow gets dropped (or all sources go silent in
+                // a way that suppresses DataAvailable on some hardware), but
+                // it does NOT pace production — the capture clock does.
+                try { await _captureSignal!.WaitAsync(200, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { break; }
+
                 var mixer = _mixer;
                 if (mixer == null) break;
 
-                int read = mixer.Read(sampleBuf, 0, SamplesPerFrame);
-                if (read > 0)
+                // Drain every full 100 ms frame ALL active sources have
+                // already produced.  A burst of catch-up samples is emitted
+                // immediately rather than dribbled over 10 timer ticks, which
+                // is the property that makes the pump track real time under
+                // load instead of cumulatively slipping behind it.
+                while (!ct.IsCancellationRequested && HasFullFrameBuffered())
                 {
+                    int read = mixer.Read(sampleBuf, 0, SamplesPerFrame);
+                    if (read <= 0) break;
+
                     int byteCount = read * 2;
                     for (int i = 0; i < read; i++)
                     {
@@ -288,10 +370,38 @@ public class AudioBroadcaster : IDisposable
             {
                 _logger.LogWarning(ex, "Audio pump frame failed");
             }
-
-            try { await Task.Delay(FrameDurationMs, ct); }
-            catch (OperationCanceledException) { break; }
         }
+    }
+
+    /// <summary>Phase 11-C v2 Step 1 — true when every currently-active capture
+    /// source has buffered at least one full 100 ms frame.  The pump uses this
+    /// to drain catch-up bursts in one wake rather than across many ticks, and
+    /// to avoid reading silence-padded frames from the mixer (which would let
+    /// the timer drift back in through the back door).  Reads volatile
+    /// references without the state lock: a brief race with Remove*Locked
+    /// nulling a buffer is benign because BufferedDuration is safe to query on
+    /// a live BufferedWaveProvider and the next call will observe the null.</summary>
+    private bool HasFullFrameBuffered()
+    {
+        bool any = false;
+        double minMs = double.MaxValue;
+
+        if (_micEnabled)
+        {
+            var buf = _micBuffer;
+            if (buf == null) return false;
+            minMs = Math.Min(minMs, buf.BufferedDuration.TotalMilliseconds);
+            any = true;
+        }
+        if (_systemAudioEnabled)
+        {
+            var buf = _loopbackBuffer;
+            if (buf == null) return false;
+            minMs = Math.Min(minMs, buf.BufferedDuration.TotalMilliseconds);
+            any = true;
+        }
+
+        return any && minMs >= FrameDurationMs;
     }
 
     public void Dispose()
