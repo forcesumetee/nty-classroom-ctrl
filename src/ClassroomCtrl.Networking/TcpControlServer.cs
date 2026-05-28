@@ -152,6 +152,35 @@ public class TcpControlServer : ITransport
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Phase 10.21 — reliable per-peer broadcast for file chunks (and any
+    /// other traffic where dropping a frame corrupts state).  Fans out the
+    /// serialized envelope to every peer's reliable channel; each peer's
+    /// channel is FullMode.Wait, so when the slowest peer's writer task can't
+    /// keep up the producer awaits on that peer rather than losing chunks.
+    /// Producer therefore runs at the slowest peer's TCP-drain rate.  Acceptable
+    /// for a one-off file send; would not be acceptable for hot screen-share
+    /// frames (which is why <see cref="BroadcastAsync"/> stays DropOldest).
+    /// </summary>
+    public async Task BroadcastReliableAsync(Envelope env, CancellationToken ct)
+    {
+        var bytes = env.Serialize();
+        // Snapshot the peer list — concurrent connect/disconnect during a long
+        // file send is fine; new peers miss this frame (they weren't here when
+        // it was broadcast), departed peers are no-ops on the await.
+        var snapshot = _peers.Values.ToArray();
+        foreach (var p in snapshot)
+        {
+            try { await p.EnqueueReliableAsync(bytes, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex,
+                    "Reliable enqueue failed for peer {Id}; continuing with remaining peers.",
+                    p.Id);
+            }
+        }
+    }
+
     public void Dispose()
     {
         _cts?.Cancel();
@@ -170,6 +199,16 @@ internal class PeerConnection : IDisposable
     /// </summary>
     private const int QueueCapacity = 16;
 
+    /// <summary>
+    /// Phase 10.21 — separate channel for must-arrive traffic (file chunks).
+    /// Kept small on purpose: a larger buffer just defers the back-pressure
+    /// signal without giving more headroom — the bottleneck is socket drain
+    /// rate, not in-memory queueing.  FullMode.Wait makes the producer await
+    /// when full, so file chunks back up at the producer rather than getting
+    /// silently dropped (which is what corrupted Net Movie pre-10.21).
+    /// </summary>
+    private const int ReliableQueueCapacity = 4;
+
     private readonly Guid _id;
     private readonly TcpClient _client;
     private readonly TcpControlServer _server;
@@ -178,8 +217,13 @@ internal class PeerConnection : IDisposable
 
     // Fix 8 — outbound work queue + dedicated writer task.
     private readonly Channel<byte[]> _outbox;
+    // Phase 10.21 — second outbound queue for reliable traffic.
+    private readonly Channel<byte[]> _reliableOutbox;
     private readonly Task _writerTask;
     private readonly CancellationTokenSource _connCts = new();
+
+    /// <summary>Phase 10.21 — exposed so BroadcastReliableAsync can log per-peer failures.</summary>
+    public Guid Id => _id;
 
     // Fix 8 — count of frames dropped due to queue overflow.  Logged in a
     // throttled way so a flapping student doesn't drown the log.
@@ -205,8 +249,23 @@ internal class PeerConnection : IDisposable
             SingleReader = true,
             SingleWriter = false,
         });
+        _reliableOutbox = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(ReliableQueueCapacity)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = false,
+        });
         _writerTask = Task.Run(() => WriterLoopAsync(_connCts.Token));
     }
+
+    /// <summary>
+    /// Phase 10.21 — back-pressured enqueue for must-arrive frames.  Awaits
+    /// when the reliable channel is full so producers (BroadcastFileAsync) are
+    /// rate-limited to the slowest peer's drain rate instead of dropping
+    /// chunks on the floor.
+    /// </summary>
+    public ValueTask EnqueueReliableAsync(byte[] body, CancellationToken ct)
+        => _reliableOutbox.Writer.WriteAsync(body, ct);
 
     public async Task RunAsync(CancellationToken ct)
     {
@@ -296,25 +355,30 @@ internal class PeerConnection : IDisposable
 
     private async Task WriterLoopAsync(CancellationToken ct)
     {
+        // Phase 10.21 — drains both _reliableOutbox (priority) and _outbox
+        // (best-effort).  Wait until either channel has data, then drain all
+        // ready reliable items before processing one lossy item.  Reliable
+        // never starves lossy because we always advance one lossy item per
+        // outer iteration once reliable is empty.  Teardown is signalled by
+        // _connCts.Cancel() in Dispose, which trips the OperationCanceledException
+        // catch below — we don't need to detect channel completion separately.
         try
         {
-            await foreach (var body in _outbox.Reader.ReadAllAsync(ct))
+            while (!ct.IsCancellationRequested)
             {
-                try
+                var reliableWait = _reliableOutbox.Reader.WaitToReadAsync(ct).AsTask();
+                var lossyWait = _outbox.Reader.WaitToReadAsync(ct).AsTask();
+                await Task.WhenAny(reliableWait, lossyWait);
+
+                // Priority drain: ALL ready reliable items first.
+                while (_reliableOutbox.Reader.TryRead(out var rbody))
                 {
-                    var len = new byte[4];
-                    BinaryPrimitives.WriteInt32BigEndian(len, body.Length);
-                    await _stream.WriteAsync(len, ct);
-                    await _stream.WriteAsync(body, ct);
-                    await _stream.FlushAsync(ct);
+                    if (!await TryWriteFrameAsync(rbody, ct)) return;
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                // Then ONE lossy item, so reliable can't starve screen-share.
+                if (_outbox.Reader.TryRead(out var lbody))
                 {
-                    _logger.LogWarning(ex, "Peer {Id} write failed; closing connection", _id);
-                    // Cancel our scope so the read loop unblocks and the peer is
-                    // torn down through HandleDisconnect.
-                    try { _connCts.Cancel(); } catch { }
-                    break;
+                    if (!await TryWriteFrameAsync(lbody, ct)) return;
                 }
             }
         }
@@ -325,6 +389,30 @@ internal class PeerConnection : IDisposable
         if (dropped > 0)
         {
             _logger.LogWarning("Peer {Id} writer exited; total dropped frames: {Dropped}", _id, dropped);
+        }
+    }
+
+    /// <summary>
+    /// Phase 10.21 — extracted from WriterLoopAsync so reliable and lossy
+    /// paths share identical framing + error handling.  Returns false when
+    /// the connection has been torn down and the writer loop should exit.
+    /// </summary>
+    private async Task<bool> TryWriteFrameAsync(byte[] body, CancellationToken ct)
+    {
+        try
+        {
+            var len = new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(len, body.Length);
+            await _stream.WriteAsync(len, ct);
+            await _stream.WriteAsync(body, ct);
+            await _stream.FlushAsync(ct);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Peer {Id} write failed; closing connection", _id);
+            try { _connCts.Cancel(); } catch { }
+            return false;
         }
     }
 
@@ -344,6 +432,7 @@ internal class PeerConnection : IDisposable
     {
         try { _connCts.Cancel(); } catch { }
         try { _outbox.Writer.TryComplete(); } catch { }
+        try { _reliableOutbox.Writer.TryComplete(); } catch { }
         try { _client.Dispose(); } catch { }
     }
 }

@@ -195,6 +195,16 @@ public class MoviePlayMessage
     public string FileName { get; set; } = "";
     public double SeekTime { get; set; }
     public long PlayAtTimestampMs { get; set; }
+    /// <summary>
+    /// Phase 10.21 — total file size in bytes, carried so the student's player
+    /// can gate playback on size match (defence-in-depth against a partial file
+    /// somehow being exposed despite the atomic .part/rename in FileReceiver).
+    /// Default 0 keeps the field backward-compatible: an older student build
+    /// that doesn't read this field still plays whatever's on disk, same as
+    /// today.  A newer student build treats 0 as "no check, fall back to
+    /// existence-only" so a teacher that hasn't been upgraded still works.
+    /// </summary>
+    public long ExpectedFileSizeBytes { get; set; }
 }
 
 [MessagePackObject(true)]

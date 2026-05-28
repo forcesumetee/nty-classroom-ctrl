@@ -1,4 +1,5 @@
-﻿using System;
+using ClassroomCtrl.Shared;
+using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -21,27 +22,48 @@ public partial class MoviePlayerWindow : Window
     }
 
     /// <summary>
-    /// Phase 10.20 — file path the player looks at for incoming Net Movie content.
-    /// Must match where <c>Student.Service.Modules.FileReceiver.Complete</c> actually
-    /// writes the file.  Phase 10.13 moved the FileReceiver destination from
-    /// <c>%PUBLIC%\Documents\Classroom\</c> to <c>%USERPROFILE%\Desktop\ClassroomFiles\</c>
-    /// (Service runs in user session since Phase 10.9), but this player was never
-    /// updated to match — the resulting File.Exists check always failed, the player
-    /// set "Waiting for..." once and returned, and there was no recovery path.
+    /// Phase 10.21 — path now comes from the single shared constant in
+    /// <see cref="StoragePaths"/>, used by both this reader and the
+    /// FileReceiver writer.  Phase 10.20 fixed the immediate path mismatch
+    /// (Desktop\ClassroomFiles vs %PUBLIC%\Documents\Classroom) by duplicating
+    /// the new path here, which was the exact tech-debt that caused the
+    /// original bug; 10.21 closes that hole by routing both ends through one
+    /// definition.  As a bonus the new location (%LOCALAPPDATA%) is local and
+    /// not OneDrive-redirected, so M365 school PCs no longer upload teacher
+    /// videos to the student's cloud.
     /// </summary>
     private static string GetExpectedFilePath(string fileName)
-    {
-        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-        return Path.Combine(desktop, "ClassroomFiles", fileName);
-    }
+        => StoragePaths.GetNetMovieFilePath(fileName);
 
-    public void Play(string fileName, double seekTime, long playAtUtcMs)
+    public void Play(string fileName, double seekTime, long playAtUtcMs, long expectedSizeBytes)
     {
         var path = GetExpectedFilePath(fileName);
         IpcClient.LogToFile($"[MoviePlayer] Play request: fileName='{fileName}' " +
-            $"seekTime={seekTime} playAtMs={playAtUtcMs} expectedPath='{path}'");
+            $"seekTime={seekTime} playAtMs={playAtUtcMs} expectedSize={expectedSizeBytes} expectedPath='{path}'");
 
-        if (!File.Exists(path))
+        // Phase 10.21 — gate playback on existence AND size match.  Atomic .part
+        // rename in FileReceiver should already mean the file is fully written
+        // before it appears under the final name, but a size mismatch (e.g. an
+        // older Service build still using non-atomic write, or a stale leftover
+        // from a previous transfer with the same name) would otherwise produce
+        // a "plays first third then freezes" experience identical to the
+        // pre-10.21 bug.  Belt-and-suspenders with the atomic rename.
+        bool ready = File.Exists(path);
+        long actualSize = 0;
+        if (ready)
+        {
+            try { actualSize = new FileInfo(path).Length; }
+            catch { actualSize = 0; }
+            if (expectedSizeBytes > 0 && actualSize != expectedSizeBytes)
+            {
+                IpcClient.LogToFile(
+                    $"[MoviePlayer] Size mismatch (have {actualSize}, expected {expectedSizeBytes}); " +
+                    "treating as not-yet-ready and waiting.");
+                ready = false;
+            }
+        }
+
+        if (!ready)
         {
             // Phase 10.20 — race-safe waiting + 30 s timeout.  Previously the
             // overlay was set once and the function returned; nothing ever polled
@@ -51,7 +73,7 @@ public partial class MoviePlayerWindow : Window
             // playback path runs.  On timeout we replace the overlay with a
             // user-actionable error.
             StatusText.Text = $"Waiting for {fileName}... (0 s / 30 s)";
-            StartWaitingForFile(fileName, seekTime, playAtUtcMs, path);
+            StartWaitingForFile(fileName, seekTime, playAtUtcMs, expectedSizeBytes, path);
             return;
         }
 
@@ -98,7 +120,7 @@ public partial class MoviePlayerWindow : Window
             }
             else { startPlayback(); }
             StatusText.Text = "";
-            IpcClient.LogToFile($"[MoviePlayer] Playback armed: path='{path}' delayMs={delayMs}");
+            IpcClient.LogToFile($"[MoviePlayer] Playback armed: path='{path}' size={actualSize} delayMs={delayMs}");
         }
         catch (Exception ex)
         {
@@ -111,7 +133,7 @@ public partial class MoviePlayerWindow : Window
     /// Phase 10.20 — kick off the per-200ms polling timer that waits for the file
     /// to land at the expected path.  Disposes any prior wait first.  See Play().
     /// </summary>
-    private void StartWaitingForFile(string fileName, double seekTime, long playAtUtcMs, string expectedPath)
+    private void StartWaitingForFile(string fileName, double seekTime, long playAtUtcMs, long expectedSizeBytes, string expectedPath)
     {
         StopWaiting();
         _waitTicks = 0;
@@ -119,20 +141,32 @@ public partial class MoviePlayerWindow : Window
         _waitTimer.Tick += (_, _) =>
         {
             _waitTicks++;
-            if (File.Exists(expectedPath))
+            // Phase 10.21 — re-check size on every tick so we don't recurse into
+            // Play() while the receiver is between completing the .part write and
+            // performing the atomic rename.  In practice the rename is atomic, so
+            // when File.Exists is true the file is already the published size; the
+            // size check is defence against an older Service build still using the
+            // pre-10.21 non-atomic write.
+            bool ready = File.Exists(expectedPath);
+            if (ready && expectedSizeBytes > 0)
             {
-                IpcClient.LogToFile($"[MoviePlayer] File arrived after {_waitTicks * WaitIntervalMs} ms: '{expectedPath}'");
+                try { if (new FileInfo(expectedPath).Length != expectedSizeBytes) ready = false; }
+                catch { ready = false; }
+            }
+            if (ready)
+            {
+                IpcClient.LogToFile($"[MoviePlayer] File ready after {_waitTicks * WaitIntervalMs} ms: '{expectedPath}'");
                 StopWaiting();
-                Play(fileName, seekTime, playAtUtcMs);  // recursion: file now exists, hits the play branch
+                Play(fileName, seekTime, playAtUtcMs, expectedSizeBytes);
                 return;
             }
             if (_waitTicks >= WaitMaxTicks)
             {
-                IpcClient.LogToFile($"[MoviePlayer] Wait timed out after {WaitTimeoutMs} ms; file still not at '{expectedPath}'");
+                IpcClient.LogToFile($"[MoviePlayer] Wait timed out after {WaitTimeoutMs} ms; file still not ready at '{expectedPath}' (expected {expectedSizeBytes} bytes)");
                 StopWaiting();
                 StatusText.Text =
                     $"Could not load {fileName} after {WaitTimeoutMs / 1000}s.\n" +
-                    $"The teacher's file transfer did not arrive at:\n{expectedPath}\n" +
+                    $"The teacher's file transfer did not complete at:\n{expectedPath}\n" +
                     $"Check that the file is shared and the network allows the transfer.";
                 return;
             }

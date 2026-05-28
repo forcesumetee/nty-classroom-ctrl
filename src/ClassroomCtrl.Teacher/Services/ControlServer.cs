@@ -698,7 +698,16 @@ public class ControlServer : IDisposable
             UseMulticast = false,
         };
         var announceBytes = MessagePack.MessagePackSerializer.Serialize(announce);
-        await _tcp.BroadcastAsync(Envelope.Create(MessageType.FileAnnounce, announceBytes, _teacherId), ct);
+        // Phase 10.21 — file transfer MUST use the reliable broadcast path.
+        // Phase 10.10 Fix 8 introduced a DropOldest bounded channel per peer
+        // sized for screen-share frames (16 slots); FileAnnounce/Chunk/Complete
+        // were being silently evicted under any sustained burst, which
+        // truncated received files to ~10 MB regardless of original size
+        // (root cause of the Phase 10.21 "Net Movie plays only first third"
+        // report).  Reliable path is FullMode.Wait per peer, so the producer
+        // here is back-pressured by the slowest student's TCP drain rate
+        // instead of corrupting the stream.
+        await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileAnnounce, announceBytes, _teacherId), ct);
         _logger.LogInformation("File announce: {Name} ({Size} bytes, {Chunks} chunks)",
             fileName, size, chunkCount);
         App.LogDebug($"[BroadcastFile] FileAnnounce sent: sha256={sha256Hex[..16]}...");
@@ -720,14 +729,14 @@ public class ControlServer : IDisposable
                     Data = chunkData,
                 };
                 var chunkBytes = MessagePack.MessagePackSerializer.Serialize(chunk);
-                await _tcp.BroadcastAsync(Envelope.Create(MessageType.FileChunk, chunkBytes, _teacherId), ct);
+                await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileChunk, chunkBytes, _teacherId), ct);
                 idx++;
             }
         }
 
         var complete = new FileCompleteMessage { TransferId = transferId, FileName = fileName };
         var completeBytes = MessagePack.MessagePackSerializer.Serialize(complete);
-        await _tcp.BroadcastAsync(Envelope.Create(MessageType.FileComplete, completeBytes, _teacherId), ct);
+        await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileComplete, completeBytes, _teacherId), ct);
         _logger.LogInformation("File transfer complete: {Name}", fileName);
         App.LogDebug($"[BroadcastFile] complete: file='{fileName}' chunksSent={chunkCount}");
     }

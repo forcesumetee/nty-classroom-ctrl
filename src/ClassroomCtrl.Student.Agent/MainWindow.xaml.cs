@@ -472,7 +472,9 @@ public partial class MainWindow : Window
                     var mp = MessagePack.MessagePackSerializer.Deserialize<MoviePlayMessage>(env.Payload);
                     // Phase 10.20 — was silent catch; now logged so future
                     // Net Movie failures show up in agent-debug.log.
-                    IpcClient.LogToFile($"[MainWindow] MoviePlay received: file='{mp.FileName}' seek={mp.SeekTime} playAtMs={mp.PlayAtTimestampMs}");
+                    // Phase 10.21 — log expected size too so a "file truncated"
+                    // regression is diagnosable from one log line.
+                    IpcClient.LogToFile($"[MainWindow] MoviePlay received: file='{mp.FileName}' seek={mp.SeekTime} playAtMs={mp.PlayAtTimestampMs} expectedSize={mp.ExpectedFileSizeBytes}");
                     Dispatcher.Invoke(() =>
                     {
                         if (_movieWindow == null)
@@ -481,7 +483,7 @@ public partial class MainWindow : Window
                             _movieWindow.Closed += (_, _) => _movieWindow = null;
                             _movieWindow.Show();
                         }
-                        _movieWindow.Play(mp.FileName, mp.SeekTime, mp.PlayAtTimestampMs);
+                        _movieWindow.Play(mp.FileName, mp.SeekTime, mp.PlayAtTimestampMs, mp.ExpectedFileSizeBytes);
                     });
                 }
                 catch (Exception ex)

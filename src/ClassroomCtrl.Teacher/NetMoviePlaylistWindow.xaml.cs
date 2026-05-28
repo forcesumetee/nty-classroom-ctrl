@@ -86,11 +86,20 @@ public partial class NetMoviePlaylistWindow : Window
             await SendFileToAllAsync(filePath, CancellationToken.None);
 
             // Issue MoviePlay scheduled 1 sec in the future to give students time to load.
+            // Phase 10.21 — carry the file's byte length so the student's player
+            // can gate playback on size match (defence-in-depth against a partial
+            // file being exposed).  Teacher reads the size from the same path it
+            // just sent; no extra IO if the file was already opened during transfer.
+            long expectedSize = 0;
+            try { expectedSize = new FileInfo(filePath).Length; }
+            catch { /* size remains 0 → student falls back to existence-only check */ }
+
             var msg = new MoviePlayMessage
             {
                 FileName = Path.GetFileName(filePath),
                 SeekTime = 0,
                 PlayAtTimestampMs = DateTimeOffset.UtcNow.AddSeconds(1).ToUnixTimeMilliseconds(),
+                ExpectedFileSizeBytes = expectedSize,
             };
             await App.Server.BroadcastMoviePlayAsync(msg, CancellationToken.None);
             _activeFile = msg.FileName;
