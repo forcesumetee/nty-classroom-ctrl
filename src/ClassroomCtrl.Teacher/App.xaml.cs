@@ -288,6 +288,30 @@ public partial class App : Application
         }
     }
 
+    // Phase 11-B inc3 — opt-in DXGI Desktop Duplication capture toggle.  DWORD;
+    // non-zero = enabled.  Same key the Student.Agent reads so one `reg add`
+    // controls both processes.
+    //   reg add "HKCU\Software\NTY\ClassroomCtrl" /v UseDxgiCapture /t REG_DWORD /d 1 /f
+    private const string RegValueDxgi = "UseDxgiCapture";
+
+    /// <summary>Phase 11-B inc3 — opt-in DXGI capture flag from HKCU.  Default
+    /// false so production stays on the verified GDI capture path until inc4
+    /// flips it on by default with the raised FPS cap.  Read on demand (not
+    /// cached) so a registry change takes effect the next time Share Screen is
+    /// pressed without an app restart.</summary>
+    public static bool UseDxgiCapture
+    {
+        get
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(RegPath);
+                return key?.GetValue(RegValueDxgi) is int i && i != 0;
+            }
+            catch { return false; }
+        }
+    }
+
     private static string? ReadPreferredLanguage()
     {
         try

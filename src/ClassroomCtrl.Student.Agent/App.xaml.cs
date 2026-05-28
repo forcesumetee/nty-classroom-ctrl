@@ -176,6 +176,27 @@ public partial class App : Application
         }
     }
 
+    // Phase 11-B inc3 — opt-in DXGI Desktop Duplication capture toggle.  Same
+    // key the Teacher reads so one `reg add` controls both processes.
+    //   reg add "HKCU\Software\NTY\ClassroomCtrl" /v UseDxgiCapture /t REG_DWORD /d 1 /f
+    private const string RegValueDxgi = "UseDxgiCapture";
+
+    /// <summary>Phase 11-B inc3 — opt-in DXGI capture flag from HKCU.  Default
+    /// false; inc4 flips on by default.  Read on demand so a registry change
+    /// takes effect at the next StudentBroadcaster Start without an app restart.</summary>
+    public static bool UseDxgiCapture
+    {
+        get
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(RegPath);
+                return key?.GetValue(RegValueDxgi) is int i && i != 0;
+            }
+            catch { return false; }
+        }
+    }
+
     private static string? ReadPreferredLanguage()
     {
         try

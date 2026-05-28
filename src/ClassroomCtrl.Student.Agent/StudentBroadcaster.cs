@@ -1,8 +1,8 @@
-﻿using ClassroomCtrl.Shared.Codec;
+﻿using ClassroomCtrl.Shared.Capture;
+using ClassroomCtrl.Shared.Codec;
 using ClassroomCtrl.Shared.Protocol;
 using System;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,6 +61,11 @@ public class StudentBroadcaster : IDisposable
     // factory picks the impl from _activeCodec at Start().
     private IVideoEncoder? _encoder;
 
+    // Phase 11-B inc3 — capture goes through IScreenCapturer (GDI or DXGI) so
+    // the broadcaster no longer owns SystemInformation.VirtualScreen +
+    // CopyFromScreen + Bicubic resize inline.
+    private IScreenCapturer? _capturer;
+
     public bool IsBroadcasting => _captureTask is { IsCompleted: false };
 
     public void Start()
@@ -104,8 +109,17 @@ public class StudentBroadcaster : IDisposable
                 out activeEncoderDesc);
         }
 
+        // Phase 11-B inc3 — capture goes through IScreenCapturer.  Student
+        // historically captured the virtual screen (union of monitors); under
+        // DXGI inc3 falls back to primary-only (documented limit).  Factory
+        // try/catch handles DXGI-init failure with permanent GDI fallback.
+        _capturer = ScreenCapturerFactory.Create(
+            ScreenCaptureSource.VirtualScreen,
+            useDxgi: App.UseDxgiCapture,
+            out string activeCaptureDesc);
+
         _captureTask = Task.Run(() => CaptureLoopAsync(_cts.Token));
-        IpcClient.LogToFile($"[StudentBroadcaster] Started ({_activeCodec} {FramesPerSecond} FPS, {TargetWidth}x{TargetHeight}, encoder={activeEncoderDesc}, UseHardwareH264={App.UseHardwareH264})");
+        IpcClient.LogToFile($"[StudentBroadcaster] Started ({_activeCodec} {FramesPerSecond} FPS, {TargetWidth}x{TargetHeight}, encoder={activeEncoderDesc}, capture={activeCaptureDesc}, UseHardwareH264={App.UseHardwareH264}, UseDxgiCapture={App.UseDxgiCapture})");
     }
 
     public void Stop()
@@ -118,6 +132,8 @@ public class StudentBroadcaster : IDisposable
 
         _encoder?.Dispose();
         _encoder = null;
+        _capturer?.Dispose();
+        _capturer = null;
 
         IpcClient.LogToFile($"[StudentBroadcaster] Stopped (sent {_frameSeq} frames)");
     }
@@ -132,7 +148,7 @@ public class StudentBroadcaster : IDisposable
         {
             try
             {
-                using var bmp = CaptureFrame();
+                using var bmp = _capturer?.Capture(TargetWidth, TargetHeight);
                 if (bmp != null && App.Ipc != null && _encoder != null)
                 {
                     var encoded = _encoder.Encode(bmp);
@@ -188,39 +204,9 @@ public class StudentBroadcaster : IDisposable
         }
     }
 
-    /// <summary>Capture virtual screen and resize to target (32bpp BGRA).</summary>
-    private Bitmap? CaptureFrame()
-    {
-        try
-        {
-            var bounds = SystemInformation.VirtualScreen;
-            if (bounds.Width <= 0 || bounds.Height <= 0) return null;
-
-            using var srcBmp = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(srcBmp))
-            {
-                g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0,
-                    new System.Drawing.Size(bounds.Width, bounds.Height),
-                    CopyPixelOperation.SourceCopy);
-            }
-
-            var dstBmp = new Bitmap(TargetWidth, TargetHeight, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(dstBmp))
-            {
-                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Bicubic;
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                g.DrawImage(srcBmp, 0, 0, TargetWidth, TargetHeight);
-            }
-            return dstBmp;
-        }
-        catch (Exception ex)
-        {
-            IpcClient.LogToFile($"[StudentBroadcaster] capture failed: {ex.Message}");
-            return null;
-        }
-    }
-
+    // Phase 11-B inc3 — CaptureFrame moved into GdiScreenCapturer (VirtualScreen
+    // source).  The student broadcaster no longer owns SystemInformation or
+    // CopyFromScreen.
     // Phase 11-B inc2 part 1 — EncodeJpeg removed; logic lives in MJpegEncoder.
 
     public void Dispose()

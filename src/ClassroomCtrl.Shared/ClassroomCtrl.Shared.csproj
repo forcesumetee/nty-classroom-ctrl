@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="MessagePack" Version="2.5.187" />
     <PackageReference Include="H264Sharp" Version="1.6.0" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+    <PackageReference Include="Vortice.DXGI" Version="3.6.2" />
     <!-- Phase 11-B inc2 part 2 (round 2) — Vortice.MediaFoundation managed wrappers
          (SharpGen-generated) for the MF software H.264 encoder.  Round-1 attempt
          used wrong API names; round 2 resolves them against the restored

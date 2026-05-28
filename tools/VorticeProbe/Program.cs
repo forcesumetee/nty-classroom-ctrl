@@ -1,254 +1,234 @@
-// Phase 11-B inc2 part2 round 3 — extended Vortice 3.6.2 API surface probe.
+// Phase 11-B inc3 — DXGI/Direct3D11 API surface probe.
 //
-// Round 2 used this probe to resolve sync-mode SetOutputType / ProcessOutput
-// names.  Round 3 needs to resolve the async MFT pump surface: MFTEnumEx,
-// IMFActivate, IMFMediaEventGenerator, MediaEventType (METransformNeedInput /
-// METransformHaveOutput), MFT_FRIENDLY_NAME, MFT_CATEGORY_VIDEO_ENCODER,
-// MFT_ENUM_FLAG_*, MFT_MESSAGE_* (CommandDrain, NotifyEndOfStream,
-// SetD3DManager), and check whether ICodecAPI is bound.
+// inc2 used this probe to resolve MF APIs.  inc3 needs DXGI Desktop Duplication:
+//   IDXGIFactory1 / IDXGIAdapter1 / IDXGIOutput / IDXGIOutput1,
+//   IDXGIOutputDuplication (AcquireNextFrame, ReleaseFrame, GetFramePointerShape),
+//   OutduplFrameInfo, OutduplPointerShapeInformation, the DXGI_ERROR_* HRESULTs,
+//   ID3D11Device + Texture2DDescription (CpuAccessFlags.Read, Usage.Staging),
+//   ID3D11DeviceContext (CopyResource, Map, Unmap), MappedSubresource (RowPitch).
 //
 // Run from the repo root:
-//   dotnet run --project tools\VorticeProbe\VorticeProbe.csproj
-// Output is plain-text and intended to be piped to a file the dev reviews.
+//   dotnet run --project tools\VorticeProbe\VorticeProbe.csproj -c Release > probe-inc3.txt
 
 using System;
 using System.Linq;
 using System.Reflection;
-using Vortice.MediaFoundation;
 
-// Round 2 probe was a one-shot, single-output dump.  Round 3 needs many
-// distinct surfaces, so split into named sections so the output is greppable.
-
-Section("MediaFactory STATIC methods matching MFTEnumEx / MFTGetInfo / MFCreate*");
-foreach (var m in typeof(MediaFactory)
-    .GetMethods(BindingFlags.Public | BindingFlags.Static)
-    .Where(m => m.Name.StartsWith("MFTEnum") || m.Name.StartsWith("MFTGet")
-             || m.Name.StartsWith("MFCreateDXGI") || m.Name.StartsWith("MFCreateAttributes")
-             || m.Name.StartsWith("MFTRegister") || m.Name == "MFTEnum")
-    .OrderBy(m => m.Name))
-{
-    PrintMethod(m);
-}
-
-Section("MediaFactory STATIC methods — full list (filter for what we need)");
-foreach (var m in typeof(MediaFactory)
-    .GetMethods(BindingFlags.Public | BindingFlags.Static)
-    .Where(m => !m.IsSpecialName)
-    .OrderBy(m => m.Name))
-{
-    PrintMethod(m);
-}
-
-Section("IMFActivate type");
-PrintTypeBrief(typeof(IMFActivate));
-PrintMethods(typeof(IMFActivate), declaredOnly: true);
-
-Section("IMFTransform — declared methods (verify ProcessMessage / SetInputType / SetOutputType etc)");
-PrintMethods(typeof(IMFTransform), declaredOnly: true);
-
-Section("IMFTransform — inherited (look for IMFMediaEventGenerator surface)");
-PrintMethods(typeof(IMFTransform), declaredOnly: false);
-
-Section("IMFMediaEventGenerator type");
-var evGen = TryGetType("Vortice.MediaFoundation.IMFMediaEventGenerator");
-if (evGen != null) { PrintTypeBrief(evGen); PrintMethods(evGen, declaredOnly: true); }
-else Console.WriteLine("  (type not found in Vortice.MediaFoundation namespace)");
-
-Section("IMFMediaEvent type");
-var evType = TryGetType("Vortice.MediaFoundation.IMFMediaEvent");
-if (evType != null)
-{
-    PrintTypeBrief(evType);
-    Console.WriteLine("  -- declared methods --");
-    PrintMethods(evType, declaredOnly: true);
-    Console.WriteLine("  -- declared properties --");
-    foreach (var p in evType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).OrderBy(p => p.Name))
-        Console.WriteLine($"    prop {FormatType(p.PropertyType)} {p.Name}");
-}
-else Console.WriteLine("  (type not found in Vortice.MediaFoundation namespace)");
-
-Section("MediaEventType enum (METransformNeedInput / METransformHaveOutput)");
-var mediaEvT = TryGetType("Vortice.MediaFoundation.MediaEventType");
-if (mediaEvT != null)
-{
-    foreach (var n in Enum.GetNames(mediaEvT).OrderBy(x => x))
-        Console.WriteLine($"  {n} = 0x{(int)Enum.Parse(mediaEvT, n):X4}");
-}
-else Console.WriteLine("  (type not found — searching for any enum containing 'Transform' members)");
-
-Section("TMessageType (MFT_MESSAGE_*) — search for CommandDrain, NotifyEndOfStream, SetD3DManager");
-var tmsg = TryGetType("Vortice.MediaFoundation.TMessageType");
-if (tmsg != null)
-{
-    foreach (var n in Enum.GetNames(tmsg).OrderBy(x => x))
-        Console.WriteLine($"  {n} = 0x{(int)Enum.Parse(tmsg, n):X4}");
-}
-else Console.WriteLine("  (type not found)");
-
-Section("Vortice.MediaFoundation namespace — types matching MFT*, CodecApi, Codec, Activate");
-foreach (var t in typeof(MediaFactory).Assembly
-    .GetTypes()
-    .Where(t => t.Namespace == "Vortice.MediaFoundation")
-    .Where(t => t.Name.Contains("MFT") || t.Name.Contains("CodecApi") || t.Name.Contains("Codec")
-             || t.Name.Contains("Activate") || t.Name.Contains("Friendly") || t.Name.Contains("Category"))
-    .OrderBy(t => t.Name))
-{
-    Console.WriteLine($"  {t.FullName}  ({(t.IsInterface ? "interface" : t.IsEnum ? "enum" : t.IsValueType ? "struct" : "class")})");
-}
-
-Section("Static GUID containers — look for MFT_CATEGORY_VIDEO_ENCODER, MFT_FRIENDLY_NAME, MF_TRANSFORM_*");
-// Vortice tends to expose Win32 constants as `MFTxxx` or via `xxxKeys` static classes
-// with public static Guid fields.  Enumerate likely containers and grep.
-string[] containers = {
-    "Vortice.MediaFoundation.MediaFactory",
-    "Vortice.MediaFoundation.TransformAttributeKeys",
-    "Vortice.MediaFoundation.MediaTypeAttributeKeys",
-    "Vortice.MediaFoundation.SampleAttributeKeys",
-    "Vortice.MediaFoundation.CaptureDeviceAttributeKeys",
-    "Vortice.MediaFoundation.MFTransformCategoryGuids",
-    "Vortice.MediaFoundation.MFTransformCategory",
-    "Vortice.MediaFoundation.MfTransformCategoryGuids",
+// Try to load the Vortice.DXGI / Vortice.Direct3D11 / Vortice.DirectX assemblies
+// directly from the NuGet cache for the .NET 8 target.  We can't reference them
+// at compile time (Shared.csproj doesn't have them yet) but we can load + reflect
+// via reflection.  Adjust the nuget cache path if needed.
+var nugetCache = Environment.ExpandEnvironmentVariables("%USERPROFILE%\\.nuget\\packages");
+string[] tryAssemblies = {
+    System.IO.Path.Combine(nugetCache, "vortice.directx", "3.6.2", "lib", "net8.0", "Vortice.DirectX.dll"),
+    System.IO.Path.Combine(nugetCache, "vortice.dxgi", "3.6.2", "lib", "net8.0", "Vortice.DXGI.dll"),
+    System.IO.Path.Combine(nugetCache, "vortice.direct3d11", "3.6.2", "lib", "net8.0", "Vortice.Direct3D11.dll"),
+    System.IO.Path.Combine(nugetCache, "vortice.mathematics", "1.9.2", "lib", "net8.0", "Vortice.Mathematics.dll"),
 };
-foreach (var name in containers)
+
+Console.WriteLine($"Loading Vortice DX assemblies from {nugetCache}...");
+var loaded = new System.Collections.Generic.List<Assembly>();
+foreach (var path in tryAssemblies)
 {
-    var ct = TryGetType(name);
-    if (ct == null) continue;
-    var fields = ct.GetFields(BindingFlags.Public | BindingFlags.Static)
-                   .Where(f => f.FieldType == typeof(Guid))
-                   .Where(f => f.Name.Contains("MFT") || f.Name.Contains("Transform")
-                            || f.Name.Contains("Friendly") || f.Name.Contains("Category")
-                            || f.Name.Contains("D3DManager") || f.Name.Contains("Async")
-                            || f.Name.Contains("LowLatency") || f.Name.Contains("Codec"))
-                   .OrderBy(f => f.Name)
-                   .ToList();
-    if (fields.Count == 0) continue;
-    Console.WriteLine($"\n  -- {ct.FullName} --");
-    foreach (var f in fields)
-        Console.WriteLine($"    {f.Name} = {f.GetValue(null)}");
+    if (System.IO.File.Exists(path))
+    {
+        try
+        {
+            var asm = Assembly.LoadFrom(path);
+            loaded.Add(asm);
+            Console.WriteLine($"  loaded: {asm.GetName().Name} v{asm.GetName().Version} from {path}");
+        }
+        catch (Exception ex) { Console.WriteLine($"  FAIL: {path}: {ex.Message}"); }
+    }
+    else
+    {
+        Console.WriteLine($"  missing: {path}");
+    }
 }
 
-Section("Search all Vortice.MediaFoundation static Guid fields whose name suggests round-3 relevance");
-var asm = typeof(MediaFactory).Assembly;
-foreach (var t in asm.GetTypes().Where(t => t.IsClass && t.IsSealed && t.IsAbstract)) // static classes
+Section("All types in Vortice.DXGI namespace (interface/struct/enum filter)");
+foreach (var asm in loaded)
 {
-    var hits = t.GetFields(BindingFlags.Public | BindingFlags.Static)
-                .Where(f => f.FieldType == typeof(Guid))
-                .Where(f => f.Name.Contains("FriendlyName")
-                         || f.Name.Contains("Category")
-                         || f.Name.Contains("AsyncUnlock")
-                         || f.Name.Contains("LowLatency")
-                         || f.Name.Contains("D3DManager")
-                         || f.Name.Contains("Hardware")
-                         || f.Name.StartsWith("MFT_")
-                         || f.Name.StartsWith("CODECAPI_"))
+    var types = asm.GetTypes()
+        .Where(t => (t.Namespace ?? "").StartsWith("Vortice.DXGI"))
+        .Where(t => t.Name.Contains("Output") || t.Name.Contains("Adapter") || t.Name.Contains("Factory")
+                 || t.Name.Contains("Duplication") || t.Name.Contains("Outdupl") || t.Name.Contains("Pointer"))
+        .OrderBy(t => t.Name);
+    foreach (var t in types)
+        Console.WriteLine($"  {t.FullName}  ({(t.IsInterface ? "interface" : t.IsEnum ? "enum" : t.IsValueType ? "struct" : "class")})");
+}
+
+Section("IDXGIOutput1 — declared methods (looking for DuplicateOutput)");
+foreach (var asm in loaded)
+{
+    var t = asm.GetType("Vortice.DXGI.IDXGIOutput1");
+    if (t == null) continue;
+    PrintTypeBrief(t);
+    PrintMethods(t, declaredOnly: true);
+}
+
+Section("IDXGIOutputDuplication — declared methods (AcquireNextFrame, ReleaseFrame, GetFramePointerShape)");
+foreach (var asm in loaded)
+{
+    var t = asm.GetType("Vortice.DXGI.IDXGIOutputDuplication");
+    if (t == null) continue;
+    PrintTypeBrief(t);
+    PrintMethods(t, declaredOnly: true);
+}
+
+Section("OutduplFrameInfo struct fields");
+foreach (var asm in loaded)
+{
+    var t = asm.GetType("Vortice.DXGI.OutduplFrameInfo");
+    if (t == null) continue;
+    PrintTypeBrief(t);
+    foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Instance))
+        Console.WriteLine($"    field {FormatType(f.FieldType)} {f.Name}");
+}
+
+Section("OutduplPointerShapeInformation struct fields");
+foreach (var asm in loaded)
+{
+    var t = asm.GetType("Vortice.DXGI.OutduplPointerShapeInformation")
+          ?? asm.GetType("Vortice.DXGI.OutduplPointerShapeInfo");
+    if (t == null) continue;
+    PrintTypeBrief(t);
+    foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Instance))
+        Console.WriteLine($"    field {FormatType(f.FieldType)} {f.Name}");
+}
+
+Section("IDXGIFactory1 — declared (EnumAdapters1)");
+foreach (var asm in loaded)
+{
+    var t = asm.GetType("Vortice.DXGI.IDXGIFactory1");
+    if (t == null) continue;
+    PrintTypeBrief(t);
+    PrintMethods(t, declaredOnly: true);
+}
+
+Section("IDXGIAdapter1 — declared (EnumOutputs)");
+foreach (var asm in loaded)
+{
+    var t = asm.GetType("Vortice.DXGI.IDXGIAdapter1");
+    if (t == null) continue;
+    PrintMethods(t, declaredOnly: true);
+}
+
+Section("IDXGIOutput — declared (need this for IDXGIOutput1's QI base)");
+foreach (var asm in loaded)
+{
+    var t = asm.GetType("Vortice.DXGI.IDXGIOutput");
+    if (t == null) continue;
+    PrintMethods(t, declaredOnly: true);
+}
+
+Section("CreateDXGIFactory entrypoint (DXGI.CreateDXGIFactory1 or similar)");
+foreach (var asm in loaded)
+{
+    foreach (var t in asm.GetTypes().Where(t => t.IsClass && t.IsSealed && t.IsAbstract))
+    {
+        var m = t.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Where(m => m.Name.Contains("CreateDXGI") || m.Name == "CreateDXGIFactory1" || m.Name == "CreateDXGIFactory2")
                 .ToList();
-    if (hits.Count == 0) continue;
-    Console.WriteLine($"  -- {t.FullName} --");
-    foreach (var f in hits) Console.WriteLine($"    {f.Name} = {f.GetValue(null)}");
+        foreach (var mi in m) Console.WriteLine($"  {t.FullName}.{mi.Name}({string.Join(",", mi.GetParameters().Select(p => $"{FormatType(p.ParameterType)} {p.Name}"))}) -> {FormatType(mi.ReturnType)}");
+    }
 }
 
-Section("Look for ICodecAPI in Vortice (often NOT bound — Direct COM via Marshal.QI)");
-var codecApi = asm.GetTypes().FirstOrDefault(t => t.Name == "ICodecAPI" || t.Name == "IMFCodecAPI");
-Console.WriteLine(codecApi != null
-    ? $"  FOUND: {codecApi.FullName}"
-    : "  NOT FOUND in Vortice.MediaFoundation — we'll declare a minimal [ComImport] interface manually");
-
-Section("MFTOutputStreamInfo / IMFActivate.ActivateObject lookup");
-var osi = TryGetType("Vortice.MediaFoundation.MFTOutputStreamInfo")
-       ?? TryGetType("Vortice.MediaFoundation.TOutputStreamInformation");
-if (osi != null)
+Section("Vortice.Direct3D11 — D3D11.CreateDevice static + Texture2DDescription + ID3D11Texture2D");
+foreach (var asm in loaded)
 {
-    Console.WriteLine($"  found: {osi.FullName}");
-    foreach (var f in osi.GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(f => f.Name))
-        Console.WriteLine($"    field {f.FieldType.Name} {f.Name}");
+    if (!asm.GetName().Name!.Contains("Direct3D11")) continue;
+    foreach (var t in asm.GetTypes().Where(t => t.IsClass && t.IsSealed && t.IsAbstract && t.Name == "D3D11"))
+    {
+        foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Static).Where(m => m.Name.StartsWith("Create")))
+            Console.WriteLine($"  {t.Name}.{m.Name}({string.Join(",", m.GetParameters().Select(p => $"{FormatType(p.ParameterType)} {p.Name}"))}) -> {FormatType(m.ReturnType)}");
+    }
+    var tex = asm.GetType("Vortice.Direct3D11.Texture2DDescription");
+    if (tex != null)
+    {
+        Console.WriteLine($"  -- {tex.FullName} --");
+        foreach (var p in tex.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            Console.WriteLine($"    prop {FormatType(p.PropertyType)} {p.Name}");
+        foreach (var f in tex.GetFields(BindingFlags.Public | BindingFlags.Instance))
+            Console.WriteLine($"    field {FormatType(f.FieldType)} {f.Name}");
+    }
+    var iTex = asm.GetType("Vortice.Direct3D11.ID3D11Texture2D");
+    if (iTex != null) { Console.WriteLine($"  -- {iTex.FullName} (interface) --"); PrintMethods(iTex, declaredOnly: true); }
+    var iDev = asm.GetType("Vortice.Direct3D11.ID3D11Device");
+    if (iDev != null)
+    {
+        Console.WriteLine($"  -- {iDev.FullName} (declared methods) --");
+        foreach (var m in iDev.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Where(m => !m.IsSpecialName).Where(m => m.Name.Contains("Texture") || m.Name.Contains("Resource") || m.Name == "QueryInterface" || m.Name.Contains("Context")))
+            Console.WriteLine($"    {FormatType(m.ReturnType)} {m.Name}({string.Join(",", m.GetParameters().Select(p => $"{FormatType(p.ParameterType)} {p.Name}"))})");
+    }
+    var iCtx = asm.GetType("Vortice.Direct3D11.ID3D11DeviceContext");
+    if (iCtx != null)
+    {
+        Console.WriteLine($"  -- {iCtx.FullName} (filtered Copy/Map methods) --");
+        foreach (var m in iCtx.GetMethods(BindingFlags.Public | BindingFlags.Instance).Where(m => !m.IsSpecialName).Where(m => m.Name == "CopyResource" || m.Name.StartsWith("Map") || m.Name == "Unmap"))
+            Console.WriteLine($"    {FormatType(m.ReturnType)} {m.Name}({string.Join(",", m.GetParameters().Select(p => $"{FormatType(p.ParameterType)} {p.Name}"))})");
+    }
 }
 
-Section("MFT_ENUM_FLAG values (look for an enum)");
-var enumFlag = asm.GetTypes().FirstOrDefault(t => t.IsEnum && t.Name.Contains("EnumFlag"));
-if (enumFlag != null)
+Section("DXGI Result constants (DXGI_ERROR_WAIT_TIMEOUT etc)");
+foreach (var asm in loaded)
 {
-    Console.WriteLine($"  found enum: {enumFlag.FullName}");
-    foreach (var n in Enum.GetNames(enumFlag))
-        Console.WriteLine($"    {n} = 0x{(int)Enum.Parse(enumFlag, n):X8}");
+    foreach (var t in asm.GetTypes().Where(t => t.IsClass && t.IsSealed && t.IsAbstract && (t.Name == "ResultCode" || t.Name == "Vortice" || t.Name == "DXGI" || t.Name.Contains("Result"))))
+    {
+        var hits = t.GetFields(BindingFlags.Public | BindingFlags.Static)
+                    .Where(f => f.FieldType.Name.Contains("Result") || f.FieldType == typeof(int) || f.FieldType == typeof(uint))
+                    .Where(f => f.Name.Contains("Timeout") || f.Name.Contains("AccessLost") || f.Name.Contains("AccessDenied")
+                             || f.Name.Contains("DeviceRemoved") || f.Name.Contains("Unsupported"))
+                    .ToList();
+        if (hits.Count == 0) continue;
+        Console.WriteLine($"  -- {t.FullName} --");
+        foreach (var f in hits) Console.WriteLine($"    {f.FieldType.Name} {f.Name} = {f.GetValue(null)}");
+    }
 }
-else Console.WriteLine("  (no EnumFlag enum found — Win32 flags will be passed as raw uint)");
 
-Section("All Vortice.MediaFoundation enums — dump every enum, names+values");
-foreach (var t in asm.GetTypes().Where(t => t.IsEnum && t.Namespace == "Vortice.MediaFoundation").OrderBy(t => t.Name))
+Section("D3D11.CreateDevice overloads + MappedSubresource + IDXGIAdapter.EnumOutputs");
+foreach (var asm in loaded.Where(a => a.GetName().Name == "Vortice.Direct3D11"))
 {
-    Console.WriteLine($"  -- {t.Name} ({Enum.GetUnderlyingType(t).Name}) --");
-    foreach (var n in Enum.GetNames(t).Take(60))
-        Console.WriteLine($"    {n} = {Convert.ChangeType(Enum.Parse(t, n), Enum.GetUnderlyingType(t))}");
+    var d3d11 = asm.GetType("Vortice.Direct3D11.D3D11");
+    if (d3d11 != null)
+        foreach (var m in d3d11.GetMethods(BindingFlags.Public | BindingFlags.Static).Where(m => m.Name.StartsWith("CreateDevice")))
+            Console.WriteLine($"  D3D11.{m.Name}({string.Join(",", m.GetParameters().Select(p => $"{FormatType(p.ParameterType)} {p.Name}"))}) -> {FormatType(m.ReturnType)}");
+    var ms = asm.GetType("Vortice.Direct3D11.MappedSubresource");
+    if (ms != null) { Console.WriteLine($"  -- {ms.FullName} --");
+        foreach (var f in ms.GetFields(BindingFlags.Public | BindingFlags.Instance)) Console.WriteLine($"    field {FormatType(f.FieldType)} {f.Name}");
+        foreach (var p in ms.GetProperties(BindingFlags.Public | BindingFlags.Instance)) Console.WriteLine($"    prop {FormatType(p.PropertyType)} {p.Name}"); }
 }
-
-Section("IMFAttributes — declared methods (GetString shape, Set overloads)");
-PrintMethods(TryGetType("Vortice.MediaFoundation.IMFAttributes")!, declaredOnly: true);
-
-Section("TransformCategoryGuids fields");
-var tcg = TryGetType("Vortice.MediaFoundation.TransformCategoryGuids");
-if (tcg != null)
+foreach (var asm in loaded.Where(a => a.GetName().Name == "Vortice.DXGI"))
 {
-    foreach (var f in tcg.GetFields(BindingFlags.Public | BindingFlags.Static)
-                         .Where(f => f.FieldType == typeof(Guid))
-                         .OrderBy(f => f.Name))
-        Console.WriteLine($"  {f.Name} = {f.GetValue(null)}");
+    var iAdapter = asm.GetType("Vortice.DXGI.IDXGIAdapter");
+    if (iAdapter != null)
+        foreach (var m in iAdapter.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Where(m => !m.IsSpecialName))
+            Console.WriteLine($"  IDXGIAdapter.{m.Name}({string.Join(",", m.GetParameters().Select(p => $"{FormatType(p.ParameterType)} {p.Name}"))}) -> {FormatType(m.ReturnType)}");
 }
-
-Section("CodecAPI GUIDs anywhere in Vortice assembly");
-foreach (var t in asm.GetTypes().Where(t => t.IsClass && t.IsSealed && t.IsAbstract))
-{
-    var hits = t.GetFields(BindingFlags.Public | BindingFlags.Static)
-                .Where(f => f.FieldType == typeof(Guid))
-                .Where(f => f.Name.Contains("CodecApi") || f.Name.Contains("AvEnc") || f.Name.Contains("ForceKey"))
-                .ToList();
-    if (hits.Count == 0) continue;
-    Console.WriteLine($"  -- {t.FullName} --");
-    foreach (var f in hits) Console.WriteLine($"    {f.Name} = {f.GetValue(null)}");
-}
-
-Section("IMFDXGIDeviceManager surface (need ResetDevice signature)");
-var dxgiMgr = TryGetType("Vortice.MediaFoundation.IMFDXGIDeviceManager");
-if (dxgiMgr != null) { PrintTypeBrief(dxgiMgr); PrintMethods(dxgiMgr, declaredOnly: true); }
-else Console.WriteLine("  (type not found)");
-
-Section("Look for MFCreateDXGIDeviceManager overload taking resetToken out");
-foreach (var m in typeof(MediaFactory).GetMethods(BindingFlags.Public | BindingFlags.Static)
-    .Where(m => m.Name.Contains("DXGI")))
-    PrintMethod(m);
 
 Console.WriteLine("\n=== probe complete ===");
 
 // ─── helpers ───
 static void Section(string name) => Console.WriteLine($"\n========== {name} ==========");
-static Type? TryGetType(string fullName)
-    => typeof(MediaFactory).Assembly.GetType(fullName, throwOnError: false);
-
 static void PrintTypeBrief(Type t)
 {
     Console.WriteLine($"  full={t.FullName}  isInterface={t.IsInterface}  base={t.BaseType?.Name}");
     var ifs = t.GetInterfaces();
-    if (ifs.Length > 0)
-        Console.WriteLine($"  interfaces: {string.Join(", ", ifs.Select(i => i.Name))}");
+    if (ifs.Length > 0) Console.WriteLine($"  interfaces: {string.Join(", ", ifs.Take(8).Select(i => i.Name))}");
 }
-
-static void PrintMethod(MethodInfo m)
-{
-    var ps = string.Join(", ", m.GetParameters().Select(p => $"{FormatType(p.ParameterType)}{(p.IsOut ? "&out" : p.ParameterType.IsByRef ? "&ref" : "")} {p.Name}"));
-    Console.WriteLine($"  {FormatType(m.ReturnType)} {m.Name}({ps})");
-}
-
 static void PrintMethods(Type t, bool declaredOnly)
 {
     var flags = BindingFlags.Public | BindingFlags.Instance;
     if (declaredOnly) flags |= BindingFlags.DeclaredOnly;
     foreach (var m in t.GetMethods(flags).Where(m => !m.IsSpecialName).OrderBy(m => m.Name))
-        PrintMethod(m);
+    {
+        var ps = string.Join(", ", m.GetParameters().Select(p => $"{FormatType(p.ParameterType)}{(p.IsOut ? "&out" : p.ParameterType.IsByRef ? "&ref" : "")} {p.Name}"));
+        Console.WriteLine($"  {FormatType(m.ReturnType)} {m.Name}({ps})");
+    }
 }
-
 static string FormatType(Type t)
 {
     if (t.IsByRef) return FormatType(t.GetElementType()!);
-    if (t.IsGenericType)
-        return $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(FormatType))}>";
+    if (t.IsGenericType) return $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(FormatType))}>";
     return t.Name;
 }

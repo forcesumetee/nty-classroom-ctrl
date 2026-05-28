@@ -1,4 +1,5 @@
-﻿using ClassroomCtrl.Shared.Codec;
+﻿using ClassroomCtrl.Shared.Capture;
+using ClassroomCtrl.Shared.Codec;
 using ClassroomCtrl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 using System;
@@ -7,7 +8,6 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace ClassroomCtrl.Teacher.Services;
 
@@ -39,6 +39,10 @@ public class ScreenBroadcaster : IDisposable
     // MJPEG fallback path.  Now both codecs go through IVideoEncoder; the
     // factory picks the impl from _activeCodec at Start().
     private IVideoEncoder? _encoder;
+
+    // Phase 11-B inc3 — capture goes through IScreenCapturer (GDI or DXGI) so
+    // the broadcaster no longer owns GetSystemMetrics + CopyFromScreen.
+    private IScreenCapturer? _capturer;
 
     /// <summary>Phase 4 Part 5: Reflects the most recently applied bitrate (informational; updated by adaptive controller).</summary>
     public int CurrentBitrateBps => _activeCodec == VideoCodec.H264 ? H264BitrateBps : MapJpegQualityToApproxBitrate(JpegQuality);
@@ -141,13 +145,23 @@ public class ScreenBroadcaster : IDisposable
                 out activeEncoderDesc);
         }
 
+        // Phase 11-B inc3 — capture goes through IScreenCapturer.  Teacher
+        // captures the primary monitor; UseDxgiCapture flag (HKCU) picks DXGI
+        // when on, GDI otherwise.  Factory's try/catch handles DXGI-init
+        // failure by falling back to GDI permanently for this session.
+        _capturer = ScreenCapturerFactory.Create(
+            ScreenCaptureSource.Primary,
+            useDxgi: App.UseDxgiCapture,
+            out string activeCaptureDesc);
+
         // Notify students to open viewer
         _ = _server.BroadcastScreenStreamControlAsync(start: true, _cts.Token);
 
         _captureTask = Task.Run(() => CaptureLoopAsync(_cts.Token));
-        _logger.LogInformation("Screen broadcasting started ({Codec} {Fps} FPS, {W}x{H}, {Bps} bps, encoder={Encoder})",
-            _activeCodec, FramesPerSecond, TargetWidth, TargetHeight, CurrentBitrateBps, activeEncoderDesc);
+        _logger.LogInformation("Screen broadcasting started ({Codec} {Fps} FPS, {W}x{H}, {Bps} bps, encoder={Encoder}, capture={Capture})",
+            _activeCodec, FramesPerSecond, TargetWidth, TargetHeight, CurrentBitrateBps, activeEncoderDesc, activeCaptureDesc);
         App.LogDebug($"[Broadcast] Active encoder: {activeEncoderDesc} (UseHardwareH264 flag={App.UseHardwareH264})");
+        App.LogDebug($"[Broadcast] Active capture: {activeCaptureDesc} (UseDxgiCapture flag={App.UseDxgiCapture})");
     }
 
     public void Stop()
@@ -163,6 +177,8 @@ public class ScreenBroadcaster : IDisposable
 
         _encoder?.Dispose();
         _encoder = null;
+        _capturer?.Dispose();
+        _capturer = null;
 
         // Notify students to close viewer
         _ = _server.BroadcastScreenStreamControlAsync(start: false, CancellationToken.None);
@@ -217,7 +233,7 @@ public class ScreenBroadcaster : IDisposable
         {
             try
             {
-                using var bmp = CaptureFrame();
+                using var bmp = _capturer?.Capture(TargetWidth, TargetHeight);
                 if (bmp != null)
                 {
                     // Phase 5 bug-fix: tee raw BGRA pixels to recorder BEFORE encode.
@@ -285,68 +301,11 @@ public class ScreenBroadcaster : IDisposable
         }
     }
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern int GetSystemMetrics(int nIndex);
-    private const int SM_CXSCREEN = 0;
-    private const int SM_CYSCREEN = 1;
-
-    private bool _firstCaptureLogged;
-
-    /// <summary>Capture primary screen via GDI and resize to TargetWidth × TargetHeight (32bpp BGRA).</summary>
-    private Bitmap? CaptureFrame()
-    {
-        try
-        {
-            // Prefer GetSystemMetrics — for a DPI-aware process this returns PHYSICAL pixels.
-            // SystemParameters.PrimaryScreenWidth was unreliable in some test runs (returned
-            // DIPs, e.g. 1536 instead of 1920 at 125% scaling); GetSystemMetrics + DPI-aware
-            // manifest is the well-trodden combo.
-            int srcW = GetSystemMetrics(SM_CXSCREEN);
-            int srcH = GetSystemMetrics(SM_CYSCREEN);
-            if (srcW <= 0 || srcH <= 0)
-            {
-                srcW = (int)SystemParameters.PrimaryScreenWidth;
-                srcH = (int)SystemParameters.PrimaryScreenHeight;
-            }
-            if (srcW <= 0 || srcH <= 0) return null;
-
-            if (!_firstCaptureLogged)
-            {
-                _firstCaptureLogged = true;
-                int dipW = (int)SystemParameters.PrimaryScreenWidth;
-                int dipH = (int)SystemParameters.PrimaryScreenHeight;
-                _logger.LogInformation("Screen capture source: GetSystemMetrics={W}x{H}, SystemParameters={DipW}x{DipH}, target={TgtW}x{TgtH}",
-                    srcW, srcH, dipW, dipH, TargetWidth, TargetHeight);
-                App.LogDebug($"[Capture] First frame: GetSystemMetrics={srcW}x{srcH}, SystemParameters={dipW}x{dipH}, target={TargetWidth}x{TargetHeight}");
-                if (dipW != srcW || dipH != srcH)
-                {
-                    App.LogDebug($"[Capture] WARNING: DIP/physical mismatch — DPI awareness may not be active (WPF caching). Capture is using physical {srcW}x{srcH}.");
-                }
-            }
-
-            using var srcBmp = new Bitmap(srcW, srcH, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(srcBmp))
-            {
-                g.CopyFromScreen(0, 0, 0, 0, new System.Drawing.Size(srcW, srcH), CopyPixelOperation.SourceCopy);
-            }
-
-            // 32bpp BGRA — works for both JPEG encoder and H264Sharp's RgbImage(Bgra)
-            var dstBmp = new Bitmap(TargetWidth, TargetHeight, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(dstBmp))
-            {
-                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Bicubic;
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                g.DrawImage(srcBmp, 0, 0, TargetWidth, TargetHeight);
-            }
-            return dstBmp;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Screen capture failed");
-            return null;
-        }
-    }
+    // Phase 11-B inc3 — CaptureFrame + GetSystemMetrics + _firstCaptureLogged
+    // moved into GdiScreenCapturer (Primary source) so the broadcaster no longer
+    // owns DPI / metrics resolution.  The first-frame DPI-mismatch warning is
+    // not re-emitted by the capturer (the GetSystemMetrics call is the same;
+    // if it returned DIPs in inc2, it still does so now) — kept silent.
 
     /// <summary>
     /// Lock the bitmap and copy its 32bpp BGRA pixels into a managed byte[]. Caller owns the buffer.
