@@ -530,12 +530,24 @@ public partial class MainWindow : Window
             // ─────── Phase 6.5: Remote Control ───────
 
             case MessageType.RemoteControlStart:
+                // Phase 12-B — defensive release-all BEFORE starting a new
+                // session.  Covers the case where a prior session ended
+                // abruptly (teacher killed, network blip) and modifiers /
+                // buttons were left "held" in the OS.
+                RemoteControlReceiver.ReleaseAll();
                 Dispatcher.Invoke(() =>
                 {
                     if (_remoteBanner == null)
                     {
                         _remoteBanner = new RemoteControlBanner();
-                        _remoteBanner.Closed += (_, _) => _remoteBanner = null;
+                        // Phase 12-B — banner close (user X-es it, OS closes it,
+                        // window destroyed during shutdown) MUST release any
+                        // held state so it can't outlive the visual signal.
+                        _remoteBanner.Closed += (_, _) =>
+                        {
+                            _remoteBanner = null;
+                            RemoteControlReceiver.ReleaseAll();
+                        };
                         _remoteBanner.Show();
                         App.Tray?.ShowBalloon(Loc.Get("Lbl_AppName"), Loc.Get("Banner_RemoteActive"));
                     }
@@ -548,6 +560,11 @@ public partial class MainWindow : Window
                     _remoteBanner?.Close();
                     _remoteBanner = null;
                 });
+                // Phase 12-B — explicit release after the banner is torn down
+                // (banner.Closed will also fire ReleaseAll above; calling here
+                // makes the End path self-contained even if the banner was
+                // already null).
+                RemoteControlReceiver.ReleaseAll();
                 break;
 
             case MessageType.RemoteMouseMove:

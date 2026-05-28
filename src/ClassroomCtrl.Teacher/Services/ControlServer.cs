@@ -319,35 +319,42 @@ public class ControlServer : IDisposable
         => _tcp.BroadcastAsync(Envelope.Create(MessageType.MovieStop, Array.Empty<byte>(), _teacherId), ct);
 
     // ─────── Phase 6.5: Remote Control ───────
+    // Phase 12-B (Tier 1) — all 6 Remote* sends now route through the targeted,
+    // lossless _inputOutbox channel via TcpControlServer.SendInputAsync.  The
+    // legacy BroadcastAsync path put input on the same DropOldest cap-16
+    // _outbox as 20 FPS video frames, so under post-inc4 load a key-up or
+    // mouse-up could be evicted → stuck modifier / button on the student.
+    // TargetEndpointId is retained on the envelope for the student-side
+    // IsForMe filter (no longer needed for routing, harmless defense-in-depth).
 
     public Task SendRemoteControlStartAsync(Guid studentId, CancellationToken ct)
-        => _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.RemoteControlStart, Array.Empty<byte>(), _teacherId, studentId), ct);
+        => _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteControlStart, Array.Empty<byte>(), _teacherId, studentId), ct);
 
     public Task SendRemoteControlEndAsync(Guid studentId, CancellationToken ct)
-        => _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.RemoteControlEnd, Array.Empty<byte>(), _teacherId, studentId), ct);
+        => _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteControlEnd, Array.Empty<byte>(), _teacherId, studentId), ct);
 
     public Task SendRemoteMouseMoveAsync(Guid studentId, RemoteMouseMoveMessage msg, CancellationToken ct)
     {
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
-        return _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.RemoteMouseMove, bytes, _teacherId, studentId), ct);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteMouseMove, bytes, _teacherId, studentId), ct);
     }
 
     public Task SendRemoteMouseClickAsync(Guid studentId, RemoteMouseClickMessage msg, CancellationToken ct)
     {
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
-        return _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.RemoteMouseClick, bytes, _teacherId, studentId), ct);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteMouseClick, bytes, _teacherId, studentId), ct);
     }
 
     public Task SendRemoteMouseScrollAsync(Guid studentId, RemoteMouseScrollMessage msg, CancellationToken ct)
     {
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
-        return _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.RemoteMouseScroll, bytes, _teacherId, studentId), ct);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteMouseScroll, bytes, _teacherId, studentId), ct);
     }
 
     public Task SendRemoteKeyAsync(Guid studentId, RemoteKeyMessage msg, CancellationToken ct)
     {
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
-        return _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.RemoteKey, bytes, _teacherId, studentId), ct);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteKey, bytes, _teacherId, studentId), ct);
     }
 
     // ─────── Phase 4.6: Live Mic Monitor (per-student start/stop) ───────

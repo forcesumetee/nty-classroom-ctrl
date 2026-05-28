@@ -89,6 +89,12 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Phase 12-B — best-effort release of every modifier + mouse button.
+        // If the Agent is killed mid-remote-control, the student's OS would
+        // otherwise be left with held state; ReleaseAll is idempotent and
+        // harmless if no remote-control session was active.
+        try { RemoteControlReceiver.ReleaseAll(); } catch { }
+
         _screenCapturer?.Stop();
         Ipc?.Stop();
         _tray?.Dispose();

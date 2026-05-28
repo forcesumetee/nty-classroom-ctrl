@@ -64,6 +64,19 @@ internal static class RemoteControlReceiver
     private const uint MOUSEEVENTF_WHEEL = 0x0800;
     private const uint KEYEVENTF_KEYUP = 0x0002;
 
+    // Phase 12-B — modifier VK codes used by ReleaseAll().  Both Left/Right
+    // variants are released because the teacher-side capture sends specific-
+    // side VKs (KeyInterop.VirtualKeyFromKey distinguishes LeftShift from
+    // RightShift, etc.), and Windows tracks each side's hold state separately.
+    private const ushort VK_LSHIFT   = 0xA0;
+    private const ushort VK_RSHIFT   = 0xA1;
+    private const ushort VK_LCONTROL = 0xA2;
+    private const ushort VK_RCONTROL = 0xA3;
+    private const ushort VK_LMENU    = 0xA4;   // Left Alt
+    private const ushort VK_RMENU    = 0xA5;   // Right Alt
+    private const ushort VK_LWIN     = 0x5B;
+    private const ushort VK_RWIN     = 0x5C;
+
     public static void HandleMouseMove(RemoteMouseMoveMessage msg)
     {
         try
@@ -128,5 +141,55 @@ internal static class RemoteControlReceiver
             SendInput(1, new[] { inp }, INPUT.Size);
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Phase 12-B — defensive release of every modifier key + mouse button.
+    /// Called on RemoteControlEnd, banner close, agent shutdown, and at the
+    /// start of every new RemoteControlStart so a prior session's lost key-up
+    /// (e.g. teacher disconnected mid-Shift) can't leave the student's OS with
+    /// a phantom-held modifier or button.  Best-effort per call; a failure on
+    /// one VK does not prevent the rest from being released.
+    /// </summary>
+    public static void ReleaseAll()
+    {
+        ushort[] modifiers =
+        {
+            VK_LSHIFT, VK_RSHIFT,
+            VK_LCONTROL, VK_RCONTROL,
+            VK_LMENU, VK_RMENU,
+            VK_LWIN, VK_RWIN,
+        };
+        foreach (var vk in modifiers)
+        {
+            try
+            {
+                var inp = new INPUT
+                {
+                    type = INPUT_KEYBOARD,
+                    U = new InputUnion
+                    {
+                        ki = new KEYBDINPUT { wVk = vk, dwFlags = KEYEVENTF_KEYUP }
+                    }
+                };
+                SendInput(1, new[] { inp }, INPUT.Size);
+            }
+            catch { }
+        }
+
+        uint[] mouseUpFlags = { MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_MIDDLEUP };
+        foreach (var flag in mouseUpFlags)
+        {
+            try
+            {
+                var inp = new INPUT
+                {
+                    type = INPUT_MOUSE,
+                    U = new InputUnion { mi = new MOUSEINPUT { dwFlags = flag } }
+                };
+                SendInput(1, new[] { inp }, INPUT.Size);
+            }
+            catch { }
+        }
     }
 }

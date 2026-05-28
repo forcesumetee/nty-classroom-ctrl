@@ -171,6 +171,41 @@ public class TcpControlServer : ITransport
     }
 
     /// <summary>
+    /// Phase 12-B — fan-out send for Phase 6.5 remote-control input through the
+    /// dedicated per-peer <c>_inputOutbox</c> (Wait, cap 32, separate from the
+    /// lossy <c>_outbox</c> that carries 20 FPS video).
+    ///
+    /// The <paramref name="peerId"/> parameter is informational — receivers
+    /// filter via the envelope's <c>TargetEndpointId</c> + their own
+    /// <c>IsForMe</c> check.  We fan out (mirror <see cref="BroadcastAudioAsync"/>)
+    /// rather than look up by <paramref name="peerId"/> because <c>_peers</c> is
+    /// keyed by the server-generated transport connection Guid created at TCP-
+    /// accept, NOT by the student's application-level <c>EndpointId</c> — and
+    /// every existing targeted-to-one operation in this codebase
+    /// (PowerOneAsync, LockOneAsync, RequestStudentStreamAsync, …) already uses
+    /// the same broadcast-and-IsForMe pattern.  Fixing the namespace gap with a
+    /// proper endpoint→connection map is a Tier-3 follow-up.
+    ///
+    /// Each peer's <c>EnqueueInputOrSkip</c> is a non-blocking <c>TryWrite</c>:
+    /// the input queue is normally near-empty (input is ~30 events/s × ~30 B);
+    /// cap 32 absorbs ~1 s of burst.  If a peer's queue does saturate, that
+    /// peer's write is skipped — for non-target peers IsForMe would have
+    /// discarded the bytes anyway, and for the actual target the connection is
+    /// genuinely stalled (release-all on disconnect will clean modifier state).
+    /// Keeps FullMode.Wait on the channel for symmetry with reliable-style
+    /// semantics, but never blocks the teacher UI thread on a producer write.
+    /// </summary>
+    public Task SendInputAsync(Guid peerId, Envelope env, CancellationToken ct)
+    {
+        var bytes = env.Serialize();
+        foreach (var p in _peers.Values)
+        {
+            p.EnqueueInputOrSkip(bytes);
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Phase 10.21 — reliable per-peer broadcast for file chunks (and any
     /// other traffic where dropping a frame corrupts state).  Fans out the
     /// serialized envelope to every peer's reliable channel; each peer's
@@ -244,6 +279,19 @@ internal class PeerConnection : IDisposable
     /// </summary>
     private const int AudioQueueCapacity = 3;
 
+    /// <summary>
+    /// Phase 12-B — fourth per-peer channel, exclusively for Phase 6.5 remote-
+    /// control input envelopes (RemoteControlStart/End, RemoteMouseMove/Click/
+    /// Scroll, RemoteKey).  Cap 32 ≈ ~1 s of headroom at 30 events/s; FullMode
+    /// is <see cref="BoundedChannelFullMode.Wait"/> because input semantics are
+    /// near-lossless: a dropped key-up = stuck modifier on the student, a
+    /// dropped mouse-up after a drag = stuck button.  Wait back-pressures only
+    /// the producer for the single peer being controlled (input is sent
+    /// targeted, not broadcast — see TcpControlServer.SendInputAsync) so a
+    /// stalled student can't disturb other students' input or video / audio.
+    /// </summary>
+    private const int InputQueueCapacity = 32;
+
     private readonly Guid _id;
     private readonly TcpClient _client;
     private readonly TcpControlServer _server;
@@ -256,6 +304,8 @@ internal class PeerConnection : IDisposable
     private readonly Channel<byte[]> _reliableOutbox;
     // Phase 11-C — third outbound queue for audio (drop-stale, separate from video).
     private readonly Channel<byte[]> _audioOutbox;
+    // Phase 12-B — fourth outbound queue for remote-control input (Wait, lossless).
+    private readonly Channel<byte[]> _inputOutbox;
     private readonly Task _writerTask;
     private readonly CancellationTokenSource _connCts = new();
 
@@ -301,6 +351,13 @@ internal class PeerConnection : IDisposable
             SingleReader = true,
             SingleWriter = false,
         });
+        // Phase 12-B — input queue.  See InputQueueCapacity for the policy.
+        _inputOutbox = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(InputQueueCapacity)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = false,
+        });
         _writerTask = Task.Run(() => WriterLoopAsync(_connCts.Token));
     }
 
@@ -329,6 +386,26 @@ internal class PeerConnection : IDisposable
         // channel still accepts the write (and evicts the oldest item).
         _audioOutbox.Writer.TryWrite(body);
     }
+
+    /// <summary>
+    /// Phase 12-B — non-blocking enqueue for remote-control input.  Backed by
+    /// the per-peer <c>_inputOutbox</c> (Wait, cap 32).  Uses <c>TryWrite</c>
+    /// rather than the channel's awaitable <c>WriteAsync</c> so a stalled peer
+    /// can never block the teacher's UI thread during fan-out from
+    /// <see cref="TcpControlServer.SendInputAsync"/>.
+    ///
+    /// Under normal load the queue drains within microseconds (input is small
+    /// and the writer-loop drains all input per iteration), so <c>TryWrite</c>
+    /// virtually always succeeds — giving us lossless ordering in practice
+    /// while keeping FullMode.Wait's semantic guarantee that a *producer that
+    /// genuinely waits* is the right back-pressure shape if it's ever needed
+    /// elsewhere.  If the queue is genuinely full (cap-32 burst built up, peer
+    /// not draining), this returns false and the write is skipped — preferable
+    /// to DropOldest because the most recent message is more likely a key-up
+    /// or mouse-up than a key-down, and dropping the up leaves stuck state.
+    /// </summary>
+    public bool EnqueueInputOrSkip(byte[] body)
+        => _inputOutbox.Writer.TryWrite(body);
 
     public async Task RunAsync(CancellationToken ct)
     {
@@ -421,13 +498,14 @@ internal class PeerConnection : IDisposable
         // Phase 10.21 — drains _reliableOutbox (priority) and _outbox
         // (best-effort).  Reliable never starves lossy because we always
         // advance one lossy item per outer iteration once reliable is empty.
-        // Phase 11-C — third tier added between them: _audioOutbox.  Audio
-        // is small (3 KB/frame), latency-critical, and capped at 3 frames,
-        // so draining ALL queued audio per iteration is at most ~9 KB total
-        // and finishes in microseconds — it cannot starve video.  Order:
+        // Phase 11-C — _audioOutbox added.  Phase 12-B — _inputOutbox added.
+        // Audio + input are both small, latency-critical, and bounded so
+        // draining ALL queued items per iteration is cheap and cannot starve
+        // video.  Order:
         //   1. ALL reliable (file chunks — must arrive).
         //   2. ALL audio   (latency-critical, ~9 KB max per iteration).
-        //   3. ONE lossy   (screen-share video — drop-old semantics already
+        //   3. ALL input   (remote-control, cap 32 × ~30 B ≈ ~1 KB max).
+        //   4. ONE lossy   (screen-share video — drop-old semantics already
         //                   handled by _outbox itself).
         // Teardown is signalled by _connCts.Cancel() in Dispose, which trips
         // the OperationCanceledException catch below.
@@ -437,8 +515,9 @@ internal class PeerConnection : IDisposable
             {
                 var reliableWait = _reliableOutbox.Reader.WaitToReadAsync(ct).AsTask();
                 var audioWait    = _audioOutbox.Reader.WaitToReadAsync(ct).AsTask();
+                var inputWait    = _inputOutbox.Reader.WaitToReadAsync(ct).AsTask();
                 var lossyWait    = _outbox.Reader.WaitToReadAsync(ct).AsTask();
-                await Task.WhenAny(reliableWait, audioWait, lossyWait);
+                await Task.WhenAny(reliableWait, audioWait, inputWait, lossyWait);
 
                 // Priority 1 — ALL ready reliable items.
                 while (_reliableOutbox.Reader.TryRead(out var rbody))
@@ -451,8 +530,16 @@ internal class PeerConnection : IDisposable
                 {
                     if (!await TryWriteFrameAsync(abody, ct)) return;
                 }
-                // Priority 3 — ONE lossy (video) item.  Keeps reliable/audio
-                // from starving the screen-share stream.
+                // Priority 3 — ALL ready input items.  Cap=32 bounds this
+                // loop; ~1 KB total max, can't starve video.  Draining all
+                // matters: a burst of cached MouseMove events must clear
+                // before the next video frame so cursor position stays fresh.
+                while (_inputOutbox.Reader.TryRead(out var ibody))
+                {
+                    if (!await TryWriteFrameAsync(ibody, ct)) return;
+                }
+                // Priority 4 — ONE lossy (video) item.  Keeps reliable/audio/
+                // input from starving the screen-share stream.
                 if (_outbox.Reader.TryRead(out var lbody))
                 {
                     if (!await TryWriteFrameAsync(lbody, ct)) return;
@@ -511,6 +598,7 @@ internal class PeerConnection : IDisposable
         try { _outbox.Writer.TryComplete(); } catch { }
         try { _reliableOutbox.Writer.TryComplete(); } catch { }
         try { _audioOutbox.Writer.TryComplete(); } catch { }
+        try { _inputOutbox.Writer.TryComplete(); } catch { }
         try { _client.Dispose(); } catch { }
     }
 }

@@ -44,6 +44,11 @@ public partial class StudentScreenWindow : Window
         if (App.Server != null)
         {
             App.Server.StudentStreamFrameReceived += OnStudentFrame;
+            // Phase 12-B — auto-cancel remote-control state when the controlled
+            // student disconnects.  Without this the teacher's WPF event hooks
+            // keep firing into a peer that no longer exists (silent no-op on
+            // the wire) and re-toggling Remote doesn't reset cleanly.
+            App.Server.StudentLeft += OnStudentLeftWhileViewing;
         }
 
         // Phase 5b: register so MainViewModel can enable per-tile REC dim/light visuals.
@@ -57,6 +62,25 @@ public partial class StudentScreenWindow : Window
         UpdateRecordButton(App.PerStudentRecording?.IsRecording(_studentId) == true);
 
         Closed += OnClosed;
+    }
+
+    /// <summary>Phase 12-B — when the student we're viewing leaves, reset the
+    /// Remote toggle so the next reconnect / view-reopen starts clean.  Runs on
+    /// the UI thread because button visuals are touched.</summary>
+    private void OnStudentLeftWhileViewing(object? sender, Guid peerId)
+    {
+        if (peerId != _studentId) return;
+        Dispatcher.Invoke(() =>
+        {
+            if (_remoteActive)
+            {
+                _remoteActive = false;
+                UnhookRemoteCapture();
+                SetButtonText(RemoteButton, Loc.Get("Btn_RemoteMode"));
+                RemoteButton.Background = new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6));
+                App.LogDebug($"[Remote] {_studentId} disconnected; toggled Remote off");
+            }
+        });
     }
 
     /// <summary>
@@ -124,12 +148,26 @@ public partial class StudentScreenWindow : Window
 
     private bool _remoteActive;
 
+    // Phase 12-B (Fix D) — mouse-move throttle.  WPF MouseMove fires at
+    // compositor rate (60-120 Hz); the human eye + remote cursor smoothness
+    // need ≤ ~30 Hz on the wire.  We coalesce by recording the latest
+    // normalized position on every event but only emitting at most one wire
+    // send per MoveSendIntervalMs.  A pending flush via DispatcherTimer
+    // guarantees the FINAL position (e.g. the spot the user landed on before
+    // pausing) is sent within the interval, so click targets aren't stale.
+    private const int MoveSendIntervalMs = 33;
+    private System.Windows.Threading.DispatcherTimer? _moveFlushTimer;
+    private DateTime _lastMoveSendUtc = DateTime.MinValue;
+    private double _pendingMoveX, _pendingMoveY;
+    private bool _hasPendingMove;
+
     private async void Remote_Click(object sender, RoutedEventArgs e)
     {
         if (App.Server == null) return;
         if (_remoteActive)
         {
-            await App.Server.SendRemoteControlEndAsync(_studentId, CancellationToken.None);
+            try { await App.Server.SendRemoteControlEndAsync(_studentId, CancellationToken.None); }
+            catch (Exception ex) { App.LogDebug($"[Remote] End send failed: {ex.Message}"); }
             _remoteActive = false;
             UnhookRemoteCapture();
             SetButtonText(RemoteButton, Loc.Get("Btn_RemoteMode"));
@@ -137,11 +175,16 @@ public partial class StudentScreenWindow : Window
         }
         else
         {
-            await App.Server.SendRemoteControlStartAsync(_studentId, CancellationToken.None);
+            try { await App.Server.SendRemoteControlStartAsync(_studentId, CancellationToken.None); }
+            catch (Exception ex) { App.LogDebug($"[Remote] Start send failed: {ex.Message}"); }
             _remoteActive = true;
             HookRemoteCapture();
             SetButtonText(RemoteButton, Loc.Get("Btn_EndRemote"));
             RemoteButton.Background = new SolidColorBrush(Color.FromRgb(0xDC, 0x26, 0x26));
+            // Phase 12-B (Fix G) — make sure key events route to this window
+            // immediately, even if the user activated Remote via mouse click
+            // (which sets focus to the button, not the viewer).
+            Keyboard.Focus(this);
         }
     }
 
@@ -153,6 +196,19 @@ public partial class StudentScreenWindow : Window
         ScreenImage.MouseWheel += OnRemoteMouseWheel;
         KeyDown += OnRemoteKeyDown;
         KeyUp += OnRemoteKeyUp;
+
+        // Phase 12-B (Fix D) — fire a final-position flush at the throttle
+        // cadence so a user who stops moving still gets their last position
+        // delivered within MoveSendIntervalMs, not held until the next event.
+        if (_moveFlushTimer == null)
+        {
+            _moveFlushTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(MoveSendIntervalMs),
+            };
+            _moveFlushTimer.Tick += OnMoveFlushTick;
+        }
+        _moveFlushTimer.Start();
     }
 
     private void UnhookRemoteCapture()
@@ -163,17 +219,46 @@ public partial class StudentScreenWindow : Window
         ScreenImage.MouseWheel -= OnRemoteMouseWheel;
         KeyDown -= OnRemoteKeyDown;
         KeyUp -= OnRemoteKeyUp;
+        _moveFlushTimer?.Stop();
+        _hasPendingMove = false;
     }
 
-    private async void OnRemoteMouseMove(object sender, MouseEventArgs e)
+    private void OnRemoteMouseMove(object sender, MouseEventArgs e)
     {
         if (!_remoteActive || App.Server == null) return;
         var p = e.GetPosition(ScreenImage);
         double w = ScreenImage.ActualWidth, h = ScreenImage.ActualHeight;
         if (w <= 0 || h <= 0) return;
+        _pendingMoveX = Math.Clamp(p.X / w, 0, 1);
+        _pendingMoveY = Math.Clamp(p.Y / h, 0, 1);
+        _hasPendingMove = true;
+
+        // If we haven't sent within the throttle window, emit now to keep
+        // perceived latency low.  Otherwise the DispatcherTimer will flush
+        // the latest position at the next tick.
+        var now = DateTime.UtcNow;
+        if ((now - _lastMoveSendUtc).TotalMilliseconds >= MoveSendIntervalMs)
+        {
+            FlushMoveAsync();
+        }
+    }
+
+    private void OnMoveFlushTick(object? sender, EventArgs e)
+    {
+        if (!_remoteActive || !_hasPendingMove) return;
+        if ((DateTime.UtcNow - _lastMoveSendUtc).TotalMilliseconds < MoveSendIntervalMs) return;
+        FlushMoveAsync();
+    }
+
+    private async void FlushMoveAsync()
+    {
+        if (App.Server == null) return;
+        _hasPendingMove = false;
+        _lastMoveSendUtc = DateTime.UtcNow;
         var msg = new ClassroomCtrl.Shared.Protocol.RemoteMouseMoveMessage
-        { NormalizedX = Math.Clamp(p.X / w, 0, 1), NormalizedY = Math.Clamp(p.Y / h, 0, 1) };
-        try { await App.Server.SendRemoteMouseMoveAsync(_studentId, msg, CancellationToken.None); } catch { }
+        { NormalizedX = _pendingMoveX, NormalizedY = _pendingMoveY };
+        try { await App.Server.SendRemoteMouseMoveAsync(_studentId, msg, CancellationToken.None); }
+        catch (Exception ex) { App.LogDebug($"[Remote] MouseMove send failed: {ex.Message}"); }
     }
 
     private async void OnRemoteMouseDown(object sender, MouseButtonEventArgs e) => await SendClick(e, true);
@@ -190,15 +275,22 @@ public partial class StudentScreenWindow : Window
             _ => 0,
         };
         if (btn == 0) return;
+        // Phase 12-B (Fix D) — flush any pending move BEFORE the click so the
+        // student's cursor is at the intended position when the click fires.
+        // Without this, a throttled-out final move could leave the cursor at
+        // a stale position and the click would land in the wrong place.
+        if (_hasPendingMove) FlushMoveAsync();
         var msg = new ClassroomCtrl.Shared.Protocol.RemoteMouseClickMessage { Button = btn, IsDown = isDown };
-        try { await App.Server.SendRemoteMouseClickAsync(_studentId, msg, CancellationToken.None); } catch { }
+        try { await App.Server.SendRemoteMouseClickAsync(_studentId, msg, CancellationToken.None); }
+        catch (Exception ex) { App.LogDebug($"[Remote] MouseClick send failed: {ex.Message}"); }
     }
 
     private async void OnRemoteMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (!_remoteActive || App.Server == null) return;
         var msg = new ClassroomCtrl.Shared.Protocol.RemoteMouseScrollMessage { Delta = e.Delta };
-        try { await App.Server.SendRemoteMouseScrollAsync(_studentId, msg, CancellationToken.None); } catch { }
+        try { await App.Server.SendRemoteMouseScrollAsync(_studentId, msg, CancellationToken.None); }
+        catch (Exception ex) { App.LogDebug($"[Remote] MouseScroll send failed: {ex.Message}"); }
     }
 
     private async void OnRemoteKeyDown(object sender, KeyEventArgs e) => await SendKey(e, true);
@@ -218,7 +310,8 @@ public partial class StudentScreenWindow : Window
             CtrlDown = (Keyboard.Modifiers & ModifierKeys.Control) != 0,
             AltDown = (Keyboard.Modifiers & ModifierKeys.Alt) != 0,
         };
-        try { await App.Server.SendRemoteKeyAsync(_studentId, msg, CancellationToken.None); } catch { }
+        try { await App.Server.SendRemoteKeyAsync(_studentId, msg, CancellationToken.None); }
+        catch (Exception ex) { App.LogDebug($"[Remote] Key send failed: {ex.Message}"); }
         e.Handled = true;
     }
 
@@ -529,9 +622,22 @@ public partial class StudentScreenWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        // Phase 12-B — if the teacher closes the viewer mid-remote-control,
+        // signal the student to release-all before tearing down.  Fire-and-
+        // forget: we're in OnClosed so awaiting would block window teardown,
+        // and the student-side handler is idempotent.
+        if (_remoteActive && App.Server != null)
+        {
+            try { _ = App.Server.SendRemoteControlEndAsync(_studentId, CancellationToken.None); }
+            catch (Exception ex) { App.LogDebug($"[Remote] OnClosed End send failed: {ex.Message}"); }
+            _remoteActive = false;
+            UnhookRemoteCapture();
+        }
+
         if (App.Server != null)
         {
             App.Server.StudentStreamFrameReceived -= OnStudentFrame;
+            App.Server.StudentLeft -= OnStudentLeftWhileViewing;
         }
 
         // Phase 5b: deregister + auto-stop recording (no more frames coming).
