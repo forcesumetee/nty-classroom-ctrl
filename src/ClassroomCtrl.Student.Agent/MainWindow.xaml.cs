@@ -334,11 +334,17 @@ public partial class MainWindow : Window
             // ─────── Phase 4 Part 1: Screen Sharing ───────
 
             case MessageType.ScreenStreamStart:
-                IpcClient.LogToFile("[MainWindow] Screen stream START");
+            // Phase 13-B (Tier 1) — group-targeted teacher screen share routes
+            // through the same render path as whole-class; only the routing
+            // differs (Service-side IsForMe filters by TargetGroupId so out-of-
+            // group students never see these envelopes here).
+            case MessageType.GroupScreenStreamStart:
+                IpcClient.LogToFile($"[MainWindow] Screen stream START ({env.Type})");
                 Dispatcher.Invoke(EnsureScreenViewWindow);
                 break;
 
             case MessageType.ScreenStreamFrame:
+            case MessageType.GroupScreenStreamFrame:
                 {
                     var frame = MessagePack.MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(env.Payload);
                     Dispatcher.Invoke(() =>
@@ -353,7 +359,8 @@ public partial class MainWindow : Window
                 break;
 
             case MessageType.ScreenStreamStop:
-                IpcClient.LogToFile("[MainWindow] Screen stream STOP");
+            case MessageType.GroupScreenStreamStop:
+                IpcClient.LogToFile($"[MainWindow] Screen stream STOP ({env.Type})");
                 Dispatcher.Invoke(() =>
                 {
                     _screenViewWindow?.Close();

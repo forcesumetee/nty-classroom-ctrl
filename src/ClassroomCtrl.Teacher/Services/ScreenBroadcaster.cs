@@ -31,6 +31,16 @@ public class ScreenBroadcaster : IDisposable
     /// <summary>Codec used for current/next broadcast — read on Start.</summary>
     public VideoCodec Codec { get; set; } = VideoCodec.Mjpeg;
 
+    /// <summary>Phase 13-B (Tier 1) — when set, every frame is routed via
+    /// <see cref="ControlServer.BroadcastScreenFrameToGroupAsync"/> with the
+    /// given group id instead of the whole-class
+    /// <see cref="ControlServer.BroadcastScreenFrameAsync"/>.  Read on every
+    /// frame; the capture/encode pipeline is unchanged.  Set by UI in
+    /// concert with <see cref="ControlServer.StartGroupScreenShareAsync"/>
+    /// (which emits the Start signaling envelope to the target group);
+    /// clear via <see cref="ControlServer.StopGroupScreenShareAsync"/>.</summary>
+    public Guid? TargetGroupId { get; set; }
+
     /// <summary>Target bitrate for H.264 mode (CBR). Ignored for MJPEG.</summary>
     public int H264BitrateBps { get; set; } = 500_000;
 
@@ -159,13 +169,27 @@ public class ScreenBroadcaster : IDisposable
             useDxgi: App.UseDxgiCapture,
             out string activeCaptureDesc);
 
-        // Notify students to open viewer
-        _ = _server.BroadcastScreenStreamControlAsync(start: true, _cts.Token);
+        // Phase 13-B (Tier 1) — only emit whole-class ScreenStreamStart when
+        // this is a whole-class share.  Group share's Start signaling envelope
+        // is emitted by ControlServer.StartGroupScreenShareAsync (called by
+        // UI before bc.Start()) and targets only the group's members; emitting
+        // a whole-class Start here would cause out-of-group viewers to open
+        // an empty student-screen viewer.
+        if (!TargetGroupId.HasValue)
+        {
+            _ = _server.BroadcastScreenStreamControlAsync(start: true, _cts.Token);
+        }
 
         // Phase 11-B inc4 — late-joiner hook.  A student that connects mid-share
         // missed the broadcast Start above; we'll send them a per-peer Start +
         // ForceKeyframe so the next outgoing frame is an IDR they can decode.
-        _server.PeerConnected += OnLateJoinerPeerConnected;
+        // Phase 13-B (Tier 1) — disabled while in group share mode (only group
+        // members get the GroupScreenStreamStart from ControlServer; a late
+        // joiner who's not in the group should not receive it).
+        if (!TargetGroupId.HasValue)
+        {
+            _server.PeerConnected += OnLateJoinerPeerConnected;
+        }
 
         _captureTask = Task.Run(() => CaptureLoopAsync(_cts.Token));
         _logger.LogInformation("Screen broadcasting started ({Codec} {Fps} FPS, {W}x{H}, {Bps} bps, encoder={Encoder}, capture={Capture})",
@@ -183,8 +207,14 @@ public class ScreenBroadcaster : IDisposable
 
         // Phase 11-B inc4 — unsubscribe late-joiner hook.  Without this the
         // event keeps firing across share start/stop cycles and would try to
-        // ForceKeyframe on a disposed encoder.
+        // ForceKeyframe on a disposed encoder.  (Idempotent: -= on an unhooked
+        // event is a no-op, so the Phase 13-B group-share branch that skips
+        // the += still safely runs this -= path.)
         _server.PeerConnected -= OnLateJoinerPeerConnected;
+
+        // Snapshot group-mode flag BEFORE we clear it below — Stop() emits the
+        // correct Stop signaling envelope depending on which mode we were in.
+        var wasGroupShare = TargetGroupId.HasValue;
 
         _cts?.Cancel();
         try { _captureTask?.Wait(2000); } catch { }
@@ -195,8 +225,15 @@ public class ScreenBroadcaster : IDisposable
         _capturer?.Dispose();
         _capturer = null;
 
-        // Notify students to close viewer
-        _ = _server.BroadcastScreenStreamControlAsync(start: false, CancellationToken.None);
+        // Phase 13-B (Tier 1) — symmetric to the Start branch above: only
+        // broadcast whole-class Stop when this was a whole-class share.
+        // Group share's Stop envelope is emitted by ControlServer.
+        // StopGroupScreenShareAsync (called by UI after bc.Stop()).
+        if (!wasGroupShare)
+        {
+            _ = _server.BroadcastScreenStreamControlAsync(start: false, CancellationToken.None);
+        }
+        TargetGroupId = null;
         _logger.LogInformation("Screen broadcasting stopped (sent {Frames} frames)", _frameSeq);
     }
 
@@ -391,7 +428,15 @@ public class ScreenBroadcaster : IDisposable
                             Codec = _activeCodec,
                             IsKeyframe = isKeyframe,
                         };
-                        await _server.BroadcastScreenFrameAsync(msg, ct);
+                        // Phase 13-B (Tier 1) — route per current target.  Group
+                        // share and whole-class share are mutually exclusive at
+                        // the UI level; this just picks the right channel at
+                        // emission time.
+                        var grp = TargetGroupId;
+                        if (grp.HasValue)
+                            await _server.BroadcastScreenFrameToGroupAsync(msg, grp.Value, ct);
+                        else
+                            await _server.BroadcastScreenFrameAsync(msg, ct);
                     }
                 }
             }

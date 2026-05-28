@@ -237,6 +237,18 @@ public class ControlServer : IDisposable
         return _tcp.BroadcastAsync(env, ct);
     }
 
+    /// <summary>Phase 13-B (Tier 1) — send a single screen frame to one group only.
+    /// Routes via Envelope.TargetGroupId so the Service-side IsForMe filter drops
+    /// the frame for non-member students before crossing IPC.  Frame payload is
+    /// the same <see cref="ScreenStreamFrameMessage"/> shape; only the MessageType
+    /// (GroupScreenStreamFrame, 0x0624) and the TargetGroupId differ.</summary>
+    public Task BroadcastScreenFrameToGroupAsync(ScreenStreamFrameMessage frame, Guid groupId, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(frame);
+        var env = Envelope.CreateGroupTargeted(MessageType.GroupScreenStreamFrame, bytes, _teacherId, groupId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
     // ─────── Phase 4 Part 2: Student → Teacher view (on-demand) ───────
 
     /// <summary>Tell a specific student to start streaming their screen back to teacher with the given codec.</summary>

@@ -130,12 +130,30 @@ public partial class GroupManagerView : Window
     {
         if (App.Server == null) return;
         if (sender is not Button b || b.Tag is not RoomViewModel r) return;
-        // Step 5 wires the actual screen-share routing.  Step 4 just toggles
-        // the server-side flag; ScreenBroadcaster picks it up next frame.
+        var bc = App.ScreenBroadcaster;
+        if (bc == null) return;
+
         if (r.IsShareActive)
-            await App.Server.StopGroupScreenShareAsync(CancellationToken.None);
+        {
+            // Stop group share: emit Stop envelope first (still in group mode so
+            // it routes to group), then tear down the broadcaster.
+            await App.Server.StopGroupScreenShareAsync(System.Threading.CancellationToken.None);
+            bc.Stop();  // resets bc.TargetGroupId to null inside Stop()
+        }
         else
-            await App.Server.StartGroupScreenShareAsync(r.RoomId, App.SelectedCodec, CancellationToken.None);
+        {
+            // Mutual exclusion: refuse to start group share while whole-class
+            // share is running.  Teacher must Stop the whole-class share first.
+            if (bc.IsBroadcasting && !bc.TargetGroupId.HasValue)
+            {
+                MessageBox.Show(Loc.Get("GroupMgr_ShareConflictWholeClass"));
+                return;
+            }
+            bc.Codec = App.SelectedCodec;
+            bc.TargetGroupId = r.RoomId;          // MUST set before Start() so Start branches correctly
+            if (!bc.IsBroadcasting) bc.Start();   // capture loop running with group routing
+            await App.Server.StartGroupScreenShareAsync(r.RoomId, App.SelectedCodec, System.Threading.CancellationToken.None);
+        }
     }
 
     private void GroupMenu_Click(object sender, RoutedEventArgs e)
