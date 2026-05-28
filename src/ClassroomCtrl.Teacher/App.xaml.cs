@@ -264,6 +264,29 @@ public partial class App : Application
 
     private const string RegPath = @"Software\NTY\ClassroomCtrl";
     private const string RegValue = "Language";
+    // Phase 11-B inc2 part 2 — opt-in HW H.264 encode toggle.  DWORD; non-zero = enabled.
+    // Same key used by Student.Agent so one `reg add` controls both processes.
+    // To enable on the dev box:
+    //   reg add "HKCU\Software\NTY\ClassroomCtrl" /v UseHardwareH264 /t REG_DWORD /d 1 /f
+    private const string RegValueHwH264 = "UseHardwareH264";
+
+    /// <summary>Phase 11-B inc2 part 2 — opt-in flag read from HKCU.  Default false so
+    /// production stays on the verified OpenH264 SW path until the dev's 2-PC test
+    /// confirms MF HW output decodes on the existing OpenH264 decoder.  Read on demand
+    /// (not cached) so a registry change takes effect the next time Share Screen is
+    /// pressed without an app restart.</summary>
+    public static bool UseHardwareH264
+    {
+        get
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(RegPath);
+                return key?.GetValue(RegValueHwH264) is int i && i != 0;
+            }
+            catch { return false; }
+        }
+    }
 
     private static string? ReadPreferredLanguage()
     {

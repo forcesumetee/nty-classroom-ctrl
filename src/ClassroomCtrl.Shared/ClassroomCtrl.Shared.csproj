@@ -2,9 +2,19 @@
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <UseWPF>true</UseWPF>
+    <!-- Phase 11-B inc2 part 2 round 2 — MediaFoundationH264Encoder uses an unsafe
+         block for the per-frame BGRA→NV12 conversion (avoids per-pixel index-bounds
+         checks on the hot path).  Confined to that one method. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="MessagePack" Version="2.5.187" />
     <PackageReference Include="H264Sharp" Version="1.6.0" />
+    <!-- Phase 11-B inc2 part 2 (round 2) — Vortice.MediaFoundation managed wrappers
+         (SharpGen-generated) for the MF software H.264 encoder.  Round-1 attempt
+         used wrong API names; round 2 resolves them against the restored
+         assembly first via PowerShell reflection (see hand-off report).
+         Managed-only assemblies (~2 MB); no extra native binary. -->
+    <PackageReference Include="Vortice.MediaFoundation" Version="3.6.2" />
   </ItemGroup>
 </Project>

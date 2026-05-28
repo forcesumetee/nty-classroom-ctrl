@@ -76,11 +76,16 @@ public class StudentBroadcaster : IDisposable
         // story: if H.264 init throws (encoder unavailable on this OS / arch),
         // drop to MJPEG and stamp _activeCodec accordingly so frame messages
         // carry the right Codec on the wire.
+        // Phase 11-B inc2 part 2 — factory now also considers App.UseHardwareH264
+        // and reports back which encoder it actually selected.
+        string activeEncoderDesc;
         try
         {
             _encoder = VideoEncoderFactory.Create(
                 _activeCodec, TargetWidth, TargetHeight,
-                FramesPerSecond, H264BitrateBps, JpegQuality);
+                FramesPerSecond, H264BitrateBps, JpegQuality,
+                useHardwareH264: App.UseHardwareH264,
+                out activeEncoderDesc);
             if (_activeCodec == VideoCodec.H264)
             {
                 _encoder.ForceKeyframe();  // guarantee first emitted frame is IDR
@@ -94,11 +99,13 @@ public class StudentBroadcaster : IDisposable
             _activeCodec = VideoCodec.Mjpeg;
             _encoder = VideoEncoderFactory.Create(
                 VideoCodec.Mjpeg, TargetWidth, TargetHeight,
-                FramesPerSecond, H264BitrateBps, JpegQuality);
+                FramesPerSecond, H264BitrateBps, JpegQuality,
+                useHardwareH264: false,
+                out activeEncoderDesc);
         }
 
         _captureTask = Task.Run(() => CaptureLoopAsync(_cts.Token));
-        IpcClient.LogToFile($"[StudentBroadcaster] Started ({_activeCodec} {FramesPerSecond} FPS, {TargetWidth}x{TargetHeight})");
+        IpcClient.LogToFile($"[StudentBroadcaster] Started ({_activeCodec} {FramesPerSecond} FPS, {TargetWidth}x{TargetHeight}, encoder={activeEncoderDesc}, UseHardwareH264={App.UseHardwareH264})");
     }
 
     public void Stop()

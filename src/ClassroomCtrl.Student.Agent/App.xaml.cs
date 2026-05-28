@@ -156,6 +156,25 @@ public partial class App : Application
 
     private const string RegPath = @"Software\NTY\ClassroomCtrl";
     private const string RegValue = "Language";
+    // Phase 11-B inc2 part 2 — opt-in HW H.264 encode toggle.  DWORD; non-zero = enabled.
+    // Same key the Teacher reads so one `reg add` controls both processes.
+    private const string RegValueHwH264 = "UseHardwareH264";
+
+    /// <summary>Phase 11-B inc2 part 2 — opt-in flag read from HKCU.  Default false so
+    /// production stays on the verified OpenH264 SW path.  Read on demand so a registry
+    /// change takes effect at the next StudentBroadcaster Start without an app restart.</summary>
+    public static bool UseHardwareH264
+    {
+        get
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(RegPath);
+                return key?.GetValue(RegValueHwH264) is int i && i != 0;
+            }
+            catch { return false; }
+        }
+    }
 
     private static string? ReadPreferredLanguage()
     {

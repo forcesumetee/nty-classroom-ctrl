@@ -111,11 +111,17 @@ public class ScreenBroadcaster : IDisposable
         // instead of the prior inline H264/MJPEG branches.  Same fallback story:
         // if H.264 init throws, drop to MJPEG and stamp _activeCodec accordingly
         // so frame messages carry the right Codec on the wire.
+        // Phase 11-B inc2 part 2 — factory now also considers App.UseHardwareH264
+        // and reports back which encoder it actually selected so this Start log
+        // accurately reflects HW vs SW vs MJPEG.
+        string activeEncoderDesc;
         try
         {
             _encoder = VideoEncoderFactory.Create(
                 _activeCodec, TargetWidth, TargetHeight,
-                FramesPerSecond, H264BitrateBps, JpegQuality);
+                FramesPerSecond, H264BitrateBps, JpegQuality,
+                useHardwareH264: App.UseHardwareH264,
+                out activeEncoderDesc);
             if (_activeCodec == VideoCodec.H264)
             {
                 _encoder.ForceKeyframe();  // guarantee first emitted frame is IDR
@@ -127,17 +133,21 @@ public class ScreenBroadcaster : IDisposable
             _logger.LogWarning(ex, "{Codec} encoder init failed — falling back to MJPEG", _activeCodec);
             _encoder?.Dispose();
             _activeCodec = VideoCodec.Mjpeg;
+            // Force useHardwareH264:false on the fallback so we can't loop back into MF.
             _encoder = VideoEncoderFactory.Create(
                 VideoCodec.Mjpeg, TargetWidth, TargetHeight,
-                FramesPerSecond, H264BitrateBps, JpegQuality);
+                FramesPerSecond, H264BitrateBps, JpegQuality,
+                useHardwareH264: false,
+                out activeEncoderDesc);
         }
 
         // Notify students to open viewer
         _ = _server.BroadcastScreenStreamControlAsync(start: true, _cts.Token);
 
         _captureTask = Task.Run(() => CaptureLoopAsync(_cts.Token));
-        _logger.LogInformation("Screen broadcasting started ({Codec} {Fps} FPS, {W}x{H}, {Bps} bps)",
-            _activeCodec, FramesPerSecond, TargetWidth, TargetHeight, CurrentBitrateBps);
+        _logger.LogInformation("Screen broadcasting started ({Codec} {Fps} FPS, {W}x{H}, {Bps} bps, encoder={Encoder})",
+            _activeCodec, FramesPerSecond, TargetWidth, TargetHeight, CurrentBitrateBps, activeEncoderDesc);
+        App.LogDebug($"[Broadcast] Active encoder: {activeEncoderDesc} (UseHardwareH264 flag={App.UseHardwareH264})");
     }
 
     public void Stop()
