@@ -418,16 +418,12 @@
                             <!-- Sub-section spacer (12px) -->
                             <Border Height="12"/>
 
-                            <!-- Sub-section: Breakout -->
+                            <!-- Sub-section: Breakout (Phase 13-B Tier 1 — single entry to GroupManagerView) -->
                             <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding OpenBreakoutCommand}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="👥" FontSize="14" Width="22" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="{DynamicResource Btn_BreakoutRooms}" VerticalAlignment="Center"/>
                                 </StackPanel>
-                            </Button>
-                            <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding OpenMultiRoomCommand}">
-                                <TextBlock Text="{DynamicResource Btn_MultiRoom}"
-                                           VerticalAlignment="Center" HorizontalAlignment="Left"/>
                             </Button>
                         </StackPanel>
 

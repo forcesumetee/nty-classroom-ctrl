@@ -381,7 +381,10 @@ public partial class MainViewModel : ObservableObject
         SendFileCommand = new RelayCommand(SendFile);
         StartRecordingCommand = new RelayCommand(ToggleRecording);
         OpenRecordingsFolderCommand = new RelayCommand(OpenRecordingsFolder);
-        OpenBreakoutCommand = new RelayCommand(CreateRooms);
+        // Phase 13-B (Tier 1) — both breakout entry points now open GroupManagerView.
+        // The old CreateRooms input-box flow is unreachable (kept as legacy for
+        // grep-history; can be removed in a follow-up cleanup).
+        OpenBreakoutCommand = new RelayCommand(OpenGroupManager);
         ApplyPolicyCommand = new RelayCommand(OpenApplyPolicy);
         OpenLanguageCommand = new RelayCommand(OpenLanguage);
         SendChatCommand = new RelayCommand(SendChat);
@@ -412,7 +415,7 @@ public partial class MainViewModel : ObservableObject
         UpdateCameraButtonText();
         OpenNetMovieCommand = new RelayCommand(OpenNetMovie);
         OpenMicMonitorCommand = new RelayCommand(OpenMicMonitor);
-        OpenMultiRoomCommand = new RelayCommand(OpenMultiRoom);
+        OpenMultiRoomCommand = new RelayCommand(OpenGroupManager);
         if (App.Roster != null)
         {
             App.Roster.ActiveRosterChanged += OnActiveRosterChanged;
@@ -478,6 +481,10 @@ public partial class MainViewModel : ObservableObject
             App.Server.QualityReportReceived += OnQualityReportReceived;
             App.Server.HostChanged += OnHostChanged;
             App.Server.DemoStateChanged += OnDemoStateChanged;
+            // Phase 13-B (Tier 1) — sync local Rooms collection from canonical
+            // server state on every mutation.  GroupManagerView + the Step-7
+            // badges + status chip all read off Rooms.
+            App.Server.RoomsChanged += OnServerRoomsChanged;
         }
 
         if (App.AdaptiveBitrate != null)
@@ -1681,12 +1688,79 @@ public partial class MainViewModel : ObservableObject
         w.Show();
     }
 
-    // ─────── Multi-room teaching ───────
+    // ─────── Phase 13-B (Tier 1): Group Manager ───────
+    // Replaces both the old CreateRooms input-box flow (Btn_BreakoutRooms) and
+    // the MultiRoomTeacherView entry (Btn_MultiRoom).  The new GroupManagerView
+    // owns create/rename/dissolve/assign/host/templates and reads canonical
+    // state from App.Server (mirrored into Rooms via OnServerRoomsChanged).
 
-    private void OpenMultiRoom()
+    /// <summary>Phase 13-B (Tier 1) — fired whenever the Rooms collection is
+    /// rebuilt from a server snapshot.  GroupManagerView subscribes to refresh
+    /// its Unassigned section in addition to the implicit ObservableCollection
+    /// notifications.</summary>
+    public event System.EventHandler? RoomsCollectionChanged;
+
+    /// <summary>Phase 13-B (Tier 1) — Step 6 wires this to a method that opens
+    /// GroupControllerWindow for the chosen room.  Step 4's Join button calls
+    /// it via null-check, so it's safe to be unset before Step 6 lands.</summary>
+    public System.Action<RoomViewModel>? OpenGroupControllerForRoom { get; set; }
+
+    private void OpenGroupManager()
     {
-        var w = new MultiRoomTeacherView { Owner = System.Windows.Application.Current.MainWindow };
+        var w = new GroupManagerView { Owner = System.Windows.Application.Current.MainWindow };
         w.Show();
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — invoked on the dispatcher when App.Server.RoomsChanged
+    /// fires.  Rebuilds the Rooms collection from the server's canonical
+    /// snapshot so badges, status chip, and GroupManagerView all converge.</summary>
+    private void OnServerRoomsChanged(object? sender, System.EventArgs e)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            if (App.Server == null) return;
+            var descriptors = App.Server.BuildGroupDescriptors();
+            var teacherJoined = App.Server.TeacherJoinedGroupId;
+            var activeShare = App.Server.ActiveGroupShareGroupId;
+
+            // Reuse existing RoomViewModel instances by id to preserve UI state
+            // (e.g. expansion).  Rebuild MemberIds inside each.
+            var keepIds = new System.Collections.Generic.HashSet<System.Guid>(descriptors.Select(d => d.Id));
+            for (int i = Rooms.Count - 1; i >= 0; i--)
+                if (!keepIds.Contains(Rooms[i].RoomId)) Rooms.RemoveAt(i);
+
+            for (int i = 0; i < descriptors.Count; i++)
+            {
+                var d = descriptors[i];
+                var vm = Rooms.FirstOrDefault(r => r.RoomId == d.Id);
+                if (vm == null)
+                {
+                    vm = new RoomViewModel
+                    {
+                        RoomId = d.Id,
+                        RoomName = d.Name,
+                        ColorHex = GetRoomColor(i),
+                    };
+                    Rooms.Add(vm);
+                }
+                else
+                {
+                    vm.RoomName = d.Name;
+                }
+                vm.HostId = d.HostId;
+                vm.IsTeacherJoined = (teacherJoined == d.Id);
+                vm.IsShareActive = (activeShare == d.Id);
+
+                // Sync MemberIds (incremental: add missing, remove gone).
+                var wanted = new System.Collections.Generic.HashSet<System.Guid>(d.MemberIds);
+                for (int j = vm.MemberIds.Count - 1; j >= 0; j--)
+                    if (!wanted.Contains(vm.MemberIds[j])) vm.MemberIds.RemoveAt(j);
+                foreach (var mid in d.MemberIds)
+                    if (!vm.MemberIds.Contains(mid)) vm.MemberIds.Add(mid);
+            }
+
+            RoomsCollectionChanged?.Invoke(this, System.EventArgs.Empty);
+        });
     }
 
     // ─────── Phase 9.3: Class Roster ───────
@@ -2053,6 +2127,17 @@ public partial class RoomViewModel : ObservableObject
     [ObservableProperty] private System.Guid roomId;
     [ObservableProperty] private string roomName = "";
     [ObservableProperty] private string colorHex = "#3B82F6";
+
+    // Phase 13-B (Tier 1) — extras populated from server's GroupDescriptor.
+    /// <summary>Member endpoint ids (subset of online students; offline members
+    /// silently dropped at template-load and on disconnect cleanup).</summary>
+    public System.Collections.ObjectModel.ObservableCollection<System.Guid> MemberIds { get; }
+        = new System.Collections.ObjectModel.ObservableCollection<System.Guid>();
+    [ObservableProperty] private System.Guid? hostId;
+    /// <summary>True iff teacher is currently joined to this group.</summary>
+    [ObservableProperty] private bool isTeacherJoined;
+    /// <summary>True iff group-targeted teacher screen share is currently targeting this group.</summary>
+    [ObservableProperty] private bool isShareActive;
 }
 
 // Phase 8 (Bug D) — JSON-persisted shape of the broadcast policy. Mirrors the Current*
