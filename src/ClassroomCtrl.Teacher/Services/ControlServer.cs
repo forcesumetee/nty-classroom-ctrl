@@ -20,6 +20,13 @@ public class ControlServer : IDisposable
     // Phase 8.5: roomId → hostStudentId. Missing key = no host.
     private readonly Dictionary<Guid, Guid> _roomHostMap = new();
 
+    // Phase 13-B (Tier 1) — breakout extensions: which group (if any) the
+    // teacher is currently joined to + which group (if any) is the active
+    // target for teacher screen-share.  Both null = teacher is in whole-class
+    // mode; mutually exclusive with the existing whole-class screen broadcast.
+    private Guid? _teacherJoinedGroupId;
+    private Guid? _activeGroupShareGroupId;
+
     // Phase 9.1: Student Demonstration — at most one source student is broadcasting to peers
     // at a time. While set, every StudentStreamFrame from this sender is also rebroadcast as
     // a DemoFrame to all students.
@@ -52,6 +59,11 @@ public class ControlServer : IDisposable
 
     /// <summary>Phase 8.5: Host of a breakout room changed (or cleared). Args = (roomId, newHostId|null).</summary>
     public event EventHandler<(Guid RoomId, Guid? NewHostId)>? HostChanged;
+
+    /// <summary>Phase 13-B (Tier 1) — fired whenever the canonical breakout state
+    /// changes (group created/renamed/dissolved, member added/removed, host
+    /// set, teacher join/leave).  ViewModels rebuild their Rooms collection.</summary>
+    public event EventHandler? RoomsChanged;
 
     /// <summary>Phase 9.1: Student demo started/stopped. Null = stopped.</summary>
     public event EventHandler<(Guid? SourceId, string SourceName)>? DemoStateChanged;
@@ -484,8 +496,12 @@ public class ControlServer : IDisposable
 
     // ─────── Phase 8: Breakout Rooms ───────
 
-    /// <summary>Assign student to a breakout room. roomId=null removes from any room.</summary>
-    public Task AssignToRoomAsync(Guid endpointId, Guid? roomId, string roomName, CancellationToken ct)
+    /// <summary>Assign student to a breakout room. roomId=null removes from any room.
+    /// Phase 13-B (Tier 1) — also broadcasts an atomic GroupSnapshot + fires
+    /// RoomsChanged so the teacher UI rebuilds.  Per-student BreakoutAssign
+    /// stays the primary student-visible signal; the snapshot is the recovery
+    /// path for late joiners + the authoritative refresh for the teacher UI.</summary>
+    public async Task AssignToRoomAsync(Guid endpointId, Guid? roomId, string roomName, CancellationToken ct)
     {
         _studentRoomMap[endpointId] = roomId;
         if (roomId.HasValue && !_roomNames.ContainsKey(roomId.Value))
@@ -506,7 +522,9 @@ public class ControlServer : IDisposable
 
         _logger.LogInformation("Breakout assign → {Endpoint}: room={Room} ({Name}) host={Host}",
             endpointId, roomId, roomName, hostId);
-        return _tcp.BroadcastAsync(env, ct);
+        await _tcp.BroadcastAsync(env, ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        RoomsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     // ─────── Phase 8.5: Host assignment + actions ───────
@@ -645,6 +663,14 @@ public class ControlServer : IDisposable
         }
         _studentRoomMap.Clear();
         _roomNames.Clear();
+        _roomHostMap.Clear();
+        // Phase 13-B (Tier 1) — explicit BreakoutDissolve broadcast (grep-friendly
+        // for incident triage) + final atomic GroupSnapshot.
+        var msg = new BreakoutDissolveMessage { GroupId = Guid.Empty };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutDissolve, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        RoomsChanged?.Invoke(this, EventArgs.Empty);
         _logger.LogInformation("All breakout rooms dissolved");
     }
 
@@ -652,6 +678,196 @@ public class ControlServer : IDisposable
         _studentRoomMap.TryGetValue(endpointId, out var rid) ? rid : null;
 
     public IReadOnlyDictionary<Guid, string> Rooms => _roomNames;
+
+    // ─────── Phase 13-B (Tier 1) — group lifecycle + teacher join + group share ───────
+
+    /// <summary>Phase 13-B (Tier 1) — read-only view of the canonical group state.
+    /// Built on demand from <see cref="_studentRoomMap"/> + <see cref="_roomNames"/> +
+    /// <see cref="_roomHostMap"/>.  Used by <see cref="BroadcastGroupSnapshotAsync"/>
+    /// and by teacher UI rebuild.</summary>
+    public List<GroupDescriptor> BuildGroupDescriptors()
+    {
+        var byRoom = new Dictionary<Guid, List<Guid>>();
+        foreach (var (ep, rid) in _studentRoomMap)
+        {
+            if (!rid.HasValue) continue;
+            if (!byRoom.TryGetValue(rid.Value, out var list))
+                byRoom[rid.Value] = list = new List<Guid>();
+            list.Add(ep);
+        }
+        // Include empty groups too (created without any members yet).
+        foreach (var rid in _roomNames.Keys)
+            if (!byRoom.ContainsKey(rid)) byRoom[rid] = new List<Guid>();
+        return byRoom.Select(kv => new GroupDescriptor
+        {
+            Id = kv.Key,
+            Name = _roomNames.TryGetValue(kv.Key, out var n) ? n : "",
+            MemberIds = kv.Value,
+            HostId = _roomHostMap.TryGetValue(kv.Key, out var h) ? h : (Guid?)null,
+        }).ToList();
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — broadcast atomic group state to everyone.
+    /// Cheap (snapshot size at class scale ≈ a few hundred bytes); fires on
+    /// every mutation so clients always converge to the same view.</summary>
+    public Task BroadcastGroupSnapshotAsync(CancellationToken ct)
+    {
+        var msg = new GroupSnapshotMessage
+        {
+            Groups = BuildGroupDescriptors(),
+            TeacherJoinedGroupId = _teacherJoinedGroupId,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.GroupSnapshot, bytes, _teacherId), ct);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — create a new group with optional initial
+    /// members.  Each member is assigned via the existing per-student
+    /// BreakoutAssign path.  Emits an explicit BreakoutCreate envelope (grep-
+    /// friendly) and the post-state GroupSnapshot.</summary>
+    public async Task CreateGroupAsync(string name, IList<Guid> members, CancellationToken ct)
+    {
+        var groupId = Guid.NewGuid();
+        _roomNames[groupId] = name ?? "";
+
+        var msg = new BreakoutCreateMessage { GroupId = groupId, Name = name ?? "" };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutCreate, bytes, _teacherId), ct);
+
+        foreach (var ep in members)
+            await AssignToRoomAsync(ep, groupId, name ?? "", ct);
+
+        // AssignToRoomAsync already fires snapshot per call; if there were no
+        // members, fire once now so the empty-group state propagates.
+        if (members.Count == 0)
+        {
+            await BroadcastGroupSnapshotAsync(ct);
+            RoomsChanged?.Invoke(this, EventArgs.Empty);
+        }
+        _logger.LogInformation("Group created: {Id} ({Name}) members={Count}", groupId, name, members.Count);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — delete one group.  Members fall back to
+    /// main classroom (null room).  If teacher was joined to this group, leave.</summary>
+    public async Task DeleteGroupAsync(Guid groupId, CancellationToken ct)
+    {
+        if (groupId == Guid.Empty || !_roomNames.ContainsKey(groupId)) return;
+
+        // Fall the joined-teacher flag back to whole-class if we deleted the active group.
+        if (_teacherJoinedGroupId == groupId) await TeacherLeaveGroupAsync(ct);
+        if (_activeGroupShareGroupId == groupId) await StopGroupScreenShareAsync(ct);
+
+        var members = _studentRoomMap.Where(kv => kv.Value == groupId).Select(kv => kv.Key).ToList();
+        foreach (var ep in members) await AssignToRoomAsync(ep, null, "", ct);
+        _roomNames.Remove(groupId);
+        _roomHostMap.Remove(groupId);
+
+        var msg = new BreakoutDissolveMessage { GroupId = groupId };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutDissolve, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        RoomsChanged?.Invoke(this, EventArgs.Empty);
+        _logger.LogInformation("Group deleted: {Id} (members reassigned to main)", groupId);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — rename a group; re-broadcast per-member
+    /// BreakoutAssign (so each student sees the new name in their toast) and
+    /// the snapshot.</summary>
+    public async Task RenameGroupAsync(Guid groupId, string newName, CancellationToken ct)
+    {
+        if (!_roomNames.ContainsKey(groupId)) return;
+        _roomNames[groupId] = newName ?? "";
+
+        var members = _studentRoomMap.Where(kv => kv.Value == groupId).Select(kv => kv.Key).ToList();
+        foreach (var ep in members) await AssignToRoomAsync(ep, groupId, newName ?? "", ct);
+        if (members.Count == 0)
+        {
+            await BroadcastGroupSnapshotAsync(ct);
+            RoomsChanged?.Invoke(this, EventArgs.Empty);
+        }
+        _logger.LogInformation("Group renamed: {Id} → '{Name}'", groupId, newName);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — wraps the existing Phase 8.5 SetRoomHostAsync
+    /// + emits an explicit BreakoutHostSet envelope + the snapshot.</summary>
+    public async Task SetGroupHostAsync(Guid groupId, Guid? hostId, CancellationToken ct)
+    {
+        await SetRoomHostAsync(groupId, hostId, ct);  // Phase 8.5 — handles per-member re-assign
+        var msg = new BreakoutHostSetMessage { GroupId = groupId, HostStudentId = hostId };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutHostSet, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        RoomsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — alias for the existing DissolveAllRoomsAsync,
+    /// kept for symmetry with the design-doc naming.</summary>
+    public Task DissolveAllAsync(CancellationToken ct) => DissolveAllRoomsAsync(ct);
+
+    /// <summary>Phase 13-B (Tier 1) — teacher joins a group.  Pure signaling +
+    /// state stamp; does NOT change group membership.  Decision #6: only one
+    /// joined group at a time — emits an implicit Leave if already joined to
+    /// another.</summary>
+    public async Task TeacherJoinGroupAsync(Guid groupId, CancellationToken ct)
+    {
+        if (groupId == Guid.Empty || !_roomNames.ContainsKey(groupId)) return;
+        if (_teacherJoinedGroupId.HasValue && _teacherJoinedGroupId != groupId)
+            await TeacherLeaveGroupAsync(ct);
+
+        _teacherJoinedGroupId = groupId;
+        var name = _roomNames.TryGetValue(groupId, out var n) ? n : "";
+        var msg = new GroupTeacherJoinedMessage { GroupId = groupId, GroupName = name };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.GroupTeacherJoined, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        _logger.LogInformation("Teacher joined group {Id} ({Name})", groupId, name);
+    }
+
+    public async Task TeacherLeaveGroupAsync(CancellationToken ct)
+    {
+        if (!_teacherJoinedGroupId.HasValue) return;
+        var leaving = _teacherJoinedGroupId.Value;
+        _teacherJoinedGroupId = null;
+        var msg = new GroupTeacherLeftMessage { GroupId = leaving };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.GroupTeacherLeft, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        _logger.LogInformation("Teacher left group {Id}", leaving);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — start group-targeted teacher screen share.
+    /// Emits the Start control envelope; actual frame routing changes inside
+    /// ScreenBroadcaster (Step 5).  Mutually exclusive with whole-class share.</summary>
+    public async Task StartGroupScreenShareAsync(Guid groupId, VideoCodec codec, CancellationToken ct)
+    {
+        if (groupId == Guid.Empty || !_roomNames.ContainsKey(groupId)) return;
+        _activeGroupShareGroupId = groupId;
+        var msg = new GroupScreenStreamControlMessage { GroupId = groupId, Start = true, Codec = codec };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateGroupTargeted(MessageType.GroupScreenStreamStart, bytes, _teacherId, groupId);
+        await _tcp.BroadcastAsync(env, ct);
+        _logger.LogInformation("Group screen share START → group {Id} codec={Codec}", groupId, codec);
+    }
+
+    public async Task StopGroupScreenShareAsync(CancellationToken ct)
+    {
+        if (!_activeGroupShareGroupId.HasValue) return;
+        var stopping = _activeGroupShareGroupId.Value;
+        _activeGroupShareGroupId = null;
+        var msg = new GroupScreenStreamControlMessage { GroupId = stopping, Start = false, Codec = VideoCodec.Mjpeg };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateGroupTargeted(MessageType.GroupScreenStreamStop, bytes, _teacherId, stopping);
+        await _tcp.BroadcastAsync(env, ct);
+        _logger.LogInformation("Group screen share STOP (was → group {Id})", stopping);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — read-only accessor for the currently
+    /// joined group; teacher UI surfaces this as a status chip.</summary>
+    public Guid? TeacherJoinedGroupId => _teacherJoinedGroupId;
+
+    /// <summary>Phase 13-B (Tier 1) — read-only accessor for the active
+    /// group-targeted screen share, if any.</summary>
+    public Guid? ActiveGroupShareGroupId => _activeGroupShareGroupId;
 
     /// <summary>Phase 9.8: Send a teacher-authored chat message to all members of one breakout room.</summary>
     public async Task BroadcastChatToRoomAsync(Guid roomId, string text, CancellationToken ct)
@@ -782,6 +998,25 @@ public class ControlServer : IDisposable
                 _logger.LogInformation("Student joined: {Name} ({Machine}) endpoint={Id}",
                     hello.DisplayName, hello.MachineName, hello.EndpointId);
                 StudentJoined?.Invoke(this, hello);
+                // Phase 13-B (Tier 1) — push the current GroupSnapshot to the
+                // joining peer so a late student / reconnect-after-teacher-restart
+                // converges to canonical state immediately.  Targeted via the
+                // student's application EndpointId; receiver-side IsForMe matches.
+                if (_roomNames.Count > 0 || _teacherJoinedGroupId.HasValue)
+                {
+                    try
+                    {
+                        var snapMsg = new GroupSnapshotMessage
+                        {
+                            Groups = BuildGroupDescriptors(),
+                            TeacherJoinedGroupId = _teacherJoinedGroupId,
+                        };
+                        var snapBytes = MessagePack.MessagePackSerializer.Serialize(snapMsg);
+                        var snapEnv = Envelope.CreateTargeted(MessageType.GroupSnapshot, snapBytes, _teacherId, hello.EndpointId);
+                        _ = _tcp.BroadcastAsync(snapEnv, System.Threading.CancellationToken.None);
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Hello-ack snapshot send failed"); }
+                }
                 break;
 
             case MessageType.HandRaise:
