@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using System.Buffers.Binary;
 using System.IO.Pipes;
+using System.Security.AccessControl;
 
 namespace ClassroomCtrl.Student.Service.Modules;
 
@@ -38,9 +39,7 @@ public class IpcServer
             NamedPipeServerStream? stream = null;
             try
             {
-                stream = new NamedPipeServerStream(NetworkConstants.IpcPipeName,
-                    PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                stream = CreatePipeServer();
                 await stream.WaitForConnectionAsync(ct);
                 // Phase 10.8 — capture the impersonated client identity.  In Session-0
                 // Service mode this should report the interactive user (e.g.
@@ -69,6 +68,88 @@ public class IpcServer
                 stream?.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Phase 10.19 — create the IPC pipe server with an explicit security descriptor
+    /// so the non-elevated Agent (Medium integrity) can connect even when this Service
+    /// is running elevated (High integrity).
+    ///
+    /// Without the explicit descriptor:
+    ///   - The pipe inherits the Service's High mandatory integrity label.
+    ///   - Windows' mandatory integrity check (which runs before DACL evaluation)
+    ///     rejects any Medium-IL client trying to open it.
+    ///   - The Agent's NamedPipeClientStream.Connect throws
+    ///     UnauthorizedAccessException, no command frames flow either way, and
+    ///     teacher-side "View Full Screen" shows black.
+    ///
+    /// The SDDL has two parts:
+    ///   D: (DACL) — who is allowed to open the pipe:
+    ///       SYSTEM, Administrators: FullControl (FA).
+    ///       Authenticated Users: ReadWrite + CreateNewInstance + Synchronize
+    ///         (0x12019F = sum of PipeAccessRights ReadData|WriteData|
+    ///         CreateNewInstance|ReadEA|WriteEA|ReadAttributes|WriteAttributes|
+    ///         ReadPermissions|Synchronize).  Wide enough for the Agent's
+    ///         length-prefixed async read/write loop; no permission-change or
+    ///         delete rights are granted to non-admins.
+    ///   S: (SACL) — mandatory integrity label:
+    ///       ML;NW;ME = SYSTEM_MANDATORY_LABEL, NO_WRITE_UP, MEDIUM.
+    ///       This lowers the pipe's IL from the Service's High inheritance to
+    ///       Medium, so the kernel's integrity check passes for the Medium Agent.
+    ///
+    /// Fallback path: setting a mandatory label requires SeSecurityPrivilege which
+    /// only an elevated process holds.  If Create with the full descriptor throws
+    /// (typical on a dev box where the Service runs non-elevated), retry with a
+    /// DACL-only descriptor.  In that case both Service and Agent already run at
+    /// the same IL (Medium), so the kernel's mandatory check passes without an
+    /// explicit label and the DACL grant alone is sufficient.
+    ///
+    /// We do NOT ship "Agent runs as administrator" as the fix: many student PCs
+    /// are standard-user accounts with no admin rights at all, and elevating a
+    /// tray/UI app breaks shell drag-drop.  This descriptor is the standard
+    /// solution for a privileged service IPC-ing with a desktop app.
+    /// </summary>
+    private NamedPipeServerStream CreatePipeServer()
+    {
+        // DACL ACEs (same in both code paths):
+        //   A;FA;SY = LocalSystem        — FullControl
+        //   A;FA;BA = BUILTIN\Admins     — FullControl
+        //   A;0x12019F;AU = Authenticated Users — ReadWrite + CreateNewInstance
+        //                                         + Synchronize + ReadPermissions
+        const string dacl = "D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x12019F;;;AU)";
+        // Mandatory label SACL: ML;NW;ME = Medium IL, no-write-up.
+        const string sacl = "S:(ML;;NW;;;ME)";
+
+        try
+        {
+            return CreatePipeWithSddl(dacl + sacl);
+        }
+        catch (System.IO.IOException ex)
+        {
+            // Expected when Service is not elevated.  See class doc above for why
+            // the fallback is safe in that scenario.
+            _logger.LogWarning(ex,
+                "Pipe creation with Medium mandatory-label SACL failed; retrying " +
+                "with DACL only.  (This is expected when the Service is NOT elevated. " +
+                "If you see this in production where the Service IS elevated, the " +
+                "Agent may still fail to connect from Medium IL.)");
+            return CreatePipeWithSddl(dacl);
+        }
+    }
+
+    private static NamedPipeServerStream CreatePipeWithSddl(string sddl)
+    {
+        var ps = new PipeSecurity();
+        ps.SetSecurityDescriptorSddlForm(sddl);
+        return NamedPipeServerStreamAcl.Create(
+            pipeName: NetworkConstants.IpcPipeName,
+            direction: PipeDirection.InOut,
+            maxNumberOfServerInstances: NamedPipeServerStream.MaxAllowedServerInstances,
+            transmissionMode: PipeTransmissionMode.Byte,
+            options: PipeOptions.Asynchronous,
+            inBufferSize: 0,
+            outBufferSize: 0,
+            pipeSecurity: ps);
     }
 
     private async Task HandleClient(NamedPipeServerStream stream, CancellationToken ct)
