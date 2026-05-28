@@ -151,11 +151,12 @@ public partial class MainViewModel : ObservableObject
     }
 
     // Phase 4 Part 4: codec dropdown
-    // Phase 11-B inc4: default flipped to H.264 — matches App.SelectedCodec's new default.
-    // H.264 is the order-first option so the ComboBox lands on it; MJPEG remains in the
-    // list as a low-FPS / compatibility fallback.
-    public ObservableCollection<VideoCodec> CodecOptions { get; } = new() { VideoCodec.H264, VideoCodec.Mjpeg };
-    [ObservableProperty] private VideoCodec selectedCodec = VideoCodec.H264;
+    // Phase 11-B inc4.1: default reverted to MJPEG for ship — matches App.SelectedCodec.
+    // SW H.264 is CPU-bound (< 10 FPS) on the customer hardware class; MJPEG runs 20-25 FPS
+    // smooth on a gigabit LAN.  H.264 stays in the list (selectable) so the option works
+    // the moment HW H.264 (Quick Sync) is validated on Intel and can be the new default (Tier 2).
+    public ObservableCollection<VideoCodec> CodecOptions { get; } = new() { VideoCodec.Mjpeg, VideoCodec.H264 };
+    [ObservableProperty] private VideoCodec selectedCodec = VideoCodec.Mjpeg;
 
     partial void OnSelectedCodecChanged(VideoCodec value)
     {

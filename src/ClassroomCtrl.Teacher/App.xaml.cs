@@ -39,11 +39,13 @@ public partial class App : Application
     public static TrayNotifier? Notifier { get; private set; }
 
     /// <summary>Phase 4 Part 4: Global video codec selection. Read by encoders on Start.
-    /// Phase 11-B inc4: default flipped MJPEG→H.264.  With UseHardwareH264 still default-OFF,
-    /// this resolves to OpenH264Encoder (the validated SW H.264 path).  H.264 is required
-    /// to scale to 25 students at 20 FPS — MJPEG would saturate the teacher's NIC.
-    /// MJPEG remains selectable via the codec ComboBox for low-FPS / compatibility cases.</summary>
-    public static VideoCodec SelectedCodec { get; set; } = VideoCodec.H264;
+    /// Phase 11-B inc4.1: default reverted H.264 → MJPEG for ship.  SW H.264 (OpenH264) is
+    /// CPU-bound at &lt; 10 FPS on the customer hardware class, so H.264-default would hand
+    /// the customer *slower* video than MJPEG.  MJPEG runs 20-25 FPS smooth on a gigabit LAN
+    /// at classroom scale.  H.264 remains selectable for testing and becomes the right
+    /// default once HW H.264 (Quick Sync) is validated on Intel and UseHardwareH264 can
+    /// safely default-ON (Tier 2).</summary>
+    public static VideoCodec SelectedCodec { get; set; } = VideoCodec.Mjpeg;
 
     [System.Runtime.InteropServices.DllImport("shcore.dll")]
     private static extern int SetProcessDpiAwareness(int value);
