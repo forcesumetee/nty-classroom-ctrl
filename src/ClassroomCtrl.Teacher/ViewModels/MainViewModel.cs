@@ -807,6 +807,15 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
+            // Phase 11-B inc1 — wire the codec dropdown into the broadcast.  Pre-11-B
+            // the broadcaster always used its default (Mjpeg) because nothing copied
+            // App.SelectedCodec across; the H.264 init branch at
+            // ScreenBroadcaster.Start was unreachable.  Codec is captured at Start
+            // time only — changing the dropdown mid-share has no effect until the
+            // teacher stops and restarts the share (intentional; live-switching the
+            // encoder mid-stream would need a fresh IDR, viewer reset on each peer,
+            // and a re-send of ScreenStreamStart with the new codec to all peers).
+            App.ScreenBroadcaster.Codec = App.SelectedCodec;
             App.ScreenBroadcaster.Start();
             IsScreenSharing = true;
             AppendSystemChat(Loc.Get("Chat_ScreenShareStarted"));
@@ -1060,12 +1069,20 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            // BUG-001 (Phase 4 Part 4): Student→Teacher H.264 hangs at "Waiting for student to start streaming..."
-            // Bug 2 (bitrate) and Bug 3 (mutex) confirmed fixed via 2-machine test, but Bug 1 root cause not yet identified.
-            // Workaround: View Student always uses MJPEG codec until Bug 1 resolved.
-            // Investigation areas: StudentBroadcaster H.264 init lifecycle, IPC pipeline frame routing,
-            // or StudentScreenWindow decoder receiving frames but not rendering.
-            // TODO: Deferred to post-launch debugging session.
+            // Phase 11-B inc1 — BUG-001 status update.
+            //
+            // The Phase 4 Part 4 BUG-001 had two pieces.  The bitrate/mutex pieces
+            // were fixed during the original investigation; the remaining "View
+            // Student under H.264 just hangs" piece was the decoder silently
+            // returning false on every frame.  Phase 10.15.2 fixed it by
+            // pre-allocating the H264Sharp RgbImage with explicit ImageFormat +
+            // size (see H264DecoderWrapper ctor doc).  The pre-11-B "workaround
+            // forces MJPEG here" comment block is therefore stale — App.SelectedCodec
+            // is, and was, the codec actually negotiated below; "MJPEG only" was
+            // really just "the dropdown defaults to MJPEG and nobody flipped it."
+            //
+            // TODO(11-B inc1): once the developer's 2-PC validation confirms a
+            // student viewer actually renders H.264 frames here, delete this block.
             await App.Server.RequestStudentStreamAsync(s.EndpointId, App.SelectedCodec, System.Threading.CancellationToken.None);
             AppendSystemChat(Loc.Format("Chat_ViewingStudentScreen", s.DisplayName));
         }

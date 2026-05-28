@@ -252,6 +252,29 @@
                         BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,1,0,0"
                         Padding="12">
                     <StackPanel>
+                        <!-- Phase 11-B inc1 (addendum) - codec selector for screen share.
+                             ViewModel exposes CodecOptions + SelectedCodec; the
+                             VideoCodecLabel converter (declared at line 24) renders the
+                             enum values as the localized strings already present in
+                             LocalizationData (Lbl_CodecMjpeg / Lbl_CodecH264). The
+                             selection propagates to App.SelectedCodec via the existing
+                             OnSelectedCodecChanged partial, which ToggleShareScreen
+                             reads at Start time (Increment 1 wiring). MJPEG remains
+                             the default. -->
+                        <TextBlock Text="Codec"
+                                   FontWeight="SemiBold" FontSize="11"
+                                   Foreground="{DynamicResource Text.Secondary}"
+                                   Margin="0,0,0,4"/>
+                        <ComboBox ItemsSource="{Binding CodecOptions}"
+                                  SelectedItem="{Binding SelectedCodec}"
+                                  Style="{DynamicResource ComboBox.Default}"
+                                  Margin="0,0,0,8">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource VideoCodecLabel}}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                         <Button Style="{DynamicResource Button.Primary}"
                                 Command="{Binding ShareScreenCommand}"
                                 HorizontalAlignment="Stretch" Margin="0,0,0,8">

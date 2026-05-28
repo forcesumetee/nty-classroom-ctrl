@@ -19,9 +19,14 @@ namespace ClassroomCtrl.Student.Agent;
 ///
 /// Default rate: 4 FPS (matches Teacher's ScreenBroadcaster).
 /// </summary>
-// TODO BUG-001: H.264 mode currently hangs ในเส้นทาง Student → Teacher.
-// Tracked - workaround ใน Teacher MainViewModel (ใช้ MJPEG เสมอใน ViewStudentScreen).
-// ตรวจ encoder lifecycle, ForceKeyframe timing, frame send pipeline.
+// Phase 11-B inc1 — BUG-001 status: the decoder side that caused the original
+// "View Student under H.264 hangs" symptom was fixed in Phase 10.15.2
+// (pre-allocated RgbImage in H264DecoderWrapper).  No code change has ever been
+// required on this broadcaster — encoder lifecycle, ForceKeyframe timing, and
+// the IPC frame pipeline here are all believed correct.  Pending the 2-PC
+// runtime validation in Phase 11-B inc1, this path should now work end-to-end.
+// TODO(11-B inc1): once the developer's 2-PC test confirms H.264 frames render
+// at the teacher's StudentScreenWindow, delete this comment block.
 public class StudentBroadcaster : IDisposable
 {
     private CancellationTokenSource? _cts;
