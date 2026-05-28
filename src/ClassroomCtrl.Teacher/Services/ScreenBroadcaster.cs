@@ -82,8 +82,13 @@ public class ScreenBroadcaster : IDisposable
     /// <summary>JPEG encoder quality 0–100 (higher = larger frames, sharper text).</summary>
     public int JpegQuality { get; set; } = 65;
 
-    /// <summary>Capture rate. Higher = smoother motion but more bandwidth.</summary>
-    public int FramesPerSecond { get; set; } = 4;
+    /// <summary>Capture rate. Higher = smoother motion but more bandwidth.
+    /// Phase 11-B inc4: cap raised 4→20 to deliver smooth share now that DXGI capture
+    /// removes the per-frame bottleneck (10× faster, measured locally inc3).  The loop
+    /// runs at min(cap, 1000/frametime) so a slow machine just produces fewer FPS —
+    /// no blanking.  Bandwidth math at 30 students × 500 kbps H.264 ≈ 15 Mbps
+    /// teacher uplink, comfortable on gigabit LAN.</summary>
+    public int FramesPerSecond { get; set; } = 20;
 
     public bool IsBroadcasting => _captureTask is { IsCompleted: false };
 
@@ -157,6 +162,11 @@ public class ScreenBroadcaster : IDisposable
         // Notify students to open viewer
         _ = _server.BroadcastScreenStreamControlAsync(start: true, _cts.Token);
 
+        // Phase 11-B inc4 — late-joiner hook.  A student that connects mid-share
+        // missed the broadcast Start above; we'll send them a per-peer Start +
+        // ForceKeyframe so the next outgoing frame is an IDR they can decode.
+        _server.PeerConnected += OnLateJoinerPeerConnected;
+
         _captureTask = Task.Run(() => CaptureLoopAsync(_cts.Token));
         _logger.LogInformation("Screen broadcasting started ({Codec} {Fps} FPS, {W}x{H}, {Bps} bps, encoder={Encoder}, capture={Capture})",
             _activeCodec, FramesPerSecond, TargetWidth, TargetHeight, CurrentBitrateBps, activeEncoderDesc, activeCaptureDesc);
@@ -170,6 +180,11 @@ public class ScreenBroadcaster : IDisposable
 
         var adaptive = App.AdaptiveBitrate;
         if (adaptive != null) adaptive.BitrateChanged -= OnAdaptiveBitrateChanged;
+
+        // Phase 11-B inc4 — unsubscribe late-joiner hook.  Without this the
+        // event keeps firing across share start/stop cycles and would try to
+        // ForceKeyframe on a disposed encoder.
+        _server.PeerConnected -= OnLateJoinerPeerConnected;
 
         _cts?.Cancel();
         try { _captureTask?.Wait(2000); } catch { }
@@ -215,6 +230,77 @@ public class ScreenBroadcaster : IDisposable
         }
     }
 
+    /// <summary>
+    /// Phase 11-B inc4 — late-joiner peer-connect handler.  Triggered by
+    /// <see cref="ControlServer.PeerConnected"/> when a student establishes
+    /// a TCP connection while a broadcast is already active.  We:
+    ///   1. Send the new peer a per-peer <c>ScreenStreamStart</c> so its
+    ///      MainWindow opens the viewer (the original broadcast Start only
+    ///      reached peers connected at that moment).
+    ///   2. <see cref="IVideoEncoder.ForceKeyframe"/> on the encoder so the
+    ///      next outgoing frame is an IDR — required for H.264 viewers to
+    ///      decode starting mid-stream.  Existing viewers get a harmless
+    ///      extra IDR.  Cost: a single keyframe-sized frame's worth of
+    ///      extra bandwidth.
+    /// MJPEG path benefits too: every MJPEG frame is a keyframe, so the
+    /// ForceKeyframe is a no-op there but the Start delivery is the piece
+    /// that mattered.
+    /// </summary>
+    private void OnLateJoinerPeerConnected(object? sender, Guid peerId)
+    {
+        if (!IsBroadcasting || _encoder == null) return;
+        var ct = _cts?.Token ?? CancellationToken.None;
+        try
+        {
+            _ = _server.SendScreenStreamStartToPeerAsync(peerId, ct);
+            _encoder.ForceKeyframe();
+            _logger.LogInformation("Late-joiner {Id}: ScreenStreamStart sent + IDR forced", peerId);
+            App.LogDebug($"[Broadcast] Late-joiner {peerId}: Start + IDR");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Late-joiner {Id} delivery failed", peerId);
+        }
+    }
+
+    /// <summary>
+    /// Phase 11-B inc4 — runtime encoder fallback.  Triggered when the active
+    /// encoder throws (typically <see cref="EncoderStalledException"/> from the
+    /// HW MFT path).  Replaces the failed encoder with a fresh factory build
+    /// that has HW disabled, so the same wire codec keeps flowing — viewers
+    /// see no codec change, just a brief encode gap covered by the IDR.
+    ///
+    /// The new encoder gets a forced keyframe so viewers' decoders re-sync
+    /// without waiting for the natural GOP boundary.  If the rebuild itself
+    /// throws (e.g. OpenH264 init failure), the encode loop's outer catch
+    /// logs and the next frame is silently dropped — the share is degraded
+    /// but doesn't crash the broadcaster.
+    /// </summary>
+    private void RebuildEncoderWithoutHw(string reason)
+    {
+        _logger.LogWarning("Encoder failed ({Reason}) — rebuilding with HW disabled", reason);
+        App.LogDebug($"[Broadcast] Encoder rebuild: {reason}");
+
+        try { _encoder?.Dispose(); } catch { }
+        _encoder = null;
+
+        try
+        {
+            _encoder = VideoEncoderFactory.Create(
+                _activeCodec, TargetWidth, TargetHeight,
+                FramesPerSecond, H264BitrateBps, JpegQuality,
+                useHardwareH264: false,         // the key flip — never retry HW
+                out string newDesc);
+            _encoder.ForceKeyframe();           // viewers resync on the next frame
+            _logger.LogInformation("Encoder rebuilt: {Desc}", newDesc);
+            App.LogDebug($"[Broadcast] Encoder rebuilt to: {newDesc}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Encoder rebuild failed — share will produce no frames until restart");
+        }
+    }
+
     private static int MapJpegQualityToApproxBitrate(int q)
     {
         // Inverse of MapBitrateToJpegQuality (for diagnostic display)
@@ -257,7 +343,25 @@ public class ScreenBroadcaster : IDisposable
                     // output this tick" silent-skip semantics (OpenH264 frame-skip /
                     // transient encode error) — the previous `if (data != null)` gate
                     // was equivalent.
-                    var encoded = _encoder?.Encode(bmp);
+                    // Phase 11-B inc4 — encoder may throw EncoderStalledException (or
+                    // any other ex) if it detects it can no longer produce output.
+                    // We catch below, dispose, and rebuild via the factory with HW
+                    // disabled so the share keeps going on OpenH264 SW.
+                    EncodedFrame? encoded;
+                    try
+                    {
+                        encoded = _encoder?.Encode(bmp);
+                    }
+                    catch (EncoderStalledException stall)
+                    {
+                        RebuildEncoderWithoutHw($"stall: {stall.Message}");
+                        encoded = null;
+                    }
+                    catch (Exception ex)
+                    {
+                        RebuildEncoderWithoutHw($"{ex.GetType().Name}: {ex.Message}");
+                        encoded = null;
+                    }
                     if (encoded.HasValue)
                     {
                         var data = encoded.Value.Data;

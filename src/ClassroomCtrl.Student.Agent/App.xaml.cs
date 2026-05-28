@@ -181,9 +181,10 @@ public partial class App : Application
     //   reg add "HKCU\Software\NTY\ClassroomCtrl" /v UseDxgiCapture /t REG_DWORD /d 1 /f
     private const string RegValueDxgi = "UseDxgiCapture";
 
-    /// <summary>Phase 11-B inc3 — opt-in DXGI capture flag from HKCU.  Default
-    /// false; inc4 flips on by default.  Read on demand so a registry change
-    /// takes effect at the next StudentBroadcaster Start without an app restart.</summary>
+    /// <summary>Phase 11-B inc3 — opt-in DXGI capture flag from HKCU.  inc4 flipped
+    /// the default to <b>true</b>: absent key means "use DXGI", explicit DWORD=0
+    /// forces GDI.  Capturer auto-falls-back to GDI on any DXGI failure so the
+    /// student broadcaster never blanks regardless of the flag.</summary>
     public static bool UseDxgiCapture
     {
         get
@@ -191,9 +192,9 @@ public partial class App : Application
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(RegPath);
-                return key?.GetValue(RegValueDxgi) is int i && i != 0;
+                return key?.GetValue(RegValueDxgi) is int i ? i != 0 : true;
             }
-            catch { return false; }
+            catch { return true; }
         }
     }
 

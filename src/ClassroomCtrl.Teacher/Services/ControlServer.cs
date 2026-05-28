@@ -67,12 +67,36 @@ public class ControlServer : IDisposable
         _tcp = new TcpControlServer(factory.CreateLogger<TcpControlServer>());
 
         _tcp.MessageReceived += OnMessage;
-        _tcp.PeerConnected += (_, id) => _logger.LogInformation("Peer {Id} TCP connected", id);
+        _tcp.PeerConnected += (_, id) =>
+        {
+            _logger.LogInformation("Peer {Id} TCP connected", id);
+            // Phase 11-B inc4 — late-joiner hook.  Forwarded to subscribers (the
+            // ScreenBroadcaster) so a student that connects mid-share can be
+            // sent ScreenStreamStart + a forced IDR without waiting for the
+            // next teacher-initiated Start.
+            PeerConnected?.Invoke(this, id);
+        };
         _tcp.PeerDisconnected += (_, id) =>
         {
             _logger.LogInformation("Peer {Id} TCP disconnected", id);
             StudentLeft?.Invoke(this, id);
         };
+    }
+
+    /// <summary>Phase 11-B inc4 — forwarded TCP peer-connect event.  Subscribers
+    /// receive the new peer's id; used by <c>ScreenBroadcaster</c> to deliver a
+    /// late-joiner <c>ScreenStreamStart</c> + forced IDR during an active share.</summary>
+    public event EventHandler<Guid>? PeerConnected;
+
+    /// <summary>Phase 11-B inc4 — send <c>ScreenStreamStart</c> to ONE peer.
+    /// Used by the late-joiner path so existing viewers don't get a duplicate
+    /// Start event.  The broadcaster pairs this with a <c>ForceKeyframe</c> so
+    /// the next outgoing frame is an IDR the new joiner can decode immediately.</summary>
+    public Task SendScreenStreamStartToPeerAsync(Guid peerId, CancellationToken ct)
+    {
+        var env = Envelope.Create(MessageType.ScreenStreamStart, Array.Empty<byte>(), _teacherId);
+        _logger.LogInformation("Late-joiner {Id}: sending ScreenStreamStart", peerId);
+        return _tcp.SendAsync(peerId, env, ct);
     }
 
     public Task StartAsync(CancellationToken ct) => _tcp.StartAsync(ct);

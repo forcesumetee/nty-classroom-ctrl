@@ -38,8 +38,12 @@ public partial class App : Application
     /// unfocused.  See <see cref="TrayNotifier"/>.</summary>
     public static TrayNotifier? Notifier { get; private set; }
 
-    /// <summary>Phase 4 Part 4: Global video codec selection (default Mjpeg). Read by encoders on Start.</summary>
-    public static VideoCodec SelectedCodec { get; set; } = VideoCodec.Mjpeg;
+    /// <summary>Phase 4 Part 4: Global video codec selection. Read by encoders on Start.
+    /// Phase 11-B inc4: default flipped MJPEG→H.264.  With UseHardwareH264 still default-OFF,
+    /// this resolves to OpenH264Encoder (the validated SW H.264 path).  H.264 is required
+    /// to scale to 25 students at 20 FPS — MJPEG would saturate the teacher's NIC.
+    /// MJPEG remains selectable via the codec ComboBox for low-FPS / compatibility cases.</summary>
+    public static VideoCodec SelectedCodec { get; set; } = VideoCodec.H264;
 
     [System.Runtime.InteropServices.DllImport("shcore.dll")]
     private static extern int SetProcessDpiAwareness(int value);
@@ -294,11 +298,13 @@ public partial class App : Application
     //   reg add "HKCU\Software\NTY\ClassroomCtrl" /v UseDxgiCapture /t REG_DWORD /d 1 /f
     private const string RegValueDxgi = "UseDxgiCapture";
 
-    /// <summary>Phase 11-B inc3 — opt-in DXGI capture flag from HKCU.  Default
-    /// false so production stays on the verified GDI capture path until inc4
-    /// flips it on by default with the raised FPS cap.  Read on demand (not
-    /// cached) so a registry change takes effect the next time Share Screen is
-    /// pressed without an app restart.</summary>
+    /// <summary>Phase 11-B inc3 — opt-in DXGI capture flag from HKCU.  inc4 flipped
+    /// the default to <b>true</b> after the dev-box timing harness measured a 10×
+    /// speedup vs GDI and the DxgiScreenCapturer's auto-fallback to GDI proved out
+    /// (init failure, access-lost recovery, unsupported-RDP).  An absent key now
+    /// means "use DXGI"; the dev/customer can still force GDI by setting the DWORD
+    /// to 0 explicitly.  Read on demand (not cached) so a registry change takes
+    /// effect the next time Share Screen is pressed without an app restart.</summary>
     public static bool UseDxgiCapture
     {
         get
@@ -306,9 +312,10 @@ public partial class App : Application
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(RegPath);
-                return key?.GetValue(RegValueDxgi) is int i && i != 0;
+                // Absent value → default true (inc4 flip).  Present + zero → false.
+                return key?.GetValue(RegValueDxgi) is int i ? i != 0 : true;
             }
-            catch { return false; }
+            catch { return true; }
         }
     }
 

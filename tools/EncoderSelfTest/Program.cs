@@ -29,13 +29,18 @@ const int FrameCount = 12;
 Console.WriteLine($"== Phase 11-B inc2 part2 — encoder→decoder self-test ==");
 Console.WriteLine($"   target: {Width}x{Height} @ {Fps} FPS, {Bps} bps, {FrameCount} frames\n");
 
-int swResult = RunSwTest();
-int hwResult = RunHwTest();
+int swResult    = RunSwTest();
+int hwResult    = RunHwTest();
+int stallResult = RunStallDetectionTest();
 
 Console.WriteLine("\n==================== SUMMARY ====================");
 Console.WriteLine($"  SW (round 2, MS H264 Encoder MFT) ........ {Verdict(swResult)}");
 Console.WriteLine($"  HW (round 3, MFTEnumEx async pump) ....... {VerdictHw(hwResult)}");
-return swResult == 0 && (hwResult == 0 || hwResult == 2 /* HW not available */) ? 0 : 1;
+Console.WriteLine($"  inc4 stall detection .................... {VerdictStall(stallResult)}");
+return swResult == 0
+    && (hwResult == 0 || hwResult == 2)
+    && (stallResult == 0 || stallResult == 2)
+    ? 0 : 1;
 
 
 // ─── SW path (round 2 — unchanged from the original harness) ───
@@ -197,12 +202,93 @@ int CheckDecoderCompat(string label, List<EncodedFrame> outputs)
 }
 
 
+// ─── inc4 stall-detection validation ───
+//
+// Phase 11-B inc4 adds EncoderStalledException to MediaFoundationH264AsyncEncoder
+// so the broadcaster has a clean signal to fall back from a wedged HW MFT to
+// SW OpenH264.  On this AMD dev box (where the MFT genuinely stalls — round 3
+// finding), we can validate the safety mechanism by feeding the encoder past
+// the stall threshold and asserting EncoderStalledException fires with the
+// expected diagnostics (never-produced-output path).
+//
+// Return codes:
+//   0  Stall correctly detected — exception fired with hadOutputBeforeStall=false
+//   1  HW MFT activated and PRODUCED output (encoder works) — no stall to detect;
+//      treat as informational PASS since the safety guard is for broken MFTs
+//   2  No HW MFT available — informational
+int RunStallDetectionTest()
+{
+    Console.WriteLine("\n─────── inc4 stall-detection ───────");
+    MediaFoundationH264AsyncEncoder enc;
+    try { enc = new MediaFoundationH264AsyncEncoder(Width, Height, Bps, Fps); }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"   HW encoder unavailable: {ex.Message}");
+        Console.WriteLine("STALL-DETECTION: SKIPPED (no HW MFT)");
+        return 2;
+    }
+    Console.WriteLine($"   encoder: {enc.ActiveEncoderDescription}");
+    Console.WriteLine($"   feeding 50 frames; expecting EncoderStalledException ~frame 30 on stall paths");
+
+    bool stallFired = false;
+    int stallAtFrame = -1;
+    int consecutiveNulls = -1;
+    bool hadOutput = false;
+    int producedOutputs = 0;
+    try
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            using var bmp = MakeGradient(Width, Height, i);
+            var ef = enc.Encode(bmp);
+            if (ef.HasValue) producedOutputs++;
+        }
+    }
+    catch (EncoderStalledException stall)
+    {
+        stallFired = true;
+        stallAtFrame = producedOutputs;
+        consecutiveNulls = stall.ConsecutiveNullReturns;
+        hadOutput = stall.HadOutputBeforeStall;
+    }
+    enc.Dispose();
+
+    Console.WriteLine($"   producedOutputs: {producedOutputs}");
+    Console.WriteLine($"   stallFired: {stallFired}");
+    if (stallFired)
+    {
+        Console.WriteLine($"   ConsecutiveNullReturns: {consecutiveNulls}");
+        Console.WriteLine($"   HadOutputBeforeStall:   {hadOutput}");
+    }
+
+    if (stallFired)
+    {
+        Console.WriteLine($"STALL-DETECTION: PASS (caught EncoderStalledException — broadcaster rebuild path is exercisable)");
+        return 0;
+    }
+    if (producedOutputs > 0)
+    {
+        Console.WriteLine($"STALL-DETECTION: N/A (HW encoder produced output — nothing to stall-detect here)");
+        return 1;  // informational; HW worked so the guard isn't reachable on this box
+    }
+    Console.WriteLine($"STALL-DETECTION: FAIL (no output and no exception — threshold misconfigured?)");
+    return 1;
+}
+
+
 // ─── helpers ───
 static string Verdict(int code) => code == 0 ? "PASS" : "FAIL";
 static string VerdictHw(int code) => code switch
 {
     0 => "PASS",
     1 => "FAIL",
+    2 => "SKIPPED (no HW MFT)",
+    _ => "?"
+};
+static string VerdictStall(int code) => code switch
+{
+    0 => "PASS (exception fired)",
+    1 => "N/A (HW produced output)",
     2 => "SKIPPED (no HW MFT)",
     _ => "?"
 };

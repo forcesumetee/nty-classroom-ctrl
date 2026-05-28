@@ -511,11 +511,30 @@ public sealed class MediaFoundationH264AsyncEncoder : IVideoEncoder
 
     // ─────────── IVideoEncoder ───────────
 
+    // Phase 11-B inc4 — stall detection.  Round 3 revealed the AMD H.264 MFT can
+    // enter a state where it never produces output (NEED_INPUT never fires,
+    // every ProcessInput → MF_E_NOTACCEPTING).  Without detection, the broadcaster
+    // sat feeding it null frames forever and the share blanked.  Threshold of 30
+    // consecutive nulls ≈ 1.5 s at the new inc4 cap of 20 FPS — long enough to
+    // ride out normal pump warm-up (first ~2 frames typically return null while
+    // the MFT pipeline fills), short enough to fall back before viewers notice.
+    private const int StallThresholdConsecutiveNulls = 30;
+    private int _consecutiveNullReturns;
+    private bool _everProducedOutput;
+
     public EncodedFrame? Encode(Bitmap frame)
     {
         if (_disposed) return null;
         if (frame.Width != _width || frame.Height != _height) return null;
-        if (_pumpError != null) return null;  // pump died, stop trying
+        if (_pumpError != null)
+        {
+            // Pump died — surface as a stall so the broadcaster rebuilds rather
+            // than silently dropping every frame.
+            throw new EncoderStalledException(
+                $"Pump thread error: {_pumpError}",
+                _consecutiveNullReturns,
+                _everProducedOutput);
+        }
 
         // BGRA → NV12 (reuses round 2's identical converter inline — duplicated
         // here to keep the two encoder classes independent so a bug fix to one
@@ -551,7 +570,25 @@ public sealed class MediaFoundationH264AsyncEncoder : IVideoEncoder
         // typically return null (HW MFT is filling its pipeline); subsequent
         // calls return the previous frame's encoded NAL.  ~1 frame of latency.
         if (_outputQueue.TryTake(out var ef, 0))
+        {
+            _consecutiveNullReturns = 0;
+            _everProducedOutput = true;
             return ef;
+        }
+
+        // Stall guard — see comment on StallThresholdConsecutiveNulls.  The
+        // broadcaster catches this and rebuilds via the factory with HW
+        // disabled so the share keeps going on OpenH264 SW.
+        _consecutiveNullReturns++;
+        if (_consecutiveNullReturns >= StallThresholdConsecutiveNulls)
+        {
+            throw new EncoderStalledException(
+                _everProducedOutput
+                    ? $"MFT stalled mid-stream after {_consecutiveNullReturns} consecutive nulls"
+                    : $"MFT never produced output after {_consecutiveNullReturns} input frames",
+                _consecutiveNullReturns,
+                _everProducedOutput);
+        }
         return null;
     }
 

@@ -151,8 +151,11 @@ public partial class MainViewModel : ObservableObject
     }
 
     // Phase 4 Part 4: codec dropdown
-    public ObservableCollection<VideoCodec> CodecOptions { get; } = new() { VideoCodec.Mjpeg, VideoCodec.H264 };
-    [ObservableProperty] private VideoCodec selectedCodec = VideoCodec.Mjpeg;
+    // Phase 11-B inc4: default flipped to H.264 — matches App.SelectedCodec's new default.
+    // H.264 is the order-first option so the ComboBox lands on it; MJPEG remains in the
+    // list as a low-FPS / compatibility fallback.
+    public ObservableCollection<VideoCodec> CodecOptions { get; } = new() { VideoCodec.H264, VideoCodec.Mjpeg };
+    [ObservableProperty] private VideoCodec selectedCodec = VideoCodec.H264;
 
     partial void OnSelectedCodecChanged(VideoCodec value)
     {

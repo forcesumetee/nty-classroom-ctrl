@@ -37,17 +37,12 @@ public class StudentBroadcaster : IDisposable
     public int TargetWidth { get; set; } = 1920;
     public int TargetHeight { get; set; } = 1080;
     public long JpegQuality { get; set; } = 60L;
-    /// <summary>
-    /// Capture rate. Bumped to 4 FPS in Part 4 — OpenH264 doesn't behave reliably below ~3 FPS
-    /// (frame-skip + IDR-interval interactions can leave the decoder waiting forever).
-    /// Phase 10.14 (Item 3) — bumped to 6 FPS for noticeably smoother live view at Teacher
-    /// (perceived ~50% smoother).  Effectively MJPEG-only in practice: Teacher's MainViewModel
-    /// forces MJPEG for ViewStudentScreen as the BUG-001 workaround, so the H.264 path is
-    /// dormant.  Safe to revert to 4 if/when BUG-001 is fixed and H.264 turns out to be
-    /// FPS-sensitive at the new rate.  Bandwidth at 1920×1080 q60 ≈ 30–50 KB/frame × 6 =
-    /// ~180–300 KB/s per student; 30 students ≈ 9 MB/s, comfortable on 802.11n+ Wi-Fi.
-    /// </summary>
-    public int FramesPerSecond { get; set; } = 6;
+    /// <summary>Capture rate.
+    /// Phase 11-B inc4: cap raised 6→20 to match the Teacher's smooth-share rollout.
+    /// Only one student at a time has its screen viewed (teacher-initiated), so the
+    /// upstream bandwidth math is per-student-stream and stays under 1 MB/s on H.264.
+    /// DXGI capture + H.264 makes 20 FPS achievable on the typical i5 student PC.</summary>
+    public int FramesPerSecond { get; set; } = 20;
 
     /// <summary>Codec used for current/next stream — set by MainWindow before Start.</summary>
     public VideoCodec Codec { get; set; } = VideoCodec.Mjpeg;
@@ -151,7 +146,25 @@ public class StudentBroadcaster : IDisposable
                 using var bmp = _capturer?.Capture(TargetWidth, TargetHeight);
                 if (bmp != null && App.Ipc != null && _encoder != null)
                 {
-                    var encoded = _encoder.Encode(bmp);
+                    // Phase 11-B inc4 — guard the Encode call against
+                    // EncoderStalledException (round-3 AMD MFT pattern) and
+                    // any other encoder throw, then rebuild via the factory
+                    // with HW disabled so the upstream stream survives.
+                    EncodedFrame? encoded;
+                    try
+                    {
+                        encoded = _encoder.Encode(bmp);
+                    }
+                    catch (EncoderStalledException stall)
+                    {
+                        RebuildEncoderWithoutHw($"stall: {stall.Message}");
+                        encoded = null;
+                    }
+                    catch (Exception ex)
+                    {
+                        RebuildEncoderWithoutHw($"{ex.GetType().Name}: {ex.Message}");
+                        encoded = null;
+                    }
                     if (encoded == null)
                     {
                         // Encoder produced no output this tick (e.g. OpenH264 frame-skip
@@ -201,6 +214,36 @@ public class StudentBroadcaster : IDisposable
 
             try { await Task.Delay(intervalMs, ct); }
             catch (OperationCanceledException) { break; }
+        }
+    }
+
+    /// <summary>Phase 11-B inc4 — runtime encoder fallback (mirrors the Teacher
+    /// broadcaster's helper).  Disposes the failed encoder and rebuilds via the
+    /// factory with HW disabled, so the upstream wire codec is unchanged and the
+    /// Teacher's viewer sees only a brief gap covered by the forced IDR.  If the
+    /// rebuild itself throws, the outer encode-loop catch logs and the next
+    /// frame is silently dropped — the stream is degraded but the broadcaster
+    /// doesn't crash.</summary>
+    private void RebuildEncoderWithoutHw(string reason)
+    {
+        IpcClient.LogToFile($"[StudentBroadcaster] Encoder failed ({reason}) — rebuilding with HW disabled");
+
+        try { _encoder?.Dispose(); } catch { }
+        _encoder = null;
+
+        try
+        {
+            _encoder = VideoEncoderFactory.Create(
+                _activeCodec, TargetWidth, TargetHeight,
+                FramesPerSecond, H264BitrateBps, JpegQuality,
+                useHardwareH264: false,
+                out string newDesc);
+            _encoder.ForceKeyframe();
+            IpcClient.LogToFile($"[StudentBroadcaster] Encoder rebuilt: {newDesc}");
+        }
+        catch (Exception ex)
+        {
+            IpcClient.LogToFile($"[StudentBroadcaster] Encoder rebuild failed: {ex.Message}");
         }
     }
 
