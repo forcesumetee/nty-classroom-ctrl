@@ -1,0 +1,73 @@
+﻿== Phase 11-B inc2 part2 — encoder→decoder self-test ==
+   target: 1920x1080 @ 4 FPS, 500000 bps, 12 frames
+
+─────── SW path ───────
+   encoder: MS H264 Encoder MFT
+   attrSet: async_unlock=ok; low_latency=ok; 
+
+   frame 0: encoded  52712 bytes  keyframe=True
+   frame 1: encoded  16399 bytes  keyframe=False
+   frame 2: encoded   6565 bytes  keyframe=False
+   frame 3: encoded   6049 bytes  keyframe=False
+   frame 4: encoded  36519 bytes  keyframe=True
+   frame 5: encoded  20471 bytes  keyframe=False
+   frame 6: encoded  17164 bytes  keyframe=False
+   frame 7: encoded  10211 bytes  keyframe=False
+   frame 8: encoded  26503 bytes  keyframe=True
+   frame 9: encoded  10854 bytes  keyframe=False
+   frame 10: encoded   9919 bytes  keyframe=False
+   frame 11: encoded   7822 bytes  keyframe=False
+
+   draining encoder...
+   drain 0: null (MFT empty)
+
+   total SW outputs: 12
+   decoded SW output 0: 1920x1080 fmt=Bgra  keyframe=True
+   decoded SW output 1: 1920x1080 fmt=Bgra  keyframe=False
+   decoded SW output 2: 1920x1080 fmt=Bgra  keyframe=False
+   decoded SW output 3: 1920x1080 fmt=Bgra  keyframe=False
+   decoded SW output 4: 1920x1080 fmt=Bgra  keyframe=True
+   decoded SW output 5: 1920x1080 fmt=Bgra  keyframe=False
+   decoded SW output 6: 1920x1080 fmt=Bgra  keyframe=False
+   decoded SW output 7: 1920x1080 fmt=Bgra  keyframe=False
+   decoded SW output 8: 1920x1080 fmt=Bgra  keyframe=True
+   decoded SW output 9: 1920x1080 fmt=Bgra  keyframe=False
+   decoded SW output 10: 1920x1080 fmt=Bgra  keyframe=False
+   decoded SW output 11: 1920x1080 fmt=Bgra  keyframe=False
+
+   SW decode: 12/12 outputs, 3/3 IDRs
+DECODER-COMPAT (SW): PASS
+
+─────── HW path ───────
+   encoder: MediaFoundation HW (AMDh264Encoder)
+   friendly: AMDh264Encoder
+   spsPpsCache: 50 bytes
+   D3D status: ok (D3D11 HW device + DXGI manager set on MFT)
+
+   frame 0: no output yet (pump still filling — normal for first ~2 frames)
+   frame 1: no output yet (pump still filling — normal for first ~2 frames)
+   frame 2: no output yet (pump still filling — normal for first ~2 frames)
+   frame 3: no output yet (pump still filling — normal for first ~2 frames)
+   frame 4: no output yet (pump still filling — normal for first ~2 frames)
+   frame 5: no output yet (pump still filling — normal for first ~2 frames)
+   frame 6: no output yet (pump still filling — normal for first ~2 frames)
+   frame 7: no output yet (pump still filling — normal for first ~2 frames)
+   frame 8: no output yet (pump still filling — normal for first ~2 frames)
+   frame 9: no output yet (pump still filling — normal for first ~2 frames)
+   frame 10: no output yet (pump still filling — normal for first ~2 frames)
+   frame 11: no output yet (pump still filling — normal for first ~2 frames)
+
+   draining encoder...
+   drain 0: null (queue empty + drain complete)
+   pump status: ok
+   event counts: needInput=0, haveOutput=0, drainComplete=0, other=1, notAccepting=20713
+   first event types: [603]
+   last OutputStreamInfo: Flags=0x103 Size=0 Alignment=0 providesSample=True
+
+   total HW outputs: 0
+
+DECODER-COMPAT (HW): FAIL (encoder produced no output)
+
+==================== SUMMARY ====================
+  SW (round 2, MS H264 Encoder MFT) ........ PASS
+  HW (round 3, MFTEnumEx async pump) ....... FAIL
