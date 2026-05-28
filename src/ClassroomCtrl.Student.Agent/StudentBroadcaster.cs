@@ -56,7 +56,10 @@ public class StudentBroadcaster : IDisposable
     public int H264BitrateBps { get; set; } = 1_500_000;
 
     private VideoCodec _activeCodec = VideoCodec.Mjpeg;
-    private H264EncoderWrapper? _h264;
+    // Phase 11-B inc2 part 1 — was `H264EncoderWrapper? _h264;` with an inline
+    // MJPEG fallback path.  Both codecs now go through IVideoEncoder; the
+    // factory picks the impl from _activeCodec at Start().
+    private IVideoEncoder? _encoder;
 
     public bool IsBroadcasting => _captureTask is { IsCompleted: false };
 
@@ -68,20 +71,30 @@ public class StudentBroadcaster : IDisposable
         _frameSeq = 0;
         _activeCodec = Codec;
 
-        if (_activeCodec == VideoCodec.H264)
+        // Phase 11-B inc2 part 1 — go through the factory + IVideoEncoder
+        // instead of the prior inline H264/MJPEG branches.  Same fallback
+        // story: if H.264 init throws (encoder unavailable on this OS / arch),
+        // drop to MJPEG and stamp _activeCodec accordingly so frame messages
+        // carry the right Codec on the wire.
+        try
         {
-            try
+            _encoder = VideoEncoderFactory.Create(
+                _activeCodec, TargetWidth, TargetHeight,
+                FramesPerSecond, H264BitrateBps, JpegQuality);
+            if (_activeCodec == VideoCodec.H264)
             {
-                _h264 = new H264EncoderWrapper(TargetWidth, TargetHeight, H264BitrateBps, FramesPerSecond);
-                _h264.ForceKeyframe();  // guarantee first emitted frame is IDR
+                _encoder.ForceKeyframe();  // guarantee first emitted frame is IDR
                 IpcClient.LogToFile($"[StudentBroadcaster] H.264 encoder initialized (bitrate={H264BitrateBps} bps)");
             }
-            catch (Exception ex)
-            {
-                IpcClient.LogToFile($"[StudentBroadcaster] H.264 init failed, falling back to MJPEG: {ex.Message}");
-                _h264 = null;
-                _activeCodec = VideoCodec.Mjpeg;
-            }
+        }
+        catch (Exception ex)
+        {
+            IpcClient.LogToFile($"[StudentBroadcaster] {_activeCodec} init failed, falling back to MJPEG: {ex.Message}");
+            _encoder?.Dispose();
+            _activeCodec = VideoCodec.Mjpeg;
+            _encoder = VideoEncoderFactory.Create(
+                VideoCodec.Mjpeg, TargetWidth, TargetHeight,
+                FramesPerSecond, H264BitrateBps, JpegQuality);
         }
 
         _captureTask = Task.Run(() => CaptureLoopAsync(_cts.Token));
@@ -96,31 +109,16 @@ public class StudentBroadcaster : IDisposable
         try { _captureTask?.Wait(2000); } catch { }
         _captureTask = null;
 
-        _h264?.Dispose();
-        _h264 = null;
+        _encoder?.Dispose();
+        _encoder = null;
 
         IpcClient.LogToFile($"[StudentBroadcaster] Stopped (sent {_frameSeq} frames)");
     }
 
     private async Task CaptureLoopAsync(CancellationToken ct)
     {
-        ImageCodecInfo? jpegCodec = null;
-        EncoderParameters? encoderParams = null;
-        if (_activeCodec == VideoCodec.Mjpeg)
-        {
-            foreach (var c in ImageCodecInfo.GetImageEncoders())
-            {
-                if (c.MimeType == "image/jpeg") { jpegCodec = c; break; }
-            }
-            if (jpegCodec == null)
-            {
-                IpcClient.LogToFile("[StudentBroadcaster] No JPEG codec available");
-                return;
-            }
-            encoderParams = new EncoderParameters(1);
-            encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, JpegQuality);
-        }
-
+        // Phase 11-B inc2 part 1 — JPEG codec lookup + EncoderParameters setup
+        // moved into MJpegEncoder's ctor.  The loop body just calls _encoder.Encode.
         var intervalMs = 1000 / Math.Max(1, FramesPerSecond);
 
         while (!ct.IsCancellationRequested)
@@ -128,23 +126,24 @@ public class StudentBroadcaster : IDisposable
             try
             {
                 using var bmp = CaptureFrame();
-                if (bmp != null && App.Ipc != null)
+                if (bmp != null && App.Ipc != null && _encoder != null)
                 {
-                    byte[]? data;
-                    bool isKeyframe;
-
-                    if (_activeCodec == VideoCodec.H264 && _h264 != null)
+                    var encoded = _encoder.Encode(bmp);
+                    if (encoded == null)
                     {
-                        if (!_h264.Encode(bmp, out data, out isKeyframe) || data.Length == 0)
-                        {
-                            // Encoder produced no output this tick (possible at FPS<3 with frame-skip).
-                            // Log first few occurrences to aid diagnosis without flooding.
-                            if (_frameSeq < 3)
-                                IpcClient.LogToFile($"[StudentBroadcaster] H.264 encode produced 0 bytes (frame {_frameSeq})");
-                            data = null;
-                            isKeyframe = false;
-                        }
-                        else if (_frameSeq < 5 || isKeyframe)
+                        // Encoder produced no output this tick (e.g. OpenH264 frame-skip
+                        // under load).  Pre-refactor this logged only on the H.264
+                        // path; preserve that — MJpegEncoder never returns null in
+                        // practice so the conditional only fires for H.264.
+                        if (_activeCodec == VideoCodec.H264 && _frameSeq < 3)
+                            IpcClient.LogToFile($"[StudentBroadcaster] H.264 encode produced 0 bytes (frame {_frameSeq})");
+                    }
+                    else
+                    {
+                        var data = encoded.Value.Data;
+                        var isKeyframe = encoded.Value.IsKeyframe;
+
+                        if (_activeCodec == VideoCodec.H264 && (_frameSeq < 5 || isKeyframe))
                         {
                             // Phase 10.15 BUG-001 — hex-dump the first 16 bytes so we can verify the
                             // encoder is emitting Annex B start codes (00 00 00 01 or 00 00 01) and
@@ -154,15 +153,7 @@ public class StudentBroadcaster : IDisposable
                             var hex = BitConverter.ToString(preview).Replace("-", " ");
                             IpcClient.LogToFile($"[StudentBroadcaster] H.264 frame seq={_frameSeq + 1} bytes={data.Length} keyframe={isKeyframe} first16=[{hex}]");
                         }
-                    }
-                    else
-                    {
-                        data = EncodeJpeg(bmp, jpegCodec!, encoderParams!);
-                        isKeyframe = true;
-                    }
 
-                    if (data != null)
-                    {
                         _frameSeq++;
                         var frame = new ScreenStreamFrameMessage
                         {
@@ -223,20 +214,7 @@ public class StudentBroadcaster : IDisposable
         }
     }
 
-    private static byte[]? EncodeJpeg(Bitmap bmp, ImageCodecInfo codec, EncoderParameters encParams)
-    {
-        try
-        {
-            using var ms = new MemoryStream();
-            bmp.Save(ms, codec, encParams);
-            return ms.ToArray();
-        }
-        catch (Exception ex)
-        {
-            IpcClient.LogToFile($"[StudentBroadcaster] JPEG encode failed: {ex.Message}");
-            return null;
-        }
-    }
+    // Phase 11-B inc2 part 1 — EncodeJpeg removed; logic lives in MJpegEncoder.
 
     public void Dispose()
     {

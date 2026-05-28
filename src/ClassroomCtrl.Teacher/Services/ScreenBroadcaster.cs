@@ -35,7 +35,10 @@ public class ScreenBroadcaster : IDisposable
     public int H264BitrateBps { get; set; } = 500_000;
 
     private VideoCodec _activeCodec = VideoCodec.Mjpeg;
-    private H264EncoderWrapper? _h264;
+    // Phase 11-B inc2 part 1 — was `H264EncoderWrapper? _h264;` with an inline
+    // MJPEG fallback path.  Now both codecs go through IVideoEncoder; the
+    // factory picks the impl from _activeCodec at Start().
+    private IVideoEncoder? _encoder;
 
     /// <summary>Phase 4 Part 5: Reflects the most recently applied bitrate (informational; updated by adaptive controller).</summary>
     public int CurrentBitrateBps => _activeCodec == VideoCodec.H264 ? H264BitrateBps : MapJpegQualityToApproxBitrate(JpegQuality);
@@ -54,11 +57,7 @@ public class ScreenBroadcaster : IDisposable
     public bool TeeRawFrames { get; set; }
 
     /// <summary>Phase 5a: Force the next H.264 frame to be an IDR keyframe (delegates to encoder). No-op in MJPEG mode.</summary>
-    public bool ForceKeyframe()
-    {
-        if (_activeCodec != VideoCodec.H264 || _h264 == null) return false;
-        return _h264.ForceKeyframe();
-    }
+    public bool ForceKeyframe() => _encoder?.ForceKeyframe() ?? false;
 
     // ─────── Tunable encoding settings ───────
     //
@@ -104,24 +103,33 @@ public class ScreenBroadcaster : IDisposable
         if (adaptive != null)
         {
             H264BitrateBps = adaptive.CurrentBitrateBps;
-            JpegQuality = MapBitrateToJpegQuality(adaptive.CurrentBitrateBps);
+            JpegQuality = MJpegEncoder.MapBitrateToJpegQuality(adaptive.CurrentBitrateBps);
             adaptive.BitrateChanged += OnAdaptiveBitrateChanged;
         }
 
-        if (_activeCodec == VideoCodec.H264)
+        // Phase 11-B inc2 part 1 — go through the factory + IVideoEncoder
+        // instead of the prior inline H264/MJPEG branches.  Same fallback story:
+        // if H.264 init throws, drop to MJPEG and stamp _activeCodec accordingly
+        // so frame messages carry the right Codec on the wire.
+        try
         {
-            try
+            _encoder = VideoEncoderFactory.Create(
+                _activeCodec, TargetWidth, TargetHeight,
+                FramesPerSecond, H264BitrateBps, JpegQuality);
+            if (_activeCodec == VideoCodec.H264)
             {
-                _h264 = new H264EncoderWrapper(TargetWidth, TargetHeight, H264BitrateBps, FramesPerSecond);
-                _h264.ForceKeyframe();  // guarantee first emitted frame is IDR
+                _encoder.ForceKeyframe();  // guarantee first emitted frame is IDR
                 _logger.LogInformation("H.264 encoder initialized (bitrate={Bitrate} bps)", H264BitrateBps);
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "H.264 encoder init failed — falling back to MJPEG");
-                _h264 = null;
-                _activeCodec = VideoCodec.Mjpeg;
-            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "{Codec} encoder init failed — falling back to MJPEG", _activeCodec);
+            _encoder?.Dispose();
+            _activeCodec = VideoCodec.Mjpeg;
+            _encoder = VideoEncoderFactory.Create(
+                VideoCodec.Mjpeg, TargetWidth, TargetHeight,
+                FramesPerSecond, H264BitrateBps, JpegQuality);
         }
 
         // Notify students to open viewer
@@ -143,8 +151,8 @@ public class ScreenBroadcaster : IDisposable
         try { _captureTask?.Wait(2000); } catch { }
         _captureTask = null;
 
-        _h264?.Dispose();
-        _h264 = null;
+        _encoder?.Dispose();
+        _encoder = null;
 
         // Notify students to close viewer
         _ = _server.BroadcastScreenStreamControlAsync(start: false, CancellationToken.None);
@@ -153,36 +161,32 @@ public class ScreenBroadcaster : IDisposable
 
     private void OnAdaptiveBitrateChanged(object? sender, BitrateChangedEventArgs e)
     {
-        if (_activeCodec == VideoCodec.H264 && _h264 != null)
+        if (_encoder == null) return;
+        try
         {
-            try
+            // Phase 11-B inc2 part 1 — single SetMaxBitrate call regardless of codec.
+            // The encoder impl handles the mapping (OpenH264Encoder forwards CBR,
+            // MJpegEncoder re-derives JPEG quality from bps via the shared formula).
+            // Broadcaster's H264BitrateBps / JpegQuality fields are display-only
+            // mirrors for the startup log + CurrentBitrateBps; preserved exactly so
+            // the existing log lines stay byte-identical.
+            _encoder.SetMaxBitrate(e.NewBitrateBps);
+            if (_activeCodec == VideoCodec.H264)
             {
-                _h264.SetMaxBitrate(e.NewBitrateBps);
                 H264BitrateBps = e.NewBitrateBps;
                 _logger.LogInformation("H.264 max bitrate updated to {Bps} ({Reason})", e.NewBitrateBps, e.Reason);
             }
-            catch (Exception ex)
+            else if (_activeCodec == VideoCodec.Mjpeg)
             {
-                _logger.LogWarning(ex, "SetMaxBitrate failed");
+                JpegQuality = MJpegEncoder.MapBitrateToJpegQuality(e.NewBitrateBps);
+                _logger.LogInformation("JPEG quality updated to {Q} for {Bps} bps target ({Reason})",
+                    JpegQuality, e.NewBitrateBps, e.Reason);
             }
         }
-        else if (_activeCodec == VideoCodec.Mjpeg)
+        catch (Exception ex)
         {
-            JpegQuality = MapBitrateToJpegQuality(e.NewBitrateBps);
-            _logger.LogInformation("JPEG quality updated to {Q} for {Bps} bps target ({Reason})",
-                JpegQuality, e.NewBitrateBps, e.Reason);
+            _logger.LogWarning(ex, "SetMaxBitrate failed");
         }
-    }
-
-    /// <summary>Map a target bitrate to a reasonable JPEG quality value (used in MJPEG mode).</summary>
-    private static int MapBitrateToJpegQuality(int bps)
-    {
-        // Linear breakpoints: 200k→q40, 500k→q60, 1M→q75, 2M→q85
-        if (bps <= 200_000) return 40;
-        if (bps <= 500_000) return 40 + (bps - 200_000) * 20 / 300_000;
-        if (bps <= 1_000_000) return 60 + (bps - 500_000) * 15 / 500_000;
-        if (bps <= 2_000_000) return 75 + (bps - 1_000_000) * 10 / 1_000_000;
-        return 85;
     }
 
     private static int MapJpegQualityToApproxBitrate(int q)
@@ -222,25 +226,16 @@ public class ScreenBroadcaster : IDisposable
                         }
                     }
 
-                    byte[]? data;
-                    bool isKeyframe;
-
-                    if (_activeCodec == VideoCodec.H264 && _h264 != null)
+                    // Phase 11-B inc2 part 1 — single Encode call through IVideoEncoder.
+                    // Returning null preserves the pre-refactor "encoder produced no
+                    // output this tick" silent-skip semantics (OpenH264 frame-skip /
+                    // transient encode error) — the previous `if (data != null)` gate
+                    // was equivalent.
+                    var encoded = _encoder?.Encode(bmp);
+                    if (encoded.HasValue)
                     {
-                        if (!_h264.Encode(bmp, out data, out isKeyframe) || data.Length == 0)
-                        {
-                            data = null;
-                            isKeyframe = false;
-                        }
-                    }
-                    else
-                    {
-                        data = EncodeJpeg(bmp);
-                        isKeyframe = true;
-                    }
-
-                    if (data != null)
-                    {
+                        var data = encoded.Value.Data;
+                        var isKeyframe = encoded.Value.IsKeyframe;
                         _frameSeq++;
 
                         // Phase 5a: tee to recording before sending over the wire.
@@ -366,34 +361,9 @@ public class ScreenBroadcaster : IDisposable
         }
     }
 
-    private byte[]? EncodeJpeg(Bitmap bmp)
-    {
-        try
-        {
-            var jpegEncoder = GetJpegEncoder();
-            var encParams = new EncoderParameters(1);
-            encParams.Param[0] = new EncoderParameter(Encoder.Quality, (long)JpegQuality);
-
-            using var ms = new MemoryStream();
-            bmp.Save(ms, jpegEncoder, encParams);
-            return ms.ToArray();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "JPEG encode failed");
-            return null;
-        }
-    }
-
-    private static ImageCodecInfo GetJpegEncoder()
-    {
-        var codecs = ImageCodecInfo.GetImageEncoders();
-        foreach (var c in codecs)
-        {
-            if (c.FormatID == ImageFormat.Jpeg.Guid) return c;
-        }
-        throw new InvalidOperationException("JPEG encoder not found");
-    }
+    // Phase 11-B inc2 part 1 — EncodeJpeg + GetJpegEncoder removed; logic now
+    // lives in MJpegEncoder.  ExtractBgraPixels is still used by the recording
+    // tee (RawFrameCaptured event) and stays here.
 
     public void Dispose()
     {
