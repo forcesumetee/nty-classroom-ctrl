@@ -37,12 +37,28 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <!-- Auto-layout: UniformGrid with Columns bound to Tiles.Count.
-         WPF UniformGrid auto-derives Rows from Columns when only one is set,
-         so we only bind Columns. -->
+    <!-- Two mutually-exclusive layouts swapped by IsPinnedView:
+           (a) Gallery: UniformGrid auto-layout (step 2 default).
+           (b) Filmstrip: large primary tile (left ~75%) + scrolling column
+               of small tiles on the right (~25%).
+         Filmstrip uses CollectionViewSource sorting via a converter that
+         filters by IsPinned isn't reliable in pure XAML, so we keep it
+         simple: bind both layouts to the same Tiles collection; the small
+         filmstrip ItemTemplate is the same ConferenceTile UserControl. -->
     <Grid Margin="12">
+        <!-- (a) Gallery (auto-layout) — visible iff IsPinnedView == false. -->
         <ItemsControl ItemsSource="{Binding Tiles}"
                       ItemTemplate="{StaticResource ConferenceTileTemplate}">
+            <ItemsControl.Style>
+                <Style TargetType="ItemsControl">
+                    <Setter Property="Visibility" Value="Visible"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsPinnedView}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ItemsControl.Style>
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <UniformGrid
@@ -51,5 +67,93 @@
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
         </ItemsControl>
+
+        <!-- (b) Filmstrip — visible iff IsPinnedView == true. -->
+        <Grid>
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsPinnedView}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*"/>
+                <ColumnDefinition Width="1*" MinWidth="220"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Primary (pinned) tile.  ItemsControl bound to the same Tiles
+                 list but filtered by IsPinned through a Style trigger
+                 hiding non-pinned items. -->
+            <ItemsControl Grid.Column="0" ItemsSource="{Binding Tiles}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Grid/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:ConferenceTileViewModel}">
+                        <Button Background="Transparent" BorderThickness="0" Padding="0"
+                                Focusable="False" FocusVisualStyle="{x:Null}"
+                                Cursor="Hand"
+                                Command="{Binding DataContext.PinCommand,
+                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}">
+                            <local:ConferenceTile/>
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Filmstrip column.  All non-pinned tiles, scrollable. -->
+            <ScrollViewer Grid.Column="1"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          PanningMode="VerticalOnly">
+                <ItemsControl ItemsSource="{Binding Tiles}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Vertical"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:ConferenceTileViewModel}">
+                            <Button Background="Transparent" BorderThickness="0" Padding="0"
+                                    Focusable="False" FocusVisualStyle="{x:Null}"
+                                    Cursor="Hand"
+                                    Height="120"
+                                    Command="{Binding DataContext.PinCommand,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}">
+                                <local:ConferenceTile/>
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </UserControl>
