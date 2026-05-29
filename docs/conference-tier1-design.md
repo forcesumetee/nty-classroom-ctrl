@@ -33,10 +33,18 @@ What's NOT in scope (Tier 2/3):
 
 ## 2. Pre-flight (must be true before Tier 1 commits)
 
-- [ ] CamSpike verdict on dev box = WORKS or PARTIAL. (INVESTIGATE blocks
-      Tier 1.)
-- [ ] CamSpike's "JPEG Q70 size mean" populated in the README's
-      "Dev box results" so the bandwidth math is anchored in a real number.
+- [x] CamSpike verdict on dev box = **WORKS** (sirin, Chicony USB
+      integrated cam, 2026-05-29). 46 frames / 5 s = 9.2 FPS sustained,
+      jitter stddev ~7%, no stalls > 500 ms.
+- [x] CamSpike's "JPEG Q70 size mean" populated: **~16 KB/frame** →
+      **~148 KB/s per stream actual**. This is **~50% of the
+      architecture doc's 300–400 KB/s design budget**, so all bandwidth
+      math in `conference-mode-architecture.md` § 6 has headroom; no
+      tier-plan adjustments needed beyond noting the favorable result.
+- [x] FPS target **locked at 10**. Driver-advertised 30 FPS is misleading
+      — sustained delivery on the dev box is ~10 FPS regardless of the
+      capability dump's `avg=30` line. `Start(moniker, 640, 480, 10)` in
+      step 5 is the correct call shape.
 - [ ] Dev confirms Phase 9.5 `CameraBroadcastService` still works post-
       Phase 13 changes (smoke-test: launch Teacher + 1 Student, call
       `CameraBroadcastService.Start(devices[0].Moniker, 640, 480, 10)`
@@ -396,10 +404,10 @@ Run on dev box (sirin teacher + force student).
 - **No teacher cam settings dialog in Tier 1.** Resolution/FPS hardcoded
   at 640×480 @ 10 FPS. Tier 2 polish adds a Settings dialog (with the
   CamSpike-validated capability list as the dropdown source).
-- **CamSpike result must be filled in before merge.** The Tier 1 PR
-  description includes the "Dev box result" block from
-  [`tools/CamSpike/README.md`](../tools/CamSpike/README.md). If the box was
-  PARTIAL, ship docs flag "10 FPS minimum, USB webcam recommended".
+- **CamSpike result locked at WORKS.** Dev box (sirin, Chicony USB
+  integrated cam) delivered 9.2 FPS sustained at 148 KB/s — ~50% of
+  the architecture doc's 300–400 KB/s budget. Tier 1 ships with the
+  default FPS target = 10. No "PARTIAL" doc clause needed.
 
 ## 7. What can go wrong (Tier 1)
 
