@@ -68,8 +68,19 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <local:ConferenceGalleryView Grid.Row="0"
-                                         DataContext="{Binding ConferenceGallery}"/>
+            <!-- Phase 15-D step 2 — gallery + sidebar overlay share Row 0.
+                 The sidebar is positioned HorizontalAlignment=Right with a
+                 fixed Width so the gallery tiles continue to render under
+                 the left portion of the cell when the sidebar is open
+                 (overlay, not push — gallery layout doesn't reflow on
+                 sidebar toggle). -->
+            <Grid Grid.Row="0">
+                <local:ConferenceGalleryView DataContext="{Binding ConferenceGallery}"/>
+                <local:ConferenceSidebar HorizontalAlignment="Right"
+                                         Width="340"
+                                         Visibility="{Binding IsConferenceSidebarVisible,
+                                                      Converter={StaticResource BoolToVisibility}}"/>
+            </Grid>
             <!-- Phase 15-D step 1 — Meet-style toolbar replaces the 15-B
                  placeholder End-only bar.  The toolbar's commands route
                  through MainViewModel (this control's DataContext), so no

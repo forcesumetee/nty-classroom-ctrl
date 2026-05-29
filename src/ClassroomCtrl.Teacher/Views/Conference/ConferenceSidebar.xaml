@@ -1,0 +1,189 @@
+<UserControl x:Class="ClassroomCtrl.Teacher.Views.Conference.ConferenceSidebar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+             xmlns:models="clr-namespace:ClassroomCtrl.Shared.Models;assembly=ClassroomCtrl.Shared"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface.Elevated}"
+             FontFamily="Segoe UI"
+             d:DesignWidth="340" d:DesignHeight="640">
+    <!-- Phase 15-D step 2 — slide-in sidebar overlay for the Conference shell.
+         Hosts two tabs (Chat | Participants).  Chat reuses EveryoneConversation
+         (the same conversation backing the Classroom right-rail), giving a
+         single source of truth for whole-class chat across modes — messages
+         sent in Conference appear in the Classroom rail after End, and vice
+         versa.  Step 3 fills the Participants tab. -->
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <!-- Tab pill — used twice in the header for Chat / Participants tab
+             selection.  Active state set via DataTrigger on the parent's
+             IsConferenceChatTabSelected / IsConferenceParticipantsTabSelected
+             flags so the pill highlight stays in sync no matter how the tab
+             is switched (toolbar click, sidebar click, ✋ shortcut). -->
+        <Style x:Key="SidebarTabPill" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Pill" CornerRadius="999"
+                                Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Pill" Property="Background"
+                                        Value="{DynamicResource Surface.Card}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border BorderBrush="{DynamicResource Border.Soft}"
+            BorderThickness="1,0,0,0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <!-- Header (title + tabs + close). -->
+                <RowDefinition Height="Auto"/>
+                <!-- Tab content. -->
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header bar: tabs on the left, close X on the right. -->
+            <Border Grid.Row="0"
+                    BorderBrush="{DynamicResource Border.Soft}"
+                    BorderThickness="0,0,0,1"
+                    Padding="10,8">
+                <DockPanel>
+                    <!-- Close X — reuses ToggleConferenceSidebarCommand which
+                         closes when invoked from Chat tab; we hard-set the tab
+                         to Chat first via the bound command's semantics. -->
+                    <Button DockPanel.Dock="Right"
+                            Width="32" Height="32"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Focusable="False" FocusVisualStyle="{x:Null}"
+                            Cursor="Hand"
+                            Click="CloseButton_Click"
+                            ToolTip="{DynamicResource Conf_SidebarClose}">
+                        <TextBlock Text="✕" FontSize="14"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Text.Secondary}"/>
+                    </Button>
+                    <!-- Tab cluster. -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Command="{Binding SelectConferenceChatTabCommand}"
+                                Content="{DynamicResource Conf_SidebarChatTab}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SidebarTabPill}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsConferenceChatTabSelected}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Accent.PrimarySubtle}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Command="{Binding SelectConferenceParticipantsTabCommand}"
+                                Content="{DynamicResource Conf_SidebarParticipantsTab}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SidebarTabPill}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsConferenceParticipantsTabSelected}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Accent.PrimarySubtle}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Tab body. -->
+            <Grid Grid.Row="1">
+                <!-- Chat tab.  Reuses ActiveConversation.Messages (mirrors the
+                     pattern at Teacher/MainWindow.xaml:1016) so the rail and
+                     the sidebar share a single chat history. -->
+                <DockPanel
+                    Visibility="{Binding IsConferenceChatTabSelected, Converter={StaticResource BoolToVisibility}}">
+                    <!-- Bottom input row. -->
+                    <Border DockPanel.Dock="Bottom"
+                            BorderBrush="{DynamicResource Border.Soft}"
+                            BorderThickness="0,1,0,0"
+                            Padding="10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Style="{DynamicResource TextBox.Default}"
+                                     Text="{Binding ActiveConversation.DraftInput, UpdateSourceTrigger=PropertyChanged}"/>
+                            <Button Grid.Column="1"
+                                    Style="{DynamicResource Button.Primary}"
+                                    Command="{Binding SendChatCommand}"
+                                    Margin="8,0,0,0" Width="40" Height="40" Padding="0"
+                                    ToolTip="{DynamicResource Btn_Send}">
+                                <TextBlock Text="➤" FontSize="14" Foreground="White"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Bubble list. -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding ActiveConversation.Messages}"
+                                      Margin="10,8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:ChatMessage}">
+                                    <Border Margin="0,0,0,6" Padding="10,8" CornerRadius="8"
+                                            Background="{DynamicResource Surface.Card}"
+                                            BorderBrush="{DynamicResource Border.Soft}"
+                                            BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding SenderName}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Text.Secondary}"/>
+                                            <TextBlock Text="{Binding MessageText}"
+                                                       FontSize="12"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource Text.Primary}"
+                                                       Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+
+                <!-- Participants tab — Phase 15-D step 3 fills this in. -->
+                <Grid
+                    Visibility="{Binding IsConferenceParticipantsTabSelected, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{DynamicResource Conf_SidebarParticipantsPlaceholder}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Text.Muted}"
+                               FontSize="12"/>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>
