@@ -274,6 +274,48 @@ public class ControlServer : IDisposable
         return _tcp.BroadcastAsync(env, ct);
     }
 
+    // ─────── Phase 16-B+ : In-frame Conference screen share ───────
+
+    /// <summary>Phase 16-B+ — send the ConferenceShareStart signal that opens
+    /// the in-frame share view on every in-Conference participant.  Reliable
+    /// channel.  Distinct from <see cref="BroadcastScreenStreamControlAsync"/>
+    /// (Classroom full-takeover); this stays inside the Conference window.</summary>
+    public Task BroadcastConferenceShareStartAsync(string sourceName, CancellationToken ct)
+    {
+        var msg = new ConferenceShareStartMessage
+        {
+            SourceEndpointId = _teacherId,
+            SourceName = sourceName ?? "",
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.ConferenceShareStart, bytes, _teacherId);
+        _logger.LogInformation("ConferenceShare START ({Name})", sourceName);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 16-B+ — send one ConferenceShareFrame to all in-Conference
+    /// peers.  Frame payload uses the new <see cref="ConferenceShareFrameMessage"/>
+    /// DTO (mirrors ScreenStreamFrameMessage shape + SourceEndpointId).
+    /// Receiver-side self-loopback filter on Envelope.SenderId == own endpoint id
+    /// drops the teacher's echo from the share view.</summary>
+    public Task BroadcastConferenceShareFrameAsync(ConferenceShareFrameMessage frame, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(frame);
+        var env = Envelope.Create(MessageType.ConferenceShareFrame, bytes, _teacherId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 16-B+ — send the ConferenceShareStop signal that returns
+    /// every participant's gallery to tile-mode.  Reliable channel.</summary>
+    public Task BroadcastConferenceShareStopAsync(CancellationToken ct)
+    {
+        var msg = new ConferenceShareStopMessage { SourceEndpointId = _teacherId };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.ConferenceShareStop, bytes, _teacherId);
+        _logger.LogInformation("ConferenceShare STOP");
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
     // ─────── Phase 4 Part 2: Student → Teacher view (on-demand) ───────
 
     /// <summary>Tell a specific student to start streaming their screen back to teacher with the given codec.</summary>

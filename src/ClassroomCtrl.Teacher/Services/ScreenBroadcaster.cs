@@ -41,6 +41,25 @@ public class ScreenBroadcaster : IDisposable
     /// clear via <see cref="ControlServer.StopGroupScreenShareAsync"/>.</summary>
     public Guid? TargetGroupId { get; set; }
 
+    /// <summary>Phase 16-B+ — Conference-share routing.  When true, the
+    /// broadcaster emits <see cref="MessageType.ConferenceShareStart"/> /
+    /// <see cref="MessageType.ConferenceShareFrame"/> /
+    /// <see cref="MessageType.ConferenceShareStop"/> envelopes via the
+    /// ControlServer's BroadcastConferenceShare* methods instead of the
+    /// whole-class ScreenStream* path.  The Classroom 11-B path is
+    /// untouched — full takeover (StudentScreenWindow + remote control)
+    /// stays the Classroom default.  Set by UI before Start() when the
+    /// teacher is in Conference mode; cleared in Stop().
+    /// Mutually exclusive with <see cref="TargetGroupId"/> (Conference
+    /// dissolves breakouts on entry — see Phase 15-D step 5).</summary>
+    public bool IsConferenceShare { get; set; }
+
+    /// <summary>Phase 16-B+ — display name carried in the
+    /// ConferenceShareStart envelope so receivers can render an "X is
+    /// sharing" banner without resolving sender→name themselves.  Set
+    /// alongside <see cref="IsConferenceShare"/>.</summary>
+    public string ConferenceShareSourceName { get; set; } = "";
+
     /// <summary>Target bitrate for H.264 mode (CBR). Ignored for MJPEG.</summary>
     public int H264BitrateBps { get; set; } = 500_000;
 
@@ -175,7 +194,15 @@ public class ScreenBroadcaster : IDisposable
         // UI before bc.Start()) and targets only the group's members; emitting
         // a whole-class Start here would cause out-of-group viewers to open
         // an empty student-screen viewer.
-        if (!TargetGroupId.HasValue)
+        // Phase 16-B+ — Conference-share emits its own Start envelope
+        // (ConferenceShareStart, 0x0683); skip the Classroom whole-class Start
+        // here so non-Conference viewers don't open a fullscreen window for
+        // an in-frame share.
+        if (IsConferenceShare)
+        {
+            _ = _server.BroadcastConferenceShareStartAsync(ConferenceShareSourceName, _cts.Token);
+        }
+        else if (!TargetGroupId.HasValue)
         {
             _ = _server.BroadcastScreenStreamControlAsync(start: true, _cts.Token);
         }
@@ -186,7 +213,13 @@ public class ScreenBroadcaster : IDisposable
         // Phase 13-B (Tier 1) — disabled while in group share mode (only group
         // members get the GroupScreenStreamStart from ControlServer; a late
         // joiner who's not in the group should not receive it).
-        if (!TargetGroupId.HasValue)
+        // Phase 16-B+ — late-joiner hook is for the Classroom takeover path
+        // (StudentScreenWindow needs a fresh IDR to decode mid-stream).
+        // Conference share opens the in-frame view via ConferenceShareStart;
+        // a late-joining participant gets that via the ControlServer relay's
+        // last-known-state replay (added in Step 7), not via the late-joiner
+        // ForceKeyframe path here.
+        if (!TargetGroupId.HasValue && !IsConferenceShare)
         {
             _server.PeerConnected += OnLateJoinerPeerConnected;
         }
@@ -212,9 +245,11 @@ public class ScreenBroadcaster : IDisposable
         // the += still safely runs this -= path.)
         _server.PeerConnected -= OnLateJoinerPeerConnected;
 
-        // Snapshot group-mode flag BEFORE we clear it below — Stop() emits the
-        // correct Stop signaling envelope depending on which mode we were in.
+        // Snapshot group-mode + conference-mode flags BEFORE we clear them
+        // below — Stop() emits the correct Stop signaling envelope depending
+        // on which mode we were in.
         var wasGroupShare = TargetGroupId.HasValue;
+        var wasConferenceShare = IsConferenceShare;
 
         _cts?.Cancel();
         try { _captureTask?.Wait(2000); } catch { }
@@ -229,11 +264,19 @@ public class ScreenBroadcaster : IDisposable
         // broadcast whole-class Stop when this was a whole-class share.
         // Group share's Stop envelope is emitted by ControlServer.
         // StopGroupScreenShareAsync (called by UI after bc.Stop()).
-        if (!wasGroupShare)
+        // Phase 16-B+ — Conference share has its own Stop envelope; emit it
+        // here so receivers swap the gallery layout back to tile-mode.
+        if (wasConferenceShare)
+        {
+            _ = _server.BroadcastConferenceShareStopAsync(CancellationToken.None);
+        }
+        else if (!wasGroupShare)
         {
             _ = _server.BroadcastScreenStreamControlAsync(start: false, CancellationToken.None);
         }
         TargetGroupId = null;
+        IsConferenceShare = false;
+        ConferenceShareSourceName = "";
         _logger.LogInformation("Screen broadcasting stopped (sent {Frames} frames)", _frameSeq);
     }
 
@@ -418,25 +461,49 @@ public class ScreenBroadcaster : IDisposable
                             App.LogDebug($"[Broadcast] FrameEncoded subscriber threw: {ex.Message}");
                         }
 
-                        var msg = new ScreenStreamFrameMessage
+                        // Phase 16-B+ — three mutually-exclusive routing
+                        // targets: Conference share (in-frame, 0x0684),
+                        // Group share (Tier 1 breakout, 0x0624), whole-class
+                        // share (Classroom, 0x0323).  The capture/encode
+                        // pipeline is identical for all three; only the wire
+                        // envelope and payload DTO change at emission time.
+                        if (IsConferenceShare)
                         {
-                            FrameData = data,
-                            Width = TargetWidth,
-                            Height = TargetHeight,
-                            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                            FrameSeq = _frameSeq,
-                            Codec = _activeCodec,
-                            IsKeyframe = isKeyframe,
-                        };
-                        // Phase 13-B (Tier 1) — route per current target.  Group
-                        // share and whole-class share are mutually exclusive at
-                        // the UI level; this just picks the right channel at
-                        // emission time.
-                        var grp = TargetGroupId;
-                        if (grp.HasValue)
-                            await _server.BroadcastScreenFrameToGroupAsync(msg, grp.Value, ct);
+                            var confMsg = new ConferenceShareFrameMessage
+                            {
+                                SourceEndpointId = _server.TeacherEndpointId,
+                                FrameData = data,
+                                Width = TargetWidth,
+                                Height = TargetHeight,
+                                TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                                FrameSeq = _frameSeq,
+                                Codec = _activeCodec,
+                                IsKeyframe = isKeyframe,
+                            };
+                            await _server.BroadcastConferenceShareFrameAsync(confMsg, ct);
+                        }
                         else
-                            await _server.BroadcastScreenFrameAsync(msg, ct);
+                        {
+                            var msg = new ScreenStreamFrameMessage
+                            {
+                                FrameData = data,
+                                Width = TargetWidth,
+                                Height = TargetHeight,
+                                TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                                FrameSeq = _frameSeq,
+                                Codec = _activeCodec,
+                                IsKeyframe = isKeyframe,
+                            };
+                            // Phase 13-B (Tier 1) — Group share vs whole-class
+                            // share picked by TargetGroupId presence; the
+                            // UI guarantees mutual exclusion at the command
+                            // level.
+                            var grp = TargetGroupId;
+                            if (grp.HasValue)
+                                await _server.BroadcastScreenFrameToGroupAsync(msg, grp.Value, ct);
+                            else
+                                await _server.BroadcastScreenFrameAsync(msg, ct);
+                        }
                     }
                 }
             }

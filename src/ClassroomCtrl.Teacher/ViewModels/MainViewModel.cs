@@ -1104,6 +1104,17 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             // encoder mid-stream would need a fresh IDR, viewer reset on each peer,
             // and a re-send of ScreenStreamStart with the new codec to all peers).
             App.ScreenBroadcaster.Codec = App.SelectedCodec;
+            // Phase 16-B+ — Conference Mode routes share through the new
+            // in-frame view (ConferenceShareView) instead of the Classroom
+            // full-takeover path.  Set the routing flag + source name BEFORE
+            // Start() so the broadcaster's Start branch emits the right
+            // signaling envelope (ConferenceShareStart vs ScreenStreamStart).
+            if (IsInConference)
+            {
+                App.ScreenBroadcaster.IsConferenceShare = true;
+                App.ScreenBroadcaster.ConferenceShareSourceName =
+                    Loc.Get("Conf_TeacherDisplayName", "Teacher");
+            }
             App.ScreenBroadcaster.Start();
             IsScreenSharing = true;
             AppendSystemChat(Loc.Get("Chat_ScreenShareStarted"));
