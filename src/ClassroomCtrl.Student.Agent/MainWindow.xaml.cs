@@ -56,6 +56,13 @@ public partial class MainWindow : Window
     private MoviePlayerWindow? _movieWindow;
     private RemoteControlBanner? _remoteBanner;
 
+    // Phase 15-B (MVP) — student-side Conference shell, spawned by
+    // ConferenceStart dispatch (0x0670) and closed by ConferenceEnd (0x0671)
+    // OR by the student's Leave button on the window itself.  Singleton per
+    // session; nulled out via Closed handler so a teacher End→Start within
+    // the same Agent session reliably reopens it.
+    private ConferenceGalleryWindow? _confWindow;
+
     // Phase 13-D (Tier 3): per-group voice chat.  Single MicBroadcaster
     // instance per Agent process; CurrentGroupId / SelfEndpointId tracked
     // alongside via BreakoutAssign + Hello capture.  Stays in muted+PTT
@@ -702,6 +709,34 @@ public partial class MainWindow : Window
                 {
                     _cameraWindow?.Close();
                     _cameraWindow = null;
+                });
+                break;
+
+            // ─────── Phase 15-B (MVP): Conference Mode session lifecycle ───────
+
+            case MessageType.ConferenceStart:
+                try
+                {
+                    var cs = MessagePack.MessagePackSerializer.Deserialize<ConferenceStartMessage>(env.Payload);
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (_confWindow != null) return;   // idempotent on repeat envelopes
+                        _confWindow = new ConferenceGalleryWindow(cs.SessionId, cs.HostName);
+                        _confWindow.Closed += (_, _) => _confWindow = null;
+                        _confWindow.Show();
+                    });
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] ConferenceStart decode: {ex.Message}");
+                }
+                break;
+
+            case MessageType.ConferenceEnd:
+                Dispatcher.Invoke(() =>
+                {
+                    try { _confWindow?.Close(); } catch { }
+                    _confWindow = null;
                 });
                 break;
 
