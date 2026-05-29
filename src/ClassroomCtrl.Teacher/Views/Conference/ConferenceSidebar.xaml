@@ -175,13 +175,106 @@
                     </ScrollViewer>
                 </DockPanel>
 
-                <!-- Participants tab — Phase 15-D step 3 fills this in. -->
+                <!-- Phase 15-D step 3 — Participants tab.  Lists every connected
+                     student; per-row indicators show mic-live (🎙), cam-live
+                     (📷), hand-raised (✋, repurposes the existing
+                     HandRaisedVisibility wired by 0x0110 dispatch — see the
+                     foundation-discovery in MainViewModel.OnHandRaiseReceived).
+                     Empty state (no students connected) is intentionally a
+                     blank list in step 3; step 6 polish adds a placeholder
+                     once a CountToVisibility converter exists. -->
                 <Grid
                     Visibility="{Binding IsConferenceParticipantsTabSelected, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="{DynamicResource Conf_SidebarParticipantsPlaceholder}"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Foreground="{DynamicResource Text.Muted}"
-                               FontSize="12"/>
+                    <!-- Participants list. -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Students}" Margin="8,8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource Surface.Card}"
+                                            BorderBrush="{DynamicResource Border.Soft}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="10,8"
+                                            Margin="0,0,0,6">
+                                        <DockPanel>
+                                            <!-- Avatar placeholder.  Per-student initials
+                                                 would need a converter or a new computed
+                                                 property; the 👤 glyph keeps the list
+                                                 readable today and matches Meet's
+                                                 default-avatar treatment. -->
+                                            <Border DockPanel.Dock="Left"
+                                                    Width="36" Height="36"
+                                                    CornerRadius="999"
+                                                    Background="{DynamicResource Accent.PrimarySubtle}"
+                                                    Margin="0,0,10,0"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="👤" FontSize="18"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"/>
+                                            </Border>
+
+                                            <!-- Right cluster: state indicators. -->
+                                            <StackPanel DockPanel.Dock="Right"
+                                                        Orientation="Horizontal"
+                                                        VerticalAlignment="Center">
+                                                <!-- ✋ Hand-raise badge.  Bound to the
+                                                     existing 0x0110/0x0111 wired
+                                                     HandRaisedVisibility. -->
+                                                <Border Padding="6,2"
+                                                        Background="#FBBF24"
+                                                        CornerRadius="999"
+                                                        Margin="0,0,4,0"
+                                                        Visibility="{Binding HandRaisedVisibility}">
+                                                    <TextBlock Text="✋" FontSize="11"/>
+                                                </Border>
+                                                <!-- 🎙 Mic indicator — green when speaking,
+                                                     dim when off; matches the gallery
+                                                     tile pattern from Phase 15-C. -->
+                                                <TextBlock Text="🎙" FontSize="14" Margin="4,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Opacity" Value="0.35"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding MicLive}" Value="True">
+                                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <!-- 📷 Cam indicator. -->
+                                                <TextBlock Text="📷" FontSize="14" Margin="4,0,0,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Opacity" Value="0.35"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding CamLive}" Value="True">
+                                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+
+                                            <!-- Name + machine. -->
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayName}"
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource Text.Primary}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding MachineName}"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource Text.Muted}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </Grid>
             </Grid>
         </Grid>
