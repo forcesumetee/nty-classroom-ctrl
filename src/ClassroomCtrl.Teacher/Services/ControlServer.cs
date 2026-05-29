@@ -343,6 +343,22 @@ public class ControlServer : IDisposable
     public Task BroadcastCameraStopAsync(CancellationToken ct)
         => _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.CameraStop, Array.Empty<byte>(), _teacherId), ct);
 
+    // ─────── Phase 15-B (MVP): Conference Mode session lifecycle ───────
+    //
+    // Both Start and End ride BroadcastReliableAsync (Wait, cap 4) because a
+    // dropped Start/End leaves clients in the wrong mode for the duration of
+    // the session.  Frames + voice/cam payloads scoped to the conference will
+    // continue to use their existing lossy/voice channels (Phase 15-C/D).
+
+    public Task BroadcastConferenceStartAsync(ConferenceStartMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.ConferenceStart, bytes, _teacherId), ct);
+    }
+
+    public Task BroadcastConferenceEndAsync(CancellationToken ct)
+        => _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.ConferenceEnd, Array.Empty<byte>(), _teacherId), ct);
+
     // ─────── Phase 9.6: Net Movie sync ───────
 
     public Task BroadcastMoviePlayAsync(MoviePlayMessage msg, CancellationToken ct)

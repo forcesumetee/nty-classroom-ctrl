@@ -472,19 +472,12 @@ public partial class MainViewModel : ObservableObject
         // bound to the ConferenceView's own Start CTA.
         EnterConferenceModeCommand = new RelayCommand(() => IsInConference = true);
         ExitConferenceModeCommand  = new RelayCommand(() => IsInConference = false);
-        // Step 4 stub: local-only mutation so ConferenceView's CTA reacts.
-        // Step 5 swaps these for broadcast-emitting implementations that also
-        // pre-flight breakout dissolution.
-        StartConferenceCommand = new RelayCommand(() =>
-        {
-            ConferenceSessionId = Guid.NewGuid();
-            ConferenceStartedAt = DateTime.UtcNow;
-        });
-        EndConferenceCommand = new RelayCommand(() =>
-        {
-            ConferenceSessionId = Guid.Empty;
-            ConferenceStartedAt = null;
-        });
+        // Step 5: real session-lifecycle commands.  StartConference dissolves
+        // breakouts first (modal confirm) per architecture § 5 risk #2, then
+        // emits ConferenceStart (0x0670).  EndConference emits ConferenceEnd
+        // (0x0671) and resets local session state.
+        StartConferenceCommand = new RelayCommand(StartConference);
+        EndConferenceCommand   = new RelayCommand(EndConference);
 
         OpenNetMovieCommand = new RelayCommand(OpenNetMovie);
         OpenMicMonitorCommand = new RelayCommand(OpenMicMonitor);
@@ -1826,6 +1819,78 @@ public partial class MainViewModel : ObservableObject
         CameraButtonText = (App.Camera?.IsActive ?? false)
             ? Loc.Get("Btn_StopCamera")
             : Loc.Get("Btn_Camera");
+    }
+
+    /// <summary>Phase 15-B (MVP) — Start the Conference session.  Pre-flight
+    /// dissolves any active breakouts (modal confirm per architecture § 5
+    /// risk #2 — running Conference alongside breakouts multiplies relay
+    /// paths and confuses routing).  After confirm: emit ConferenceStart
+    /// (0x0670) to all connected students; students transition to
+    /// ConferenceGalleryWindow on dispatch (Phase 15-B step 6).</summary>
+    private async void StartConference()
+    {
+        // Pre-flight: dissolve breakouts if any exist.
+        if (App.Server != null && Rooms.Count > 0)
+        {
+            var msg = string.Format(
+                Loc.Get("Conf_DissolveBreakoutsConfirm",
+                    "Starting Conference will dissolve {0} active breakout room(s). Continue?"),
+                Rooms.Count);
+            var result = System.Windows.MessageBox.Show(
+                msg,
+                Loc.Get("Conf_StartConference", "Start Conference"),
+                System.Windows.MessageBoxButton.OKCancel,
+                System.Windows.MessageBoxImage.Question);
+            if (result != System.Windows.MessageBoxResult.OK) return;
+            try { await App.Server.DissolveAllRoomsAsync(System.Threading.CancellationToken.None); }
+            catch (Exception ex)
+            {
+                AppendSystemChat(string.Format(Loc.Get("Err_GenericFmt", "Error: {0}"), ex.Message));
+                return;
+            }
+        }
+
+        ConferenceSessionId = Guid.NewGuid();
+        ConferenceStartedAt = DateTime.UtcNow;
+        // Make sure the shell is in Conference mode (idempotent if the teacher
+        // already toggled the mode pill before clicking Start).
+        IsInConference = true;
+
+        if (App.Server != null)
+        {
+            try
+            {
+                var payload = new ConferenceStartMessage
+                {
+                    SessionId = ConferenceSessionId,
+                    HostName = OrganizationSubtitle ?? "",
+                    StartedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                };
+                await App.Server.BroadcastConferenceStartAsync(payload, System.Threading.CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                AppendSystemChat(string.Format(Loc.Get("Err_GenericFmt", "Error: {0}"), ex.Message));
+            }
+        }
+    }
+
+    /// <summary>Phase 15-B (MVP) — End the Conference session.  Emits
+    /// ConferenceEnd (0x0671) so students close their ConferenceGalleryWindow,
+    /// then resets local session state and returns the shell to Classroom mode.</summary>
+    private async void EndConference()
+    {
+        if (App.Server != null)
+        {
+            try { await App.Server.BroadcastConferenceEndAsync(System.Threading.CancellationToken.None); }
+            catch (Exception ex)
+            {
+                AppendSystemChat(string.Format(Loc.Get("Err_GenericFmt", "Error: {0}"), ex.Message));
+            }
+        }
+        ConferenceSessionId = Guid.Empty;
+        ConferenceStartedAt = null;
+        IsInConference = false;
     }
 
     /// <summary>Phase 14-B (Tier 1) — runtime cam failure handler.  Wired in
