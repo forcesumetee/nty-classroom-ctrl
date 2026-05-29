@@ -378,6 +378,15 @@ public class ControlServer : IDisposable
         return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteKey, bytes, _teacherId, studentId), ct);
     }
 
+    // Phase 12-C step 2 — Unicode text channel for Thai/IME.  Same routing
+    // shape as the other Remote* methods: targeted envelope on the lossless
+    // _inputOutbox.  Student replays via KEYEVENTF_UNICODE SendInput pairs.
+    public Task SendRemoteTextAsync(Guid studentId, RemoteTextMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteText, bytes, _teacherId, studentId), ct);
+    }
+
     // ─────── Phase 4.6: Live Mic Monitor (per-student start/stop) ───────
 
     public Task SendMicMonitorStartAsync(Guid studentId, CancellationToken ct)

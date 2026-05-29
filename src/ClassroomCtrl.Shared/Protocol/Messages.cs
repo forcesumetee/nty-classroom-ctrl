@@ -323,6 +323,19 @@ public class RemoteKeyMessage
     public bool AltDown { get; set; }
 }
 
+/// <summary>
+/// Phase 12-C step 2 — composed Unicode text from teacher's WPF TextInput
+/// event.  Survives layout mismatch (TH/EN) and multi-key IME compositions
+/// that the VK channel (RemoteKeyMessage) cannot carry.  Student replays via
+/// SendInput with KEYEVENTF_UNICODE so the wScan field is interpreted as a
+/// UTF-16 code unit instead of a scan code.
+/// </summary>
+[MessagePackObject]
+public class RemoteTextMessage
+{
+    [Key(0)] public string Text { get; set; } = string.Empty;
+}
+
 // ───────────── Phase 9.2: Screen Pen annotation ─────────────
 
 [MessagePackObject(true)]

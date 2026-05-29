@@ -119,6 +119,10 @@ public enum MessageType : ushort
     RemoteMouseClick = 0x0483,
     RemoteMouseScroll = 0x0484,
     RemoteKey = 0x0485,
+    // Phase 12-C step 2: composed Unicode text (Thai/IME).  Sent in addition
+    // to RemoteKey VK events for non-control, non-shortcut printable input —
+    // see StudentScreenWindow.OnRemoteTextInput for the de-dupe rule.
+    RemoteText = 0x0486,
 
     // Phase 4.6: Live Mic Monitor (0x0490-0x049F)
     MicMonitorStart = 0x0490,

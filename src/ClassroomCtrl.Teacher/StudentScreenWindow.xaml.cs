@@ -196,6 +196,10 @@ public partial class StudentScreenWindow : Window
         ScreenImage.MouseWheel += OnRemoteMouseWheel;
         KeyDown += OnRemoteKeyDown;
         KeyUp += OnRemoteKeyUp;
+        // Phase 12-C step 2 — TextInput fires after KeyDown carrying the IME-
+        // composed string; this is the channel that carries Thai/IME input.
+        AddHandler(TextCompositionManager.TextInputEvent,
+                   new TextCompositionEventHandler(OnRemoteTextInput));
 
         // Phase 12-B (Fix D) — fire a final-position flush at the throttle
         // cadence so a user who stops moving still gets their last position
@@ -219,6 +223,8 @@ public partial class StudentScreenWindow : Window
         ScreenImage.MouseWheel -= OnRemoteMouseWheel;
         KeyDown -= OnRemoteKeyDown;
         KeyUp -= OnRemoteKeyUp;
+        RemoveHandler(TextCompositionManager.TextInputEvent,
+                      new TextCompositionEventHandler(OnRemoteTextInput));
         _moveFlushTimer?.Stop();
         _hasPendingMove = false;
     }
@@ -301,6 +307,18 @@ public partial class StudentScreenWindow : Window
         if (!_remoteActive || App.Server == null) return;
         // Don't forward F11/ESC — they control the local window.
         if (e.Key == Key.F11 || e.Key == Key.Escape) return;
+
+        // Phase 12-C step 2 — hybrid VK + Unicode model.  Printable keys with
+        // no shortcut modifier (or only Shift) are skipped here; OnRemoteTextInput
+        // sends them as composed Unicode so Thai/IME survives layout mismatch.
+        // Control keys (modifiers, F-keys, arrows, Tab/Enter/Backspace/Delete,
+        // etc.) and any key combined with Ctrl/Alt/Win still ride the VK path
+        // so shortcuts (Ctrl+C, Alt+Tab, Win+L, …) keep working.
+        bool isControlKey = IsControlKey(e.Key);
+        bool hasShortcutModifier =
+            (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) != 0;
+        if (!isControlKey && !hasShortcutModifier) return;
+
         var vk = KeyInterop.VirtualKeyFromKey(e.Key);
         var msg = new ClassroomCtrl.Shared.Protocol.RemoteKeyMessage
         {
@@ -312,6 +330,47 @@ public partial class StudentScreenWindow : Window
         };
         try { await App.Server.SendRemoteKeyAsync(_studentId, msg, CancellationToken.None); }
         catch (Exception ex) { App.LogDebug($"[Remote] Key send failed: {ex.Message}"); }
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Phase 12-C step 2 — keys that should always travel via the VK channel:
+    /// modifiers (they bracket shortcuts and need explicit up events), F-keys,
+    /// navigation, editing keys.  Pure printable keys (letters, digits, symbols,
+    /// Thai consonants/vowels) fall through to TextInput → RemoteText.
+    /// </summary>
+    private static bool IsControlKey(Key k) => k switch
+    {
+        Key.LeftShift or Key.RightShift or
+        Key.LeftCtrl  or Key.RightCtrl  or
+        Key.LeftAlt   or Key.RightAlt   or
+        Key.LWin      or Key.RWin       => true,
+        Key.F1 or Key.F2 or Key.F3 or Key.F4 or Key.F5 or Key.F6 or
+        Key.F7 or Key.F8 or Key.F9 or Key.F10 or Key.F11 or Key.F12 => true,
+        Key.Up or Key.Down or Key.Left or Key.Right => true,
+        Key.Home or Key.End or Key.PageUp or Key.PageDown => true,
+        Key.Tab or Key.Enter or Key.Back or Key.Delete or Key.Insert => true,
+        Key.Escape or Key.Apps or Key.PrintScreen => true,
+        Key.CapsLock or Key.NumLock or Key.Scroll => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// Phase 12-C step 2 — composed text input handler.  WPF raises TextInput
+    /// AFTER KeyDown with the IME-composed UTF-16 string; this is the channel
+    /// that carries Thai (and any other layout/IME) input faithfully.  Skips
+    /// control chars (\b, \t, \r, etc.) — those are already covered by the VK
+    /// path via IsControlKey().
+    /// </summary>
+    private async void OnRemoteTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (!_remoteActive || App.Server == null) return;
+        var text = e.Text;
+        if (string.IsNullOrEmpty(text)) return;
+        if (text.Length == 1 && text[0] < 0x20) return;
+        var msg = new ClassroomCtrl.Shared.Protocol.RemoteTextMessage { Text = text };
+        try { await App.Server.SendRemoteTextAsync(_studentId, msg, CancellationToken.None); }
+        catch (Exception ex) { App.LogDebug($"[Remote] Text send failed: {ex.Message}"); }
         e.Handled = true;
     }
 

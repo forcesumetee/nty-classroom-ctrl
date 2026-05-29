@@ -535,12 +535,15 @@ public class ClassroomWorker : BackgroundService
                 break;
 
             // Phase 6.5: Remote Control (targeted to me only)
+            // Phase 12-C step 2 — RemoteText (0x0486) joins the same targeted
+            // set; same 1:1 routing as the other Remote* cases.
             case MessageType.RemoteControlStart:
             case MessageType.RemoteControlEnd:
             case MessageType.RemoteMouseMove:
             case MessageType.RemoteMouseClick:
             case MessageType.RemoteMouseScroll:
             case MessageType.RemoteKey:
+            case MessageType.RemoteText:
                 if (!IsForMe(env)) return;
                 await _ipc.ForwardToAgentAsync(env, ct);
                 break;

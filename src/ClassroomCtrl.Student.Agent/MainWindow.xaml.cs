@@ -610,6 +610,16 @@ public partial class MainWindow : Window
                 catch { }
                 break;
 
+            // Phase 12-C step 2 — composed Unicode text from teacher (Thai/IME)
+            case MessageType.RemoteText:
+                try
+                {
+                    var m = MessagePack.MessagePackSerializer.Deserialize<RemoteTextMessage>(env.Payload);
+                    RemoteControlReceiver.HandleRemoteText(m);
+                }
+                catch { }
+                break;
+
             // ─────── Phase 4.6: Mic Monitor (always-on talkback) ───────
 
             case MessageType.MicMonitorStart:

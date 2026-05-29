@@ -1,5 +1,6 @@
 ﻿using ClassroomCtrl.Shared.Protocol;
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace ClassroomCtrl.Student.Agent;
@@ -72,6 +73,9 @@ internal static class RemoteControlReceiver
     private const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
     private const uint MOUSEEVENTF_WHEEL = 0x0800;
     private const uint KEYEVENTF_KEYUP = 0x0002;
+    // Phase 12-C step 2 — when set, SendInput treats wScan as a UTF-16 code
+    // unit and ignores wVk.  This is the channel for Thai/IME composed text.
+    private const uint KEYEVENTF_UNICODE = 0x0004;
 
     // Phase 12-B — modifier VK codes used by ReleaseAll().  Both Left/Right
     // variants are released because the teacher-side capture sends specific-
@@ -153,6 +157,67 @@ internal static class RemoteControlReceiver
         }
         catch { }
     }
+
+    /// <summary>
+    /// Phase 12-C step 2 — replay composed Unicode text from the teacher.
+    /// Each code unit becomes a (down, up) INPUT pair with KEYEVENTF_UNICODE +
+    /// wScan = the UTF-16 code unit; wVk is 0 so Windows bypasses keyboard
+    /// layout translation entirely.  Surrogate pairs are emitted as four INPUT
+    /// records (down/up for each half) consecutively — Windows recombines.
+    /// One batched SendInput call so OS-level injection latency stays low.
+    /// </summary>
+    public static void HandleRemoteText(RemoteTextMessage msg)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(msg.Text)) return;
+
+            var inputs = new List<INPUT>(msg.Text.Length * 2);
+            int i = 0;
+            while (i < msg.Text.Length)
+            {
+                char c = msg.Text[i];
+                bool isSurrogatePair = char.IsHighSurrogate(c)
+                                    && i + 1 < msg.Text.Length
+                                    && char.IsLowSurrogate(msg.Text[i + 1]);
+
+                inputs.Add(NewUnicodeInput(c, keyUp: false));
+                inputs.Add(NewUnicodeInput(c, keyUp: true));
+                if (isSurrogatePair)
+                {
+                    char c2 = msg.Text[i + 1];
+                    inputs.Add(NewUnicodeInput(c2, keyUp: false));
+                    inputs.Add(NewUnicodeInput(c2, keyUp: true));
+                    i += 2;
+                }
+                else
+                {
+                    i += 1;
+                }
+            }
+
+            if (inputs.Count == 0) return;
+            var arr = inputs.ToArray();
+            SendInput((uint)arr.Length, arr, INPUT.Size);
+        }
+        catch { }
+    }
+
+    private static INPUT NewUnicodeInput(char c, bool keyUp) => new INPUT
+    {
+        type = INPUT_KEYBOARD,
+        U = new InputUnion
+        {
+            ki = new KEYBDINPUT
+            {
+                wVk = 0,
+                wScan = (ushort)c,
+                dwFlags = KEYEVENTF_UNICODE | (keyUp ? KEYEVENTF_KEYUP : 0u),
+                time = 0,
+                dwExtraInfo = IntPtr.Zero,
+            }
+        }
+    };
 
     /// <summary>
     /// Phase 12-B — defensive release of every modifier key + mouse button.
