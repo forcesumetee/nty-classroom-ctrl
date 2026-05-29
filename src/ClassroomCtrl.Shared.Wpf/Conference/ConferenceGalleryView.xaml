@@ -53,7 +53,28 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid Grid.Row="0">
-        <!-- (a) Gallery (auto-layout) — visible iff IsPinnedView == false.
+        <!-- Phase 16-B+ step 9 — top-level layout switch.  Three mutually-
+             exclusive modes; share-mode wins when active:
+               IsShareActive  → ConferenceShareView (large frame + filmstrip)
+               IsPinnedView   → existing pinned filmstrip layout
+               otherwise      → tile UniformGrid
+             Each layout's Style.Trigger collapses it when share-mode is
+             active, so the new ShareView slots in cleanly without nesting. -->
+        <local:ConferenceShareView>
+            <local:ConferenceShareView.Style>
+                <Style TargetType="local:ConferenceShareView">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsShareActive}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </local:ConferenceShareView.Style>
+        </local:ConferenceShareView>
+
+        <!-- (a) Gallery (auto-layout) — visible iff IsPinnedView == false
+             AND IsShareActive == false.
              Binds to PageTiles (paged subset of Tiles) so > TilesPerPage
              participants paginate via the bar below. -->
         <ItemsControl ItemsSource="{Binding PageTiles}"
@@ -63,6 +84,10 @@
                     <Setter Property="Visibility" Value="Visible"/>
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsPinnedView}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <!-- Phase 16-B+ step 9 — also hide in share-mode. -->
+                        <DataTrigger Binding="{Binding IsShareActive}" Value="True">
                             <Setter Property="Visibility" Value="Collapsed"/>
                         </DataTrigger>
                     </Style.Triggers>
@@ -95,7 +120,8 @@
             </ItemsControl.ItemsPanel>
         </ItemsControl>
 
-        <!-- (b) Filmstrip — visible iff IsPinnedView == true. -->
+        <!-- (b) Filmstrip — visible iff IsPinnedView == true AND
+             IsShareActive == false. -->
         <Grid>
             <Grid.Style>
                 <Style TargetType="Grid">
@@ -103,6 +129,13 @@
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsPinnedView}" Value="True">
                             <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                        <!-- Phase 16-B+ step 9 — share-mode wins.  This
+                             trigger appears AFTER the IsPinnedView trigger
+                             so its later-precedence Setter overrides the
+                             pinned-mode Visible when share-mode is also on. -->
+                        <DataTrigger Binding="{Binding IsShareActive}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"/>
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
