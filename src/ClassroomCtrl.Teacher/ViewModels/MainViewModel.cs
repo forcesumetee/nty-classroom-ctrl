@@ -1827,6 +1827,9 @@ public partial class MainViewModel : ObservableObject
         {
             App.Camera.Stop();
             HideCamBanner();
+            // Phase 15-C — clear the conference self-tile's live frame on stop
+            // so the gallery shows the cam-off placeholder again.
+            ClearConferenceSelfTileFrame();
             AppendSystemChat(Loc.Get("Chat_CameraStopped"));
         }
         else
@@ -1976,11 +1979,30 @@ public partial class MainViewModel : ObservableObject
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
             HideCamBanner();
+            // Phase 15-C — same clean-up as the user-driven Stop path: drop
+            // the live frame from the gallery self-tile so the placeholder
+            // shows on the next render.
+            ClearConferenceSelfTileFrame();
             UpdateCameraButtonText();
             AppendSystemChat(string.Format(
                 Loc.Get("Conf_CamStartFailFmt", "Camera stopped: {0}"),
                 App.Camera?.LastError ?? ""));
         });
+    }
+
+    /// <summary>Phase 15-C — drop the teacher's self-tile frame when the cam
+    /// stops (user click OR runtime error).  No-op when no active conference
+    /// or no self-tile.  Called from <see cref="ToggleCamera"/> and
+    /// <see cref="OnCameraStoppedDueToError"/>.</summary>
+    private void ClearConferenceSelfTileFrame()
+    {
+        if (!IsConferenceSessionActive || ConferenceGallery == null) return;
+        var selfId = App.Server?.TeacherEndpointId ?? System.Guid.Empty;
+        if (selfId == System.Guid.Empty) return;
+        var tile = ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == selfId);
+        if (tile == null) return;
+        tile.JpegFrame = null;
+        tile.IsCamLive = false;
     }
 
     // ─────── Phase 9.6: Net Movie ───────
