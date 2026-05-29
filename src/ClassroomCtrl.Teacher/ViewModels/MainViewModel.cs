@@ -496,6 +496,15 @@ public partial class MainViewModel : ObservableObject
             App.Server.RoomsChanged += OnServerRoomsChanged;
         }
 
+        // Phase 14-B (Tier 1) — cam-unplugged-mid-stream auto-recovery.
+        // CameraBroadcastService fires StoppedDueToError; we refresh the
+        // toolbar button + post an AppendSystemChat with the cause so the
+        // teacher knows why the broadcast disappeared.
+        if (App.Camera != null)
+        {
+            App.Camera.StoppedDueToError += OnCameraStoppedDueToError;
+        }
+
         if (App.AdaptiveBitrate != null)
         {
             App.AdaptiveBitrate.BitrateChanged += (_, e) => RefreshBitrateLabel(e.NewBitrateBps);
@@ -1664,7 +1673,7 @@ public partial class MainViewModel : ObservableObject
             : Loc.Get("Btn_SoundsOff");
     }
 
-    // ─────── Phase 9.5: Camera Broadcast ───────
+    // ─────── Phase 9.5 / Phase 14-B (Tier 1): Camera Broadcast ───────
 
     private void ToggleCamera()
     {
@@ -1676,9 +1685,32 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
+            // Phase 14-B step 5 — no-cam pre-check.  Surface a localized toast
+            // and skip the selector dialog if there's nothing to pick.
+            var devices = App.Camera.EnumerateDevices();
+            if (devices.Count == 0)
+            {
+                System.Windows.MessageBox.Show(
+                    Loc.Get("Conf_NoWebcam", "No webcam detected on this PC"),
+                    Loc.Get("Btn_Camera", "Camera"),
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+                return;
+            }
             var dlg = new CameraSelectorDialog { Owner = System.Windows.Application.Current.MainWindow };
             if (dlg.ShowDialog() == true)
                 AppendSystemChat(Loc.Get("Chat_CameraStarted"));
+            else if (!string.IsNullOrEmpty(App.Camera.LastError))
+            {
+                // The selector either succeeded (DialogResult=true, handled above)
+                // or the start failed and LastError was set inside the dialog's
+                // Start handler — surface verbatim.
+                System.Windows.MessageBox.Show(
+                    string.Format(Loc.Get("Conf_CamStartFailFmt", "Failed to start camera: {0}"), App.Camera.LastError),
+                    Loc.Get("Btn_Camera", "Camera"),
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+            }
         }
         UpdateCameraButtonText();
     }
@@ -1688,6 +1720,21 @@ public partial class MainViewModel : ObservableObject
         CameraButtonText = (App.Camera?.IsActive ?? false)
             ? Loc.Get("Btn_StopCamera")
             : Loc.Get("Btn_Camera");
+    }
+
+    /// <summary>Phase 14-B (Tier 1) — runtime cam failure handler.  Wired in
+    /// the MainViewModel ctor so a sudden device error (cam unplugged etc.)
+    /// returns the toolbar to "Start" and triggers a localized notification
+    /// rather than leaving the button stuck on "Stop".</summary>
+    private void OnCameraStoppedDueToError()
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            UpdateCameraButtonText();
+            AppendSystemChat(string.Format(
+                Loc.Get("Conf_CamStartFailFmt", "Camera stopped: {0}"),
+                App.Camera?.LastError ?? ""));
+        });
     }
 
     // ─────── Phase 9.6: Net Movie ───────

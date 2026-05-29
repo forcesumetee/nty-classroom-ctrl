@@ -30,6 +30,20 @@ public class CameraBroadcastService : IDisposable
     public bool IsActive { get; private set; }
     public int JpegQuality { get; set; } = 70;
 
+    /// <summary>Phase 14-B (Tier 1) — last error from the AForge layer.  Set
+    /// by <see cref="Start"/> on failure and by the runtime
+    /// <c>VideoSourceError</c> handler when the cam fails mid-stream
+    /// (cam unplugged, driver crash, permission revoked).  Surfaced to the
+    /// teacher UI verbatim by the toolbar's start-failed message box +
+    /// dialog error.</summary>
+    public string LastError { get; private set; } = "";
+
+    /// <summary>Phase 14-B (Tier 1) — fired when capture stops due to a
+    /// runtime error (NOT a clean Stop() call).  Teacher's MainViewModel
+    /// subscribes to refresh the toolbar button text + drop the privacy
+    /// banner without the user clicking Stop.</summary>
+    public event Action? StoppedDueToError;
+
     public CameraBroadcastService(ControlServer server, ILogger<CameraBroadcastService>? logger = null)
     {
         _server = server;
@@ -52,6 +66,7 @@ public class CameraBroadcastService : IDisposable
     public bool Start(string moniker, int width, int height, int fps)
     {
         if (IsActive) return false;
+        LastError = "";
         try
         {
             _device = new VideoCaptureDevice(moniker);
@@ -62,6 +77,10 @@ public class CameraBroadcastService : IDisposable
             if (cap != null) _device.VideoResolution = cap;
 
             _device.NewFrame += OnNewFrame;
+            // Phase 14-B (Tier 1) — surface driver-level errors (cam unplugged,
+            // permission revoked, another app grabbed the device) so the UI can
+            // auto-recover instead of silently freezing on a stale last frame.
+            _device.VideoSourceError += OnVideoSourceError;
             _device.Start();
             IsActive = true;
 
@@ -69,7 +88,12 @@ public class CameraBroadcastService : IDisposable
             _ = _server.BroadcastCameraStartAsync(startMsg, CancellationToken.None);
             return true;
         }
-        catch (Exception ex) { _logger?.LogError(ex, "Camera Start failed"); return false; }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Camera Start failed");
+            LastError = ex.Message;
+            return false;
+        }
     }
 
     public void Stop()
@@ -82,12 +106,26 @@ public class CameraBroadcastService : IDisposable
                 _device.SignalToStop();
                 _device.WaitForStop();
                 _device.NewFrame -= OnNewFrame;
+                _device.VideoSourceError -= OnVideoSourceError;
                 _device = null;
             }
         }
         catch { }
         IsActive = false;
         _ = _server.BroadcastCameraStopAsync(CancellationToken.None);
+    }
+
+    /// <summary>Phase 14-B (Tier 1) — runtime-error path.  AForge fires this on
+    /// driver crashes, sudden cam unplugs, and permission-revoked scenarios.
+    /// We auto-stop (so the privacy banner drops + the toolbar returns to
+    /// "Start") and fire <see cref="StoppedDueToError"/> so the UI can
+    /// surface the cause.</summary>
+    private void OnVideoSourceError(object? sender, VideoSourceErrorEventArgs e)
+    {
+        _logger?.LogWarning("Camera source error: {Desc}", e.Description);
+        LastError = e.Description ?? "Camera source error";
+        try { Stop(); } catch { }
+        try { StoppedDueToError?.Invoke(); } catch { }
     }
 
     private void OnNewFrame(object? sender, NewFrameEventArgs e)
@@ -106,7 +144,11 @@ public class CameraBroadcastService : IDisposable
             Interlocked.Increment(ref _frameSeq);
             _ = _server.BroadcastCameraFrameAsync(msg, CancellationToken.None);
         }
-        catch (Exception ex) { _logger?.LogWarning(ex, "Camera frame encode failed"); }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Camera frame encode failed");
+            LastError = ex.Message;
+        }
         finally { Interlocked.Exchange(ref _busy, 0); }
     }
 

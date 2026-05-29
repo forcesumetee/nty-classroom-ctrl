@@ -1,4 +1,5 @@
-﻿using ClassroomCtrl.Teacher.Services;
+﻿using ClassroomCtrl.Shared.Localization;
+using ClassroomCtrl.Teacher.Services;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -25,7 +26,7 @@ public partial class CameraSelectorDialog : Window
         if (App.Camera == null) return;
         if (DeviceCombo.SelectedItem is not ComboBoxItem item || item.Tag is not string moniker)
         {
-            MessageBox.Show("No camera device selected.");
+            MessageBox.Show(Loc.Get("Conf_NoWebcam", "No webcam detected on this PC"));
             return;
         }
 
@@ -39,7 +40,11 @@ public partial class CameraSelectorDialog : Window
         }
         else
         {
-            MessageBox.Show("Failed to start camera.");
+            // Phase 14-B step 5 — surface the AForge / driver error verbatim
+            // (e.g. "Camera held by another app", privacy permission denied)
+            // instead of the generic Phase 9.5 message.
+            var fmt = Loc.Get("Conf_CamStartFailFmt", "Failed to start camera: {0}");
+            MessageBox.Show(string.Format(fmt, App.Camera.LastError));
         }
     }
 
