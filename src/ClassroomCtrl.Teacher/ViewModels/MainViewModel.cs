@@ -1089,8 +1089,19 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
 
         if (IsScreenSharing)
         {
+            // Phase 16-B+ — capture mode BEFORE Stop() clears IsConferenceShare,
+            // so the teacher-side gallery cleanup below knows whether to clear
+            // ActiveShareEndpointId.
+            bool wasConferenceShare = App.ScreenBroadcaster.IsConferenceShare;
             App.ScreenBroadcaster.Stop();
             IsScreenSharing = false;
+            if (wasConferenceShare)
+            {
+                App.ScreenBroadcaster.FrameEncoded -= OnConferenceShareFrameEncoded;
+                ConferenceGallery.ActiveShareEndpointId = null;
+                ConferenceGallery.ActiveShareSourceName = "";
+                ConferenceGallery.ActiveShareFrame = null;
+            }
             AppendSystemChat(Loc.Get("Chat_ScreenShareStopped"));
         }
         else
@@ -1111,14 +1122,61 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             // signaling envelope (ConferenceShareStart vs ScreenStreamStart).
             if (IsInConference)
             {
+                var sourceName = Loc.Get("Conf_TeacherDisplayName", "Teacher");
                 App.ScreenBroadcaster.IsConferenceShare = true;
-                App.ScreenBroadcaster.ConferenceShareSourceName =
-                    Loc.Get("Conf_TeacherDisplayName", "Teacher");
+                App.ScreenBroadcaster.ConferenceShareSourceName = sourceName;
+                // Set local gallery state so the teacher's own view flips to
+                // share-mode immediately (TCP doesn't echo to self, so the
+                // dispatch path wouldn't trigger here).  Subscribe to
+                // FrameEncoded so the teacher's own gallery shows a live
+                // self-preview of what's being shared.
+                if (App.Server != null)
+                {
+                    ConferenceGallery.ActiveShareEndpointId = App.Server.TeacherEndpointId;
+                }
+                ConferenceGallery.ActiveShareSourceName = sourceName;
+                ConferenceGallery.ActiveShareFrame = null;
+                App.ScreenBroadcaster.FrameEncoded += OnConferenceShareFrameEncoded;
             }
             App.ScreenBroadcaster.Start();
             IsScreenSharing = true;
             AppendSystemChat(Loc.Get("Chat_ScreenShareStarted"));
         }
+    }
+
+    /// <summary>Phase 16-B+ step 10 — teacher self-preview hook for the
+    /// in-frame Conference share.  Subscribed only while a Conference share
+    /// is active; decodes MJPEG bytes back to a BitmapImage and pushes it
+    /// into <see cref="ConferenceGallery"/>.ActiveShareFrame so the teacher
+    /// sees what every participant sees.  H.264 path falls back to the
+    /// "Waiting…" placeholder (same as student side) until a future polish
+    /// round wires the 11-B H264Decoder here.</summary>
+    private void OnConferenceShareFrameEncoded(object? sender,
+        (byte[] FrameData, bool IsKeyframe, ClassroomCtrl.Shared.Protocol.VideoCodec Codec) e)
+    {
+        if (e.Codec != ClassroomCtrl.Shared.Protocol.VideoCodec.Mjpeg) return;
+        try
+        {
+            var bytes = e.FrameData;
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+            dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                    using var ms = new System.IO.MemoryStream(bytes);
+                    bmp.BeginInit();
+                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bmp.StreamSource = ms;
+                    bmp.EndInit();
+                    bmp.Freeze();
+                    ConferenceGallery.ActiveShareFrame = bmp;
+                }
+                catch { /* transient decode failure: leave last frame in place */ }
+            });
+        }
+        catch { /* dispatcher torn down: ignore */ }
     }
 
     private async void ToggleLockAll()

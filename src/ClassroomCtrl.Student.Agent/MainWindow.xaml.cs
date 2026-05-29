@@ -783,6 +783,55 @@ public partial class MainWindow : Window
                 });
                 break;
 
+            // ─────── Phase 16-B+ : In-frame Conference share ───────
+            // Distinct from the Classroom ScreenStreamFrame path (which opens
+            // ScreenViewWindow as a full takeover); these stay inside the
+            // Conference window's gallery surface.  Self-loopback filter
+            // (env.SenderId == _myEndpointId) drops the originator's own
+            // echo so a future student-share path doesn't see itself.
+
+            case MessageType.ConferenceShareStart:
+                try
+                {
+                    var ss = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareStartMessage>(env.Payload);
+                    var sourceId = env.SenderId;
+                    if (_myEndpointId.HasValue && sourceId == _myEndpointId.Value) break;
+                    IpcClient.LogToFile($"[MainWindow] ConferenceShareStart source={sourceId} ({ss.SourceName})");
+                    Dispatcher.Invoke(() => _confWindow?.OnShareStart(sourceId, ss.SourceName));
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] ConferenceShareStart decode: {ex.Message}");
+                }
+                break;
+
+            case MessageType.ConferenceShareFrame:
+                try
+                {
+                    var sf = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareFrameMessage>(env.Payload);
+                    if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
+                    Dispatcher.Invoke(() =>
+                        _confWindow?.OnShareFrame(env.SenderId, sf.FrameData, sf.Codec));
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] ConferenceShareFrame decode: {ex.Message}");
+                }
+                break;
+
+            case MessageType.ConferenceShareStop:
+                try
+                {
+                    if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
+                    IpcClient.LogToFile($"[MainWindow] ConferenceShareStop source={env.SenderId}");
+                    Dispatcher.Invoke(() => _confWindow?.OnShareStop());
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] ConferenceShareStop handler: {ex.Message}");
+                }
+                break;
+
             // ─────── Phase 9.6: Net Movie ───────
 
             case MessageType.MoviePlay:

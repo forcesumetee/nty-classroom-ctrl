@@ -1,4 +1,5 @@
 using ClassroomCtrl.Shared.Localization;
+using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Shared.Wpf.ViewModels;
 using ClassroomCtrl.Student.Agent.ViewModels;
 using System;
@@ -83,5 +84,69 @@ public partial class ConferenceGalleryWindow : Window
         {
             tile.CurrentReactionEmoji = emoji ?? "";
         }
+    }
+
+    /// <summary>Phase 16-B+ step 10 — student-side ConferenceShareStart hook.
+    /// Sets the gallery VM's ActiveShareEndpointId + name so the layout
+    /// switches from tile-mode to ConferenceShareView.</summary>
+    public void OnShareStart(Guid sourceEndpointId, string sourceName)
+    {
+        _vm.ConferenceGallery.ActiveShareEndpointId = sourceEndpointId;
+        _vm.ConferenceGallery.ActiveShareSourceName = string.IsNullOrWhiteSpace(sourceName)
+            ? Loc.Get("Conf_TeacherDisplayName", "Teacher")
+            : sourceName;
+        _vm.ConferenceGallery.ActiveShareFrame = null;
+    }
+
+    /// <summary>Phase 16-B+ step 10 — student-side ConferenceShareFrame hook.
+    /// Decodes JPEG bytes to a BitmapImage and pushes it into the gallery's
+    /// ActiveShareFrame so ConferenceShareView re-renders.  H.264 is logged
+    /// + skipped today (the default Teacher codec is MJPEG; H.264 decode
+    /// for Conference share falls back to the "Waiting…" placeholder until
+    /// a future polish round wires the existing 11-B H264Decoder here).</summary>
+    public void OnShareFrame(Guid sourceEndpointId, byte[] frameData, VideoCodec codec)
+    {
+        if (codec != VideoCodec.Mjpeg)
+        {
+            // H.264 Conference-share decode deferred; the placeholder stays.
+            return;
+        }
+        try
+        {
+            var bmp = new BitmapImage();
+            using var ms = new MemoryStream(frameData);
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            bmp.Freeze();
+
+            if (_vm.ConferenceGallery.ActiveShareEndpointId == null)
+            {
+                // Late frame after Stop / before Start: synthesize a Start
+                // anchor so the layout still swaps.  Banner name falls
+                // back to the generic display because we don't know
+                // sourceName here (the Start envelope carries it).
+                _vm.ConferenceGallery.ActiveShareEndpointId = sourceEndpointId;
+                _vm.ConferenceGallery.ActiveShareSourceName =
+                    Loc.Get("Conf_TeacherDisplayName", "Teacher");
+            }
+            _vm.ConferenceGallery.ActiveShareFrame = bmp;
+        }
+        catch
+        {
+            // Decode failure: leave whatever frame was last decoded in place
+            // so a transient corrupt frame doesn't blank the share.
+        }
+    }
+
+    /// <summary>Phase 16-B+ step 10 — student-side ConferenceShareStop hook.
+    /// Clears ActiveShareEndpointId; ConferenceGalleryView's layout
+    /// switcher returns to tile-mode.</summary>
+    public void OnShareStop()
+    {
+        _vm.ConferenceGallery.ActiveShareEndpointId = null;
+        _vm.ConferenceGallery.ActiveShareSourceName = "";
+        _vm.ConferenceGallery.ActiveShareFrame = null;
     }
 }
