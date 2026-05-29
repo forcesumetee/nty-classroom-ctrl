@@ -810,13 +810,61 @@ public class ControlServer : IDisposable
     }
 
     /// <summary>Phase 13-B (Tier 1) — wraps the existing Phase 8.5 SetRoomHostAsync
-    /// + emits an explicit BreakoutHostSet envelope + the snapshot.</summary>
-    public async Task SetGroupHostAsync(Guid groupId, Guid? hostId, CancellationToken ct)
+    /// + emits an explicit BreakoutHostSet envelope + the snapshot.
+    /// Phase 13-C (Tier 2) — also emits StudentGroupScreenStreamStop (for any
+    /// outgoing host) and StudentGroupScreenStreamStart (for the new host), so
+    /// the in-group peers' GroupPeerView opens/closes and the new host's
+    /// StudentBroadcaster starts presenting.  Both control envelopes are
+    /// group-targeted; the new/old host receives them via TargetGroupId
+    /// loopback and self-detects via payload.PresenterId == own EndpointId.
+    /// <paramref name="newHostName"/> is the new host's DisplayName, looked up
+    /// by the caller (e.g. GroupManagerView from MainViewModel.Students) so
+    /// the GroupPeerView title-bar label is correct.  Pass empty for null
+    /// new-host (clear).</summary>
+    public async Task SetGroupHostAsync(Guid groupId, Guid? hostId, string newHostName, CancellationToken ct)
     {
+        // Capture outgoing host BEFORE SetRoomHostAsync mutates _roomHostMap.
+        Guid? oldHostId = _roomHostMap.TryGetValue(groupId, out var prior) ? prior : (Guid?)null;
+
         await SetRoomHostAsync(groupId, hostId, ct);  // Phase 8.5 — handles per-member re-assign
         var msg = new BreakoutHostSetMessage { GroupId = groupId, HostStudentId = hostId };
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
         await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutHostSet, bytes, _teacherId), ct);
+
+        // Phase 13-C — Tier 2 host-presenter signals.
+        if (oldHostId.HasValue && (!hostId.HasValue || oldHostId.Value != hostId.Value))
+        {
+            var stopCtrl = new StudentGroupScreenStreamControlMessage
+            {
+                GroupId = groupId,
+                PresenterId = oldHostId.Value,
+                PresenterName = "",
+                Start = false,
+                Codec = VideoCodec.Mjpeg,
+            };
+            var stopBytes = MessagePack.MessagePackSerializer.Serialize(stopCtrl);
+            var stopEnv = Envelope.CreateGroupTargeted(
+                MessageType.StudentGroupScreenStreamStop, stopBytes, _teacherId, groupId);
+            await _tcp.BroadcastAsync(stopEnv, ct);
+            _logger.LogInformation("StudentGroupScreenStreamStop → group={Group} oldHost={Host}", groupId, oldHostId.Value);
+        }
+        if (hostId.HasValue && (!oldHostId.HasValue || oldHostId.Value != hostId.Value))
+        {
+            var startCtrl = new StudentGroupScreenStreamControlMessage
+            {
+                GroupId = groupId,
+                PresenterId = hostId.Value,
+                PresenterName = newHostName ?? "",
+                Start = true,
+                Codec = VideoCodec.Mjpeg,
+            };
+            var startBytes = MessagePack.MessagePackSerializer.Serialize(startCtrl);
+            var startEnv = Envelope.CreateGroupTargeted(
+                MessageType.StudentGroupScreenStreamStart, startBytes, _teacherId, groupId);
+            await _tcp.BroadcastAsync(startEnv, ct);
+            _logger.LogInformation("StudentGroupScreenStreamStart → group={Group} newHost={Host} ({Name})", groupId, hostId.Value, newHostName);
+        }
+
         await BroadcastGroupSnapshotAsync(ct);
         RoomsChanged?.Invoke(this, EventArgs.Empty);
     }

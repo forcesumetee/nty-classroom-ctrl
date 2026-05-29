@@ -177,14 +177,15 @@ public partial class GroupManagerView : Window
         // Set Host — submenu of members + "Clear host"
         var setHost = new MenuItem { Header = Loc.Get("GroupMgr_MenuSetHost") };
         var clearHost = new MenuItem { Header = "— (clear)" };
-        clearHost.Click += async (_, _) => await App.Server.SetGroupHostAsync(r.RoomId, null, CancellationToken.None);
+        clearHost.Click += async (_, _) => await App.Server.SetGroupHostAsync(r.RoomId, null, "", CancellationToken.None);
         setHost.Items.Add(clearHost);
         foreach (var mid in r.MemberIds)
         {
             var capturedId = mid;
             var s = _vm.Students.FirstOrDefault(x => x.EndpointId == capturedId);
-            var item = new MenuItem { Header = s?.DisplayName ?? capturedId.ToString().Substring(0, 8) };
-            item.Click += async (_, _) => await App.Server.SetGroupHostAsync(r.RoomId, capturedId, CancellationToken.None);
+            var capturedName = s?.DisplayName ?? capturedId.ToString().Substring(0, 8);
+            var item = new MenuItem { Header = capturedName };
+            item.Click += async (_, _) => await App.Server.SetGroupHostAsync(r.RoomId, capturedId, capturedName, CancellationToken.None);
             setHost.Items.Add(item);
         }
         menu.Items.Add(setHost);

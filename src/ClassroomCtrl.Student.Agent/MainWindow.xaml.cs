@@ -292,6 +292,16 @@ public partial class MainWindow : Window
                             _groupPeerView.Close();
                             _groupPeerView = null;
                         }
+                        // Defense-in-depth: if I was the host of my old room
+                        // and the teacher reassigned me without first clearing
+                        // my host role, my broadcaster is still fanning out
+                        // to a group I'm no longer in.  Stop it.  Normal flow
+                        // sends Stop before reassign, but this catches the
+                        // out-of-order case.
+                        if (_studentBroadcaster?.GroupBroadcastGroupId is Guid gid && gid != newRoom.GetValueOrDefault())
+                        {
+                            StopGroupHostBroadcast();
+                        }
                     });
                 }
                 break;
@@ -385,22 +395,33 @@ public partial class MainWindow : Window
                 break;
 
             // ─────── Phase 13-C (Tier 2): in-group peer presenter ───────
-            // The host's StudentBroadcaster emits a Start envelope, per-frame
-            // Frame envelopes, and a Stop envelope.  All carry TargetGroupId
-            // for the Service-side IsForMe filter; Service forwards to Agent.
-            // The host's OWN Agent also receives loopback envelopes — filter
-            // by env.SenderId == _myEndpointId so the host doesn't view its
-            // own broadcast.
+            // Teacher emits group-targeted Start/Stop envelopes via
+            // SetGroupHostAsync.  The host receives via TargetGroupId loopback
+            // and self-detects from payload.PresenterId == own EndpointId;
+            // the host's broadcaster starts/stops accordingly.  Non-presenter
+            // peers open/close GroupPeerView based on the same payload field.
+            // Frames are sent by the host's broadcaster directly (env.SenderId
+            // = host); the existing self-filter on env.SenderId == self
+            // handles the host's frame loopback.
             case MessageType.StudentGroupScreenStreamStart:
-                if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
                 try
                 {
                     var ctrl = MessagePack.MessagePackSerializer.Deserialize<StudentGroupScreenStreamControlMessage>(env.Payload);
-                    IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStart presenter={ctrl.PresenterName} group={ctrl.GroupId} codec={ctrl.Codec}");
+                    bool iAmPresenter = _myEndpointId.HasValue && ctrl.PresenterId == _myEndpointId.Value;
+                    IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStart presenter={ctrl.PresenterName} group={ctrl.GroupId} codec={ctrl.Codec} iAmPresenter={iAmPresenter}");
                     Dispatcher.Invoke(() =>
                     {
-                        // Host changed under us (e.g. teacher reassigned) —
-                        // close the prior viewer so the new presenter opens fresh.
+                        if (iAmPresenter)
+                        {
+                            // Close any GroupPeerView I had open as a non-host
+                            // viewer (covers the host-rotation A→C→A case).
+                            _groupPeerView?.Close();
+                            _groupPeerView = null;
+                            StartGroupHostBroadcast(ctrl.GroupId, ctrl.Codec);
+                            return;
+                        }
+                        // Host changed under us — close prior viewer so the
+                        // new presenter opens fresh instead of mixing frames.
                         if (_groupPeerView != null && _groupPeerView.PresenterId != ctrl.PresenterId)
                         {
                             _groupPeerView.Close();
@@ -425,10 +446,9 @@ public partial class MainWindow : Window
                     var presenterId = env.SenderId;
                     Dispatcher.Invoke(() =>
                     {
-                        // Defensive: open the viewer on first frame if we
-                        // missed the Start envelope (e.g. teacher restart).
-                        // Without a name we fall back to the GroupId — Step 4
-                        // refresh would correct labeling via the next Start.
+                        // Defensive: open viewer on first frame if we missed
+                        // the Start envelope (teacher restart / late join).
+                        // Labeling will be corrected by the next Start.
                         if (_groupPeerView == null && env.TargetGroupId.HasValue)
                         {
                             _groupPeerView = new GroupPeerView(presenterId, "", env.TargetGroupId.Value, _myRoomName ?? "");
@@ -445,13 +465,23 @@ public partial class MainWindow : Window
                 break;
 
             case MessageType.StudentGroupScreenStreamStop:
-                if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
-                IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStop sender={env.SenderId}");
-                Dispatcher.Invoke(() =>
+                try
                 {
-                    _groupPeerView?.Close();
-                    _groupPeerView = null;
-                });
+                    var ctrl = MessagePack.MessagePackSerializer.Deserialize<StudentGroupScreenStreamControlMessage>(env.Payload);
+                    bool iWasPresenter = _myEndpointId.HasValue && ctrl.PresenterId == _myEndpointId.Value;
+                    IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStop presenter={ctrl.PresenterId} iWasPresenter={iWasPresenter}");
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (iWasPresenter)
+                        {
+                            StopGroupHostBroadcast();
+                            return;
+                        }
+                        _groupPeerView?.Close();
+                        _groupPeerView = null;
+                    });
+                }
+                catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStop decode: {ex.Message}"); }
                 break;
 
             // ─────── Phase 9.1: Student Demonstration ───────
@@ -771,6 +801,16 @@ public partial class MainWindow : Window
                 {
                     if (_studentBroadcaster != null)
                     {
+                        // Phase 13-C (Tier 2) — if I'm currently the group
+                        // host, the broadcaster must keep running for the
+                        // group fan-out.  Teacher's view stop just stops
+                        // observing; the group share continues.
+                        if (_studentBroadcaster.GroupBroadcastGroupId.HasValue)
+                        {
+                            IpcClient.LogToFile("[MainWindow] Teacher view stopped, broadcaster kept alive for group host role");
+                            AddSystemNotification(Loc.Get("Chat_TeacherStoppedViewing"), "👁");
+                            return;
+                        }
                         _studentBroadcaster.Stop();
                         _studentBroadcaster.Dispose();
                         _studentBroadcaster = null;
@@ -877,6 +917,63 @@ public partial class MainWindow : Window
             _screenViewWindow = new ScreenViewWindow();
             _screenViewWindow.Closed += (_, _) => _screenViewWindow = null;
             _screenViewWindow.Show();
+        }
+    }
+
+    // Phase 13-C (Tier 2) — true iff THIS handler is the one that started
+    // the broadcaster (teacher wasn't already viewing).  Used by Stop to
+    // know whether disposing the broadcaster is safe or whether teacher's
+    // view path still owns the lifecycle.
+    private bool _broadcasterOwnedByGroupHost;
+
+    /// <summary>Phase 13-C (Tier 2) — host transition handler.  Sets the
+    /// group-broadcast target on the broadcaster (creating + starting it if
+    /// teacher wasn't already viewing) so every captured frame is emitted
+    /// both as StudentStreamFrame (teacher view, if active) AND as
+    /// StudentGroupScreenStreamFrame (in-group fan-out).</summary>
+    private void StartGroupHostBroadcast(Guid groupId, VideoCodec codec)
+    {
+        if (_studentBroadcaster == null)
+        {
+            _studentBroadcaster = new StudentBroadcaster
+            {
+                Codec = codec,
+                GroupBroadcastGroupId = groupId,
+            };
+            _studentBroadcaster.Start();
+            _broadcasterOwnedByGroupHost = true;
+            IpcClient.LogToFile($"[MainWindow] Group host broadcaster STARTED for group {groupId} (codec={codec})");
+        }
+        else
+        {
+            // Teacher is already viewing — broadcaster runs already, just
+            // attach the group-broadcast target.  Codec mismatch (teacher
+            // requested MJPEG, host got H.264) keeps the running encoder.
+            _studentBroadcaster.GroupBroadcastGroupId = groupId;
+            IpcClient.LogToFile($"[MainWindow] Group host attached to in-flight broadcaster, group={groupId}");
+        }
+    }
+
+    /// <summary>Phase 13-C (Tier 2) — host-role revoked.  Detach the group
+    /// target so frames stop fanning out to the group.  If we owned the
+    /// broadcaster lifecycle (teacher wasn't viewing when we started it),
+    /// also stop + dispose.  Otherwise let teacher's StudentStreamStop
+    /// handler tear it down later.</summary>
+    private void StopGroupHostBroadcast()
+    {
+        if (_studentBroadcaster == null) return;
+        _studentBroadcaster.GroupBroadcastGroupId = null;
+        if (_broadcasterOwnedByGroupHost)
+        {
+            _studentBroadcaster.Stop();
+            _studentBroadcaster.Dispose();
+            _studentBroadcaster = null;
+            _broadcasterOwnedByGroupHost = false;
+            IpcClient.LogToFile("[MainWindow] Group host broadcaster STOPPED");
+        }
+        else
+        {
+            IpcClient.LogToFile("[MainWindow] Group host detached, broadcaster left running for teacher view");
         }
     }
 
