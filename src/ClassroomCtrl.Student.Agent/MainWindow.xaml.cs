@@ -64,6 +64,7 @@ public partial class MainWindow : Window
     private MicBroadcaster? _micBroadcaster;
     private VoiceMixer? _voiceMixer;
     private PttKeyboardHook? _pttHook;
+    private VoiceLiveBanner? _voiceBanner;
     private long _voiceFramesRxCount;
 
     // Phase 9 Section B / Phase 9.1 Section B+C — Bell + Notifications.
@@ -1039,7 +1040,41 @@ public partial class MainWindow : Window
             }
             catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] MicStateUpdate send: {ex.Message}"); }
         };
+        // Phase 13-D step 7 — privacy banner.  Visible iff broadcaster is
+        // actively emitting (capturing + unmuted + (always-on || PTT down)).
+        // Red flashes when VAD says the speaker is mid-utterance.
+        _micBroadcaster.StateChanged += (_, _) =>
+        {
+            Dispatcher.BeginInvoke(new Action(UpdateVoiceBanner));
+        };
         IpcClient.LogToFile("[MainWindow] MicBroadcaster initialized (muted=true, PTT-default)");
+    }
+
+    /// <summary>Phase 13-D step 7 — privacy banner show/hide + color/text.
+    /// Driven by MicBroadcaster.StateChanged.  Shown while mic is live
+    /// (IsEmitting); red flash on IsSpeaking; hidden when muted or PTT-up.</summary>
+    private void UpdateVoiceBanner()
+    {
+        var mic = _micBroadcaster;
+        if (mic == null)
+        {
+            try { _voiceBanner?.Close(); } catch { }
+            _voiceBanner = null;
+            return;
+        }
+        if (!mic.IsEmitting)
+        {
+            try { _voiceBanner?.Close(); } catch { }
+            _voiceBanner = null;
+            return;
+        }
+        if (_voiceBanner == null)
+        {
+            _voiceBanner = new VoiceLiveBanner();
+            _voiceBanner.Closed += (_, _) => _voiceBanner = null;
+            _voiceBanner.Show();
+        }
+        _voiceBanner.UpdateState(mic.IsSpeaking, _myRoomName ?? "");
     }
 
     private void EnsureScreenViewWindow()

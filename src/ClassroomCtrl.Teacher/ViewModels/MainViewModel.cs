@@ -481,6 +481,11 @@ public partial class MainViewModel : ObservableObject
             App.Server.QualityReportReceived += OnQualityReportReceived;
             App.Server.HostChanged += OnHostChanged;
             App.Server.DemoStateChanged += OnDemoStateChanged;
+            // Phase 13-D (Tier 3) — per-student mic indicator.  Heartbeat from
+            // each student arrives ~every 1.5 s + on every state change; we
+            // route to the right StudentViewModel so per-student chips /
+            // tiles can show "Muted / Live / Speaking" without polling.
+            App.Server.MicStateUpdated += OnMicStateUpdated;
             // Phase 13-B (Tier 1) — sync local Rooms collection from canonical
             // server state on every mutation.  GroupManagerView + the Step-7
             // badges + status chip all read off Rooms.
@@ -1947,6 +1952,21 @@ public partial class MainViewModel : ObservableObject
         });
     }
 
+    /// <summary>Phase 13-D (Tier 3) — route MicStateUpdate heartbeat to the
+    /// right StudentViewModel.  No-op if the sender isn't in our Students
+    /// list (left the class between emit and arrival).</summary>
+    private void OnMicStateUpdated(object? sender, (System.Guid StudentId, ClassroomCtrl.Shared.Protocol.MicStateUpdateMessage State) e)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            var s = Students.FirstOrDefault(x => x.EndpointId == e.StudentId);
+            if (s == null) return;
+            s.MicLive = e.State.MicLive;
+            s.MicPttMode = e.State.PttMode;
+            s.MicIsSpeaking = e.State.IsSpeaking;
+        });
+    }
+
     // ─────── Phase 5b: Per-student recording commands ───────
 
     private async void StartStudentRecording(StudentViewModel? s)
@@ -2154,6 +2174,41 @@ public partial class StudentViewModel : ObservableObject
     // Phase 8.5: Host of a breakout room
     [ObservableProperty] private bool isHost;
     [ObservableProperty] private System.Windows.Visibility hostBadgeVisibility = System.Windows.Visibility.Collapsed;
+
+    // Phase 13-D (Tier 3) — last-known mic state from MicStateUpdate heartbeat.
+    // Updated by MainViewModel.OnMicStateUpdated.  MicIndicatorText carries an
+    // emoji + label ready for the per-student chip / row.  Sticky: if a
+    // student goes offline, the last state stays until StudentLeft purges them.
+    [ObservableProperty] private bool micLive;
+    [ObservableProperty] private bool micPttMode = true;
+    [ObservableProperty] private bool micIsSpeaking;
+    [ObservableProperty] private string micIndicatorText = "";
+    [ObservableProperty] private System.Windows.Visibility micIndicatorVisibility = System.Windows.Visibility.Collapsed;
+
+    partial void OnMicLiveChanged(bool value) => RefreshMicIndicator();
+    partial void OnMicIsSpeakingChanged(bool value) => RefreshMicIndicator();
+
+    private void RefreshMicIndicator()
+    {
+        // Per primer: muted (gray) / live (green) / speaking (animated).
+        // First cut surfaces as a localized emoji text; future polish can
+        // bind to a per-state brush + visibility.
+        if (MicIsSpeaking)
+        {
+            MicIndicatorText = Loc.Get("Voice_MicIndicator_Speaking", "🟢 Speaking");
+            MicIndicatorVisibility = System.Windows.Visibility.Visible;
+        }
+        else if (MicLive)
+        {
+            MicIndicatorText = Loc.Get("Voice_MicIndicator_Live", "🎤 Live");
+            MicIndicatorVisibility = System.Windows.Visibility.Visible;
+        }
+        else
+        {
+            MicIndicatorText = "";
+            MicIndicatorVisibility = System.Windows.Visibility.Collapsed;
+        }
+    }
     partial void OnIsHostChanged(bool value)
     {
         HostBadgeVisibility = value ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;

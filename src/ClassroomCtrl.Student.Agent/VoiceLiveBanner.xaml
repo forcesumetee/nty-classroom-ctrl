@@ -1,0 +1,21 @@
+<Window Icon="/Assets/logo.png" x:Class="ClassroomCtrl.Student.Agent.VoiceLiveBanner"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Voice Live"
+        WindowStyle="None"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Width="500" Height="44"
+        WindowStartupLocation="Manual">
+    <Border x:Name="BannerBorder" Background="#10B981" CornerRadius="0,0,8,8">
+        <TextBlock x:Name="BannerText"
+                   Text="🎤 Microphone ON"
+                   FontFamily="Segoe UI"
+                   Foreground="White"
+                   FontSize="15" FontWeight="Bold"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Border>
+</Window>
