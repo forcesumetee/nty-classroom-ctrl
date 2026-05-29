@@ -1,6 +1,7 @@
 ﻿using ClassroomCtrl.Shared.Protocol;
 using System;
 using System.Collections.Generic;
+using System.Linq; // [Remote-DIAG] — ReleaseAll stack-trace condense
 using System.Runtime.InteropServices;
 
 namespace ClassroomCtrl.Student.Agent;
@@ -139,6 +140,7 @@ internal static class RemoteControlReceiver
 
     public static void HandleKey(RemoteKeyMessage msg)
     {
+        IpcClient.LogToFile($"[Remote-DIAG] AGENT RemoteKey VK={msg.VirtualKeyCode:X2} IsDown={msg.IsDown} Shift={msg.ShiftDown} Ctrl={msg.CtrlDown} Alt={msg.AltDown}"); // [Remote-DIAG]
         try
         {
             var inp = new INPUT
@@ -153,9 +155,10 @@ internal static class RemoteControlReceiver
                     }
                 }
             };
-            SendInput(1, new[] { inp }, INPUT.Size);
+            uint rc = SendInput(1, new[] { inp }, INPUT.Size); // [Remote-DIAG]
+            IpcClient.LogToFile($"[Remote-DIAG] AGENT SendInput rc={rc}"); // [Remote-DIAG]  rc==0 → injection rejected
         }
-        catch { }
+        catch (Exception ex) { IpcClient.LogToFile($"[Remote-DIAG] AGENT HandleKey EX={ex.Message}"); /* [Remote-DIAG] */ }
     }
 
     /// <summary>
@@ -229,6 +232,7 @@ internal static class RemoteControlReceiver
     /// </summary>
     public static void ReleaseAll()
     {
+        IpcClient.LogToFile($"[Remote-DIAG] AGENT ReleaseAll called (stack={Environment.StackTrace.Split('\n').Skip(1).Take(3).Select(l => l.Trim()).Aggregate((a, b) => a + " | " + b)})"); // [Remote-DIAG]
         ushort[] modifiers =
         {
             VK_LSHIFT, VK_RSHIFT,
