@@ -365,6 +365,10 @@ If nothing's left to clean up, skip step 8 entirely.
 
 ## 4. Acceptance checklist (2-PC validation)
 
+**Status: code complete (Phase 14-B steps 1–7, 9 commits). Awaiting dev
+2-PC validation.** All 3 projects (Teacher, Student.Agent, Student.Service)
+build with 0 errors; T1–T13 wire-compat suite PASS.
+
 Run on dev box (sirin teacher + force student).
 
 | # | Check | How to verify |
