@@ -699,7 +699,14 @@ public partial class MainWindow : Window
                 try
                 {
                     var cf = MessagePack.MessagePackSerializer.Deserialize<CameraFrameMessage>(env.Payload);
-                    Dispatcher.Invoke(() => _cameraWindow?.UpdateFrame(cf.JpegData));
+                    Dispatcher.Invoke(() =>
+                    {
+                        _cameraWindow?.UpdateFrame(cf.JpegData);
+                        // Phase 15-C — also route into the Conference window's
+                        // teacher tile when a conference is active so the
+                        // student sees the teacher's cam in the gallery.
+                        _confWindow?.UpdateFrame(cf.JpegData);
+                    });
                 }
                 catch { }
                 break;

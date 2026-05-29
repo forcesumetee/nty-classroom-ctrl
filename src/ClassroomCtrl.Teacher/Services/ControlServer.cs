@@ -341,8 +341,17 @@ public class ControlServer : IDisposable
     public Task BroadcastCameraFrameAsync(CameraFrameMessage msg, CancellationToken ct)
     {
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        // Phase 15-C — also surface the JPEG locally so the Conference gallery's
+        // self-tile can render the teacher's own cam.  Fired on the broadcast
+        // thread; subscriber (MainViewModel) marshals to UI dispatcher.
+        try { TeacherCameraFrameSent?.Invoke(this, msg.JpegData); } catch { }
         return _tcp.BroadcastAsync(Envelope.Create(MessageType.CameraFrame, bytes, _teacherId), ct);
     }
+
+    /// <summary>Phase 15-C — fired on every teacher cam broadcast so the
+    /// Conference gallery's self-tile can render the same JPEG locally
+    /// without a round-trip through the wire.  Subscribers marshal to UI.</summary>
+    public event EventHandler<byte[]>? TeacherCameraFrameSent;
 
     public Task BroadcastCameraStopAsync(CancellationToken ct)
         => _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.CameraStop, Array.Empty<byte>(), _teacherId), ct);

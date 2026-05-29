@@ -622,6 +622,9 @@ public partial class MainViewModel : ObservableObject
             // Drives StudentViewModel.HasWebcam (data only in Tier 1; Tier 2
             // wires the visual chip alongside the actual cam capture).
             App.Server.WebcamStateUpdated += OnWebcamStateUpdated;
+            // Phase 15-C — route the teacher's own cam JPEG into the self-tile
+            // so the Conference gallery shows the teacher's own preview.
+            App.Server.TeacherCameraFrameSent += OnTeacherCameraFrameSent;
             // Phase 13-B (Tier 1) — sync local Rooms collection from canonical
             // server state on every mutation.  GroupManagerView + the Step-7
             // badges + status chip all read off Rooms.
@@ -2259,6 +2262,36 @@ public partial class MainViewModel : ObservableObject
             s.MicPttMode = e.State.PttMode;
             s.MicIsSpeaking = e.State.IsSpeaking;
         });
+    }
+
+    /// <summary>Phase 15-C — surface the teacher's broadcast cam JPEG into
+    /// the Conference self-tile.  Fires on every <c>BroadcastCameraFrameAsync</c>
+    /// call; marshal to UI dispatcher; decode JPEG into a frozen BitmapImage
+    /// and assign to <c>self.JpegFrame</c>.  Skipped if there's no active
+    /// conference (no self-tile exists yet).</summary>
+    private void OnTeacherCameraFrameSent(object? sender, byte[] jpeg)
+    {
+        if (!IsConferenceSessionActive || ConferenceGallery == null) return;
+        var selfId = App.Server?.TeacherEndpointId ?? System.Guid.Empty;
+        if (selfId == System.Guid.Empty) return;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new System.Action(() =>
+        {
+            var tile = ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == selfId);
+            if (tile == null) return;
+            try
+            {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                using var ms = new System.IO.MemoryStream(jpeg);
+                bmp.BeginInit();
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                bmp.Freeze();
+                tile.JpegFrame = bmp;
+                tile.IsCamLive = true;
+            }
+            catch { /* decode failures land the next frame; no point logging. */ }
+        }));
     }
 
     /// <summary>Phase 14-B (Tier 1) — route WebcamStateUpdate heartbeat to the
