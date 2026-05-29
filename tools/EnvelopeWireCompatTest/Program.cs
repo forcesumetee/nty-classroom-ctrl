@@ -262,6 +262,36 @@ int errors = 0;
     else { Pass("T13: WebcamStateUpdateMessage fully-populated round-trip preserved"); }
 }
 
+// ──────── Test 14 (Phase 15-B step 1): ConferenceStartMessage round-trip ────────
+{
+    var msg = new ConferenceStartMessage
+    {
+        SessionId = Guid.NewGuid(),
+        HostName = "Teacher Sirin",
+        StartedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ConferenceStartMessage>(bytes);
+    if (back.SessionId != msg.SessionId) { errors += Fail("T14: SessionId mismatch"); }
+    else if (back.HostName != msg.HostName) { errors += Fail("T14: HostName mismatch"); }
+    else if (back.StartedAtMs != msg.StartedAtMs) { errors += Fail("T14: StartedAtMs mismatch"); }
+    else { Pass("T14: ConferenceStartMessage round-trip preserved (3 keys)"); }
+}
+
+// ──────── Test 15 (Phase 15-B step 1): ConferenceStart envelope with empty
+//          payload (a future no-payload variant) AND ConferenceEnd envelope
+//          (always empty) round-trip cleanly via the Envelope wrapper. ────────
+{
+    var teacherId = Guid.NewGuid();
+    var endEnv = Envelope.Create(MessageType.ConferenceEnd, Array.Empty<byte>(), teacherId);
+    var endBytes = endEnv.Serialize();
+    var endBack = Envelope.Deserialize(endBytes);
+    if (endBack.Type != MessageType.ConferenceEnd) { errors += Fail("T15: ConferenceEnd Type lost"); }
+    else if (endBack.SenderId != teacherId) { errors += Fail("T15: ConferenceEnd SenderId lost"); }
+    else if (endBack.Payload.Length != 0) { errors += Fail($"T15: ConferenceEnd Payload should be empty, got {endBack.Payload.Length}B"); }
+    else { Pass("T15: ConferenceEnd envelope (empty payload) round-trip preserved"); }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");

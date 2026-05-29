@@ -258,6 +258,29 @@ public class WebcamStateUpdateMessage
 /// </summary>
 public enum WebcamMode : byte { Off = 0, Ptt = 1, AlwaysOn = 2 }
 
+// ───────────── Phase 15-B (MVP): Conference Mode ─────────────
+
+/// <summary>
+/// Phase 15-B (MVP) — teacher → all students conference-session start.  Carries
+/// a per-session <see cref="SessionId"/> Guid that students cache and reuse as
+/// the TargetGroupId for any conference-scoped mic / cam frame routing in
+/// Phase 15-C/D/E.  Reliable; small; must arrive in order.
+///
+/// HostName is the teacher's display name pulled from the active branding /
+/// telemetry settings — surfaced verbatim in the student-side
+/// ConferenceGalleryWindow header (e.g. "Hosted by {HostName}").
+/// StartedAtMs is the UTC wall-clock anchor for the elapsed-time chip;
+/// students use Math.Max(0, now - StartedAtMs) to compute their own elapsed
+/// independent of clock drift between machines.
+/// </summary>
+[MessagePackObject]
+public class ConferenceStartMessage
+{
+    [Key(0)] public Guid SessionId { get; set; }
+    [Key(1)] public string HostName { get; set; } = "";
+    [Key(2)] public long StartedAtMs { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]

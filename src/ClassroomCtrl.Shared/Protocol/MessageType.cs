@@ -176,4 +176,13 @@ public enum MessageType : ushort
     // teacher UI knows which students have a webcam (data plumbing only in
     // Tier 1; Tier 2 lights it up).  Reliable channel; small + must arrive.
     WebcamStateUpdate = 0x0650,   // S→T heartbeat / on-change, reliable
+
+    // Phase 15-B (MVP): Conference Mode — session lifecycle.  Reliable; small;
+    // must arrive in order.  Routes via _reliableOutbox.  Teacher's Start
+    // CTA emits 0x0670 with a per-session Guid that's reused as
+    // TargetGroupId for mic / cam frame routing within the conference
+    // (mode-exclusive with 13-D group voice — see
+    // docs/conference-mode-ux-architecture.md § 5 risk #10).
+    ConferenceStart = 0x0670,   // T→all, ConferenceStartMessage
+    ConferenceEnd   = 0x0671,   // T→all, empty payload
 }
