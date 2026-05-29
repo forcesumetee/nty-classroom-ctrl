@@ -109,7 +109,9 @@
                    VerticalAlignment="Stretch"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    UseLayoutRounding="True"
-                   SnapsToDevicePixels="True"/>
+                   SnapsToDevicePixels="True"
+                   Focusable="True"
+                   FocusVisualStyle="{x:Null}"/>
 
             <TextBlock x:Name="WaitingText"
                        Text="Waiting for student to start streaming..."

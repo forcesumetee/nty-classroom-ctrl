@@ -181,10 +181,19 @@ public partial class StudentScreenWindow : Window
             HookRemoteCapture();
             SetButtonText(RemoteButton, Loc.Get("Btn_EndRemote"));
             RemoteButton.Background = new SolidColorBrush(Color.FromRgb(0xDC, 0x26, 0x26));
-            // Phase 12-B (Fix G) — make sure key events route to this window
-            // immediately, even if the user activated Remote via mouse click
-            // (which sets focus to the button, not the viewer).
-            Keyboard.Focus(this);
+            // Phase 12-C fix — focus ScreenImage so KeyDown / KeyUp / TextInput
+            // route to this viewer.  Replaces the 12-B Fix G Keyboard.Focus(this)
+            // which was a no-op (Window itself isn't focusable as the routing
+            // target for input events).  ScreenImage is now Focusable=True with
+            // FocusVisualStyle=null so it can be the keyboard target without
+            // showing a dotted focus rectangle on top of the live frames.
+            //
+            // Phase 12-C fix companion change — RemoteButton itself is now
+            // Focusable=False (via the shared Button.Base style), so a click
+            // never leaves focus stuck on the button; a subsequent Space/Enter
+            // is no longer interpreted as "click the button again" but instead
+            // reaches the controlled student.
+            ScreenImage.Focus();
         }
     }
 

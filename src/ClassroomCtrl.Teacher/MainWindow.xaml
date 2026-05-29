@@ -235,7 +235,8 @@
                 <Button DockPanel.Dock="Right" Command="{Binding StopDemoCommand}"
                         Content="{DynamicResource Btn_StopDemo}"
                         Background="#1F2937" Foreground="White"
-                        BorderThickness="0" Padding="10,4" Cursor="Hand"/>
+                        BorderThickness="0" Padding="10,4" Cursor="Hand"
+                        Focusable="False" FocusVisualStyle="{x:Null}"/>
                 <TextBlock Text="{Binding DemoBannerText}"
                            Foreground="White" FontSize="14" FontWeight="Bold"
                            VerticalAlignment="Center"/>
@@ -776,6 +777,7 @@
                                                     Background="Transparent"
                                                     BorderThickness="0"
                                                     Cursor="Hand"
+                                                    Focusable="False" FocusVisualStyle="{x:Null}"
                                                     Visibility="{Binding Kind,
                                                         Converter={StaticResource KindToCloseVisibility}}"
                                                     Command="{Binding RelativeSource={RelativeSource AncestorType=Window},
@@ -802,6 +804,7 @@
                                                     BorderThickness="0"
                                                     Cursor="Hand"
                                                     Padding="10,10"
+                                                    Focusable="False" FocusVisualStyle="{x:Null}"
                                                     Command="{Binding RelativeSource={RelativeSource AncestorType=Window},
                                                               Path=DataContext.SwitchConversationCommand}"
                                                     CommandParameter="{Binding}">

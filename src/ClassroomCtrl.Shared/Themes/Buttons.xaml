@@ -38,6 +38,19 @@
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Template" Value="{StaticResource Button.RoundedTemplate}"/>
+        <!-- Phase 12-C fix — kill keyboard focus on all action buttons.  Without
+             this, a clicked button retains focus and a subsequent Space/Enter
+             re-activates it (notably breaking Phase 12-C's RemoteText path: a
+             space typed into the controlled student would re-toggle the Remote
+             button instead of reaching the student's app).  Tab navigation
+             through this app is mouse-driven; skipping action buttons is fine.
+             IsDefault/IsCancel routing (dialog OK/Cancel via Enter/Esc) is
+             unaffected because that path doesn't require focus.  Input
+             controls (TextBox, ComboBox) are untouched — they don't inherit
+             Button.Base.  Cascades to every variant via BasedOn (Primary,
+             Secondary, Danger, Success, Ghost, Icon, SidebarItem). -->
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
     </Style>
 
     <Style x:Key="Button.Primary" TargetType="Button" BasedOn="{StaticResource Button.Base}">
