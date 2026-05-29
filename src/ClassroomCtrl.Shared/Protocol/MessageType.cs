@@ -185,4 +185,13 @@ public enum MessageType : ushort
     // docs/conference-mode-ux-architecture.md § 5 risk #10).
     ConferenceStart = 0x0670,   // T→all, ConferenceStartMessage
     ConferenceEnd   = 0x0671,   // T→all, empty payload
+
+    // Phase 15-E (polish): Conference Mode — transient emoji reactions.
+    // HandRaise / HandLower intentionally reuse the existing 0x0110 / 0x0111
+    // dispatch (Classroom-side foundation already maintains StudentInfo
+    // .IsHandRaised + ControlServer.HandRaiseReceived) so Conference hand
+    // state is a single source of truth shared with the Classroom bell
+    // badge.  Reactions are new because no equivalent classroom feature
+    // exists — small reliable broadcast, ~1 KB max payload.
+    Reaction = 0x0674,          // S↔T, reliable, ReactionMessage
 }

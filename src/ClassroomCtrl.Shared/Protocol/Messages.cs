@@ -281,6 +281,38 @@ public class ConferenceStartMessage
     [Key(2)] public long StartedAtMs { get; set; }
 }
 
+// ───────────── Phase 15-E (polish): Conference Mode reactions ─────────────
+
+/// <summary>
+/// Phase 15-E — transient emoji reaction.  Sent by either teacher or student
+/// during an active Conference; relayed by the teacher (S→T→all) or
+/// broadcast directly (T→all).  Receivers find the matching participant
+/// tile (Envelope.SenderId) and spawn a floating animation that fades out
+/// at <see cref="ExpiresAtMs"/>.
+///
+/// Hand-raise / hand-lower intentionally do NOT have their own
+/// conference-scoped codepoints — the existing 0x0110 HandRaise / 0x0111
+/// HandLower dispatch is reused so a student's raised hand shows in both
+/// the Classroom bell badge and the Conference tile from a single
+/// authoritative state (StudentInfo.IsHandRaised, ControlServer
+/// .HandRaiseReceived).
+/// </summary>
+[MessagePackObject]
+public class ReactionMessage
+{
+    /// <summary>Emoji code-point as a string (1–8 UTF-16 chars).  The
+    /// Conference toolbar's ⋮ More picker constrains the set to 5 entries
+    /// (👍 ❤️ 😂 😮 😢) but the wire shape accepts any short string so a
+    /// future polish round can broaden the catalogue without a wire-compat
+    /// migration.</summary>
+    [Key(0)] public string Emoji { get; set; } = "👍";
+
+    /// <summary>UTC wall-clock ms when the receiver should drop the floating
+    /// animation.  ~3 s after send is the default; receivers clamp negative
+    /// or absurd values to a safe local 3-second timeout.</summary>
+    [Key(1)] public long ExpiresAtMs { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]

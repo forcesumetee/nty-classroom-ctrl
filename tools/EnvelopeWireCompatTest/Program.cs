@@ -292,6 +292,20 @@ int errors = 0;
     else { Pass("T15: ConferenceEnd envelope (empty payload) round-trip preserved"); }
 }
 
+// ──────── Test 16 (Phase 15-E step 1): ReactionMessage round-trip ────────
+{
+    var msg = new ReactionMessage
+    {
+        Emoji = "❤️",
+        ExpiresAtMs = 1748534400_000L,
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ReactionMessage>(bytes);
+    if (back.Emoji != msg.Emoji) { errors += Fail($"T16: Emoji mismatch (got '{back.Emoji}')"); }
+    else if (back.ExpiresAtMs != msg.ExpiresAtMs) { errors += Fail("T16: ExpiresAtMs mismatch"); }
+    else { Pass("T16: ReactionMessage round-trip preserved (2 keys, UTF-16 emoji)"); }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");
