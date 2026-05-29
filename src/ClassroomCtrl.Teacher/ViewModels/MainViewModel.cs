@@ -1776,9 +1776,55 @@ public partial class MainViewModel : ObservableObject
                     if (!vm.MemberIds.Contains(mid)) vm.MemberIds.Add(mid);
             }
 
+            // Phase 13-B (Tier 1) Step 7 — sync per-student tile badges from
+            // the freshly-rebuilt Rooms collection.  Drives the small G1/G2/—
+            // chip in the main classroom grid.
+            foreach (var s in Students)
+            {
+                var assignedRoom = Rooms.FirstOrDefault(r => r.MemberIds.Contains(s.EndpointId));
+                if (assignedRoom == null)
+                {
+                    s.RoomId = null;
+                    s.RoomName = "";
+                    s.RoomBadgeVisibility = System.Windows.Visibility.Collapsed;
+                }
+                else
+                {
+                    s.RoomId = assignedRoom.RoomId;
+                    s.RoomName = assignedRoom.RoomName;
+                    s.RoomBadgeColorHex = assignedRoom.ColorHex;
+                    s.RoomBadgeVisibility = System.Windows.Visibility.Visible;
+                }
+            }
+
+            // Phase 13-B (Tier 1) Step 7 — recompute the main-toolbar status chip.
+            if (teacherJoined.HasValue)
+            {
+                var jname = descriptors.FirstOrDefault(d => d.Id == teacherJoined.Value)?.Name ?? "?";
+                StatusChipText = string.Format(Loc.Get("StatusChip_JoinedFmt"), jname);
+                StatusChipVisibility = System.Windows.Visibility.Visible;
+            }
+            else if (activeShare.HasValue)
+            {
+                var sname = descriptors.FirstOrDefault(d => d.Id == activeShare.Value)?.Name ?? "?";
+                StatusChipText = string.Format(Loc.Get("StatusChip_SharingFmt"), sname);
+                StatusChipVisibility = System.Windows.Visibility.Visible;
+            }
+            else
+            {
+                StatusChipText = "";
+                StatusChipVisibility = System.Windows.Visibility.Collapsed;
+            }
+
             RoomsCollectionChanged?.Invoke(this, System.EventArgs.Empty);
         });
     }
+
+    /// <summary>Phase 13-B (Tier 1) Step 7 — main-toolbar status chip text:
+    /// "Sharing → {GroupName}" while group-share active, "Joined {GroupName}"
+    /// while teacher joined.  Empty + collapsed visibility when whole-class.</summary>
+    [ObservableProperty] private string statusChipText = "";
+    [ObservableProperty] private System.Windows.Visibility statusChipVisibility = System.Windows.Visibility.Collapsed;
 
     // ─────── Phase 9.3: Class Roster ───────
 

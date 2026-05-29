@@ -283,6 +283,18 @@
                                 <TextBlock Text="{Binding ShareScreenButtonText}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+                        <!-- Phase 13-B Tier 1 Step 7 — group status chip:
+                             "Sharing → {GroupName}" or "Joined {GroupName}" -->
+                        <Border Background="{DynamicResource Surface.Elevated}"
+                                BorderBrush="{DynamicResource Surface.Border}" BorderThickness="1"
+                                CornerRadius="{DynamicResource CornerRadius.SM}"
+                                Padding="8,4" Margin="0,0,0,8"
+                                Visibility="{Binding StatusChipVisibility}">
+                            <TextBlock Text="{Binding StatusChipText}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Text.Primary}"/>
+                        </Border>
                         <Button Style="{DynamicResource Button.Danger}"
                                 Command="{Binding LogoffAllCommand}"
                                 Content="{DynamicResource Btn_LogoffAll}"
