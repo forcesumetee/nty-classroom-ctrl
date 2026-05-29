@@ -113,6 +113,17 @@ public class ControlServer : IDisposable
         _tcp.PeerDisconnected += (_, id) =>
         {
             _logger.LogInformation("Peer {Id} TCP disconnected", id);
+            // Phase 16-C — if the disconnecting peer was broadcasting a
+            // Conference cam, drop their entry so a future late joiner
+            // doesn't get a phantom Start replay for someone who's gone.
+            // Also fire ConferenceCameraStopReceived so the local gallery
+            // tile clears its cam-live flag without waiting for a Stop
+            // envelope that will never arrive.
+            if (_activeConferenceCamSenders.Remove(id))
+            {
+                try { ConferenceCameraStopReceived?.Invoke(this, id); } catch { }
+                _logger.LogInformation("ConferenceCamera implicit STOP for disconnected {Id}", id);
+            }
             StudentLeft?.Invoke(this, id);
         };
     }
@@ -462,6 +473,23 @@ public class ControlServer : IDisposable
     /// participant joining mid-Conference sees existing cams populate tiles
     /// without waiting for the next cam toggle from each peer.</summary>
     private readonly Dictionary<Guid, ConferenceCameraStartMessage> _activeConferenceCamSenders = new();
+
+    /// <summary>Phase 16-C — fires when a ConferenceCameraStart envelope
+    /// arrives.  Teacher MainViewModel hooks in Step 5 to ensure the
+    /// matching gallery tile exists / picks up display name.  Today the
+    /// teacher's own cam doesn't bounce through this path (TCP doesn't
+    /// echo to self); only peer-cam Start envelopes from students fire it.</summary>
+    public event EventHandler<(Guid SourceId, ConferenceCameraStartMessage Msg)>? ConferenceCameraStartReceived;
+
+    /// <summary>Phase 16-C — fires when a ConferenceCameraFrame envelope
+    /// arrives.  Teacher subscribes in Step 5 to decode + route to the
+    /// matching gallery tile.</summary>
+    public event EventHandler<(Guid SourceId, ConferenceCameraFrameMessage Msg)>? ConferenceCameraFrameReceived;
+
+    /// <summary>Phase 16-C — fires when a ConferenceCameraStop envelope
+    /// arrives.  Receivers clear the matching tile's IsCamLive flag so the
+    /// cam-off placeholder swaps in.</summary>
+    public event EventHandler<Guid>? ConferenceCameraStopReceived;
 
     // ─────── Phase 15-B (MVP): Conference Mode session lifecycle ───────
     //
@@ -1368,6 +1396,35 @@ public class ControlServer : IDisposable
                     }
                     catch (Exception ex) { _logger.LogWarning(ex, "ConferenceShare late-joiner replay failed"); }
                 }
+                // Phase 16-C — late-joiner replay for every active Conference
+                // cam.  A participant joining mid-Conference would otherwise
+                // only see cams of peers who happen to toggle next; this
+                // replay seeds their gallery with all current cams.  Each
+                // replayed Start envelope preserves the ORIGINAL sender id
+                // (not _teacherId) so the receiver routes frames correctly
+                // by sender once they start arriving via the normal relay.
+                if (_activeConferenceCamSenders.Count > 0)
+                {
+                    foreach (var kv in _activeConferenceCamSenders)
+                    {
+                        try
+                        {
+                            var camReplayBytes = MessagePack.MessagePackSerializer.Serialize(kv.Value);
+                            var camReplayEnv = Envelope.CreateTargeted(
+                                MessageType.ConferenceCameraStart,
+                                camReplayBytes,
+                                kv.Key,
+                                hello.EndpointId);
+                            _ = _tcp.BroadcastAsync(camReplayEnv, System.Threading.CancellationToken.None);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "ConferenceCamera late-joiner replay failed for {Source}", kv.Key);
+                        }
+                    }
+                    _logger.LogInformation("ConferenceCamera late-joiner replay → {Peer} ({Count} active cams)",
+                        hello.EndpointId, _activeConferenceCamSenders.Count);
+                }
                 break;
 
             case MessageType.HandRaise:
@@ -1447,6 +1504,57 @@ public class ControlServer : IDisposable
                     }
                     ConferenceShareStopReceived?.Invoke(this, env.SenderId);
                     var stopRelay = Envelope.Create(MessageType.ConferenceShareStop, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(stopRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            // ─────── Phase 16-C : Peer cam routing ───────
+            // Star topology: each participant emits Start/Frame/Stop, teacher
+            // relays to all peers != sender.  Sender's SenderId is preserved
+            // on the relay envelope so receivers route by sender to the
+            // matching tile.  Tracks _activeConferenceCamSenders so the
+            // Hello-ack replay path can give a late joiner the full set of
+            // currently-broadcasting cams in one shot.
+
+            case MessageType.ConferenceCameraStart:
+                {
+                    try
+                    {
+                        var startMsg = MessagePack.MessagePackSerializer.Deserialize<ConferenceCameraStartMessage>(env.Payload);
+                        _logger.LogInformation("ConferenceCameraStart from {Sender} ({Name}, {W}x{H}@{F})",
+                            env.SenderId, startMsg.SourceName, startMsg.Width, startMsg.Height, startMsg.Fps);
+                        startMsg.SourceEndpointId = env.SenderId;
+                        _activeConferenceCamSenders[env.SenderId] = startMsg;
+                        ConferenceCameraStartReceived?.Invoke(this, (env.SenderId, startMsg));
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceCameraStart decode failed"); }
+                    var startRelay = Envelope.Create(MessageType.ConferenceCameraStart, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(startRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceCameraFrame:
+                {
+                    try
+                    {
+                        var frameMsg = MessagePack.MessagePackSerializer.Deserialize<ConferenceCameraFrameMessage>(env.Payload);
+                        ConferenceCameraFrameReceived?.Invoke(this, (env.SenderId, frameMsg));
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceCameraFrame decode failed"); }
+                    // Relay frames to all peers; receiver-side self-loopback
+                    // filter (env.SenderId == own endpoint id) drops the
+                    // sender's own echo at the gallery layer.
+                    var frameRelay = Envelope.Create(MessageType.ConferenceCameraFrame, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(frameRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceCameraStop:
+                {
+                    _logger.LogInformation("ConferenceCameraStop from {Sender}", env.SenderId);
+                    _activeConferenceCamSenders.Remove(env.SenderId);
+                    ConferenceCameraStopReceived?.Invoke(this, env.SenderId);
+                    var stopRelay = Envelope.Create(MessageType.ConferenceCameraStop, env.Payload, env.SenderId);
                     _ = _tcp.BroadcastAsync(stopRelay, System.Threading.CancellationToken.None);
                 }
                 break;
