@@ -1,0 +1,100 @@
+<UserControl x:Class="ClassroomCtrl.Shared.Wpf.Conference.ConferenceShareView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters"
+             xmlns:local="clr-namespace:ClassroomCtrl.Shared.Wpf.Conference"
+             xmlns:vm="clr-namespace:ClassroomCtrl.Shared.Wpf.ViewModels"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface.Background}"
+             FontFamily="Segoe UI"
+             d:DesignWidth="1280" d:DesignHeight="640">
+    <UserControl.Resources>
+        <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
+    </UserControl.Resources>
+    <!-- Phase 16-B+ step 8 — Zoom/Meet-style in-frame Conference share view.
+         Layout: large primary frame on top, scrollable horizontal filmstrip
+         of participant tiles below.
+         DataContext = ConferenceGalleryViewModel (the same gallery VM the
+         tile-mode view binds to); ConferenceGalleryView swaps between this
+         view and the tile-mode layout based on IsShareActive (Step 9). -->
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <!-- Primary share frame area takes most of the surface. -->
+            <RowDefinition Height="*"/>
+            <!-- Filmstrip strip — fixed height regardless of tile count. -->
+            <RowDefinition Height="120"/>
+        </Grid.RowDefinitions>
+
+        <!-- Primary share container.  Dark canvas matches ConferenceTile's
+             cam-area background so the frame Image reads against the same
+             treatment as a regular tile.  CornerRadius rounds the surface;
+             a small "X is sharing" pill anchors top-left. -->
+        <Border Grid.Row="0" Background="#1F2937" CornerRadius="8">
+            <Grid>
+                <!-- Large primary frame.  Uniform stretch preserves the
+                     source aspect ratio (so a 16:9 share doesn't deform on
+                     a wider container).  Null until the first frame after
+                     Start arrives — when null the "Waiting for share…"
+                     placeholder takes over via the StackPanel below. -->
+                <Image Source="{Binding ActiveShareFrame}" Stretch="Uniform"/>
+
+                <!-- Waiting placeholder, visible until the first frame
+                     decodes.  Shows the sharer's name so the receiver
+                     knows whose share they're about to see.  Uses the
+                     same NullToVisibility ConverterParameter=Inverted
+                     pattern as the tile cam-off placeholder. -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Visibility="{Binding ActiveShareFrame, Converter={StaticResource NullToVisibility}, ConverterParameter=Inverted}">
+                    <TextBlock Text="🖥" FontSize="56" HorizontalAlignment="Center"
+                               Foreground="#94A3B8"/>
+                    <TextBlock HorizontalAlignment="Center" Margin="0,8,0,0"
+                               FontSize="14" Foreground="#CBD5E1">
+                        <Run Text="{DynamicResource Conf_WaitingForShare}"/>
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- "X is sharing" pill anchored top-left. -->
+                <Border HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="12" Padding="10,4"
+                        Background="#10B981" CornerRadius="999">
+                    <TextBlock Foreground="White" FontSize="12" FontWeight="SemiBold">
+                        <Run Text="🖥"/>
+                        <Run Text=" "/>
+                        <Run Text="{Binding ActiveShareSourceName, Mode=OneWay}"/>
+                        <Run Text=" "/>
+                        <Run Text="{DynamicResource Conf_IsSharing}"/>
+                    </TextBlock>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Filmstrip.  Horizontal scrollable strip of small ConferenceTile
+             entries (Height=100 so the tile's avatar + name strip still fit).
+             Bound to the same Tiles collection that gallery-mode uses;
+             filmstrip-mode just renders them smaller. -->
+        <ScrollViewer Grid.Row="1" Margin="0,10,0,0"
+                      VerticalScrollBarVisibility="Disabled"
+                      HorizontalScrollBarVisibility="Auto"
+                      PanningMode="HorizontalOnly">
+            <ItemsControl ItemsSource="{Binding Tiles}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:ConferenceTileViewModel}">
+                        <!-- Each filmstrip cell is a compact ConferenceTile.
+                             Width is fixed so the strip can scroll
+                             predictably regardless of cell count. -->
+                        <Border Width="160" Margin="0,0,8,0">
+                            <local:ConferenceTile/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -225,6 +225,10 @@ internal static class LocalizationData
         ["Conf_WaitingForCamFmt"] = "Waiting for {0}'s camera…",
         // Phase 16-B+ step 3 — tile placeholder when no cam frame.
         ["Conf_CameraOff"] = "Camera off",
+        // Phase 16-B+ step 8 — in-frame Conference share UI strings.
+        ["Conf_WaitingForShare"] = "Waiting for the share to start…",
+        ["Conf_IsSharing"] = "is sharing",
+        ["Conf_TeacherDisplayName"] = "Teacher",
         // Phase 15-D — Meet-style bottom toolbar + sidebar + share banner +
         // mode-exclusivity toasts.
         ["Conf_Tooltip_Chat"] = "Chat",
@@ -850,6 +854,10 @@ internal static class LocalizationData
         ["Conf_WaitingForCamFmt"] = "กำลังรอกล้องของ {0}…",
         // Phase 16-B+ step 3 — tile placeholder when no cam frame.
         ["Conf_CameraOff"] = "ปิดกล้อง",
+        // Phase 16-B+ step 8 — in-frame Conference share UI strings.
+        ["Conf_WaitingForShare"] = "กำลังรอการแชร์หน้าจอ…",
+        ["Conf_IsSharing"] = "กำลังแชร์",
+        ["Conf_TeacherDisplayName"] = "ครู",
         // Phase 15-D — Meet-style toolbar + sidebar + share banner + toasts.
         ["Conf_Tooltip_Chat"] = "แชท",
         ["Conf_Tooltip_Hand"] = "นักเรียนยกมือ",

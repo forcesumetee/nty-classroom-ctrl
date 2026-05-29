@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Windows.Media.Imaging;
 
 namespace ClassroomCtrl.Shared.Wpf.ViewModels;
 
@@ -88,6 +89,37 @@ public partial class ConferenceGalleryViewModel : ObservableObject
     /// <see cref="RefreshRaisedHandQueue"/> whenever a tile's
     /// IsHandRaised flips.</summary>
     public ObservableCollection<ConferenceTileViewModel> RaisedHandQueue { get; } = new();
+
+    // ─────── Phase 16-B+ : In-frame Conference share — gallery state ───────
+
+    /// <summary>Phase 16-B+ — endpoint id of the participant currently
+    /// presenting an in-frame screen share, or null when no share is active.
+    /// Set by the receiver-side ConferenceShareStart dispatch (Student.Agent
+    /// MainWindow or Teacher MainViewModel); cleared on ConferenceShareStop.
+    /// Drives <see cref="IsShareActive"/> + the gallery's layout switch
+    /// between tile-mode and share-mode.</summary>
+    [ObservableProperty] private Guid? activeShareEndpointId;
+
+    /// <summary>Phase 16-B+ — display name of the active sharer.  Surfaced in
+    /// the share view's "X is sharing" banner so the source can be identified
+    /// without resolving sender→name against the participant collection.</summary>
+    [ObservableProperty] private string activeShareSourceName = "";
+
+    /// <summary>Phase 16-B+ — latest decoded share frame, bound directly to
+    /// the share view's primary Image.Source.  Null until the first frame
+    /// after Start arrives; cleared on Stop.  BitmapSource is the WPF type
+    /// frozen on the decode thread — same pattern as
+    /// <see cref="ConferenceTileViewModel.JpegFrame"/>.</summary>
+    [ObservableProperty] private BitmapSource? activeShareFrame;
+
+    /// <summary>Phase 16-B+ — true while a Conference share is in flight.
+    /// Computed from <see cref="ActiveShareEndpointId"/>.</summary>
+    public bool IsShareActive => ActiveShareEndpointId.HasValue;
+
+    partial void OnActiveShareEndpointIdChanged(Guid? value)
+    {
+        OnPropertyChanged(nameof(IsShareActive));
+    }
 
     public void RefreshRaisedHandQueue()
     {
