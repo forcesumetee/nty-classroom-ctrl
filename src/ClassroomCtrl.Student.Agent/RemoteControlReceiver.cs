@@ -21,6 +21,15 @@ internal static class RemoteControlReceiver
 
     private const int SM_CXSCREEN = 0;
     private const int SM_CYSCREEN = 1;
+    // Phase 12-C step 1 — virtual-screen metrics so mouse-move on a multi-
+    // monitor student lands on the correct monitor.  The teacher viewer renders
+    // ScreenCaptureSource.VirtualScreen (full virtual desktop), so the wire
+    // NormalizedX/Y ∈ [0,1] spans the virtual desktop — multiplying by
+    // SM_CX/SM_CYSCREEN (primary only) truncated the secondary-monitor region.
+    private const int SM_XVIRTUALSCREEN  = 76;
+    private const int SM_YVIRTUALSCREEN  = 77;
+    private const int SM_CXVIRTUALSCREEN = 78;
+    private const int SM_CYVIRTUALSCREEN = 79;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
@@ -81,10 +90,12 @@ internal static class RemoteControlReceiver
     {
         try
         {
-            int sw = GetSystemMetrics(SM_CXSCREEN);
-            int sh = GetSystemMetrics(SM_CYSCREEN);
-            int x = (int)(msg.NormalizedX * sw);
-            int y = (int)(msg.NormalizedY * sh);
+            int vLeft   = GetSystemMetrics(SM_XVIRTUALSCREEN);
+            int vTop    = GetSystemMetrics(SM_YVIRTUALSCREEN);
+            int vWidth  = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+            int vHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+            int x = vLeft + (int)(msg.NormalizedX * vWidth);
+            int y = vTop  + (int)(msg.NormalizedY * vHeight);
             SetCursorPos(x, y);
         }
         catch { }
