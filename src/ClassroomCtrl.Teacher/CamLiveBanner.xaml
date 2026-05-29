@@ -1,0 +1,26 @@
+<Window Icon="/Assets/logo.png" x:Class="ClassroomCtrl.Teacher.CamLiveBanner"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Camera Live"
+        WindowStyle="None"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Width="540" Height="44"
+        WindowStartupLocation="Manual">
+    <!-- Phase 14-B (Tier 1) — privacy banner that mirrors the Student.Agent
+         VoiceLiveBanner visual language: top-center, transparent window,
+         single colored capsule.  Red because "your camera is broadcasting
+         to the whole class" is a stronger privacy signal than mic.  Always
+         visible while CameraBroadcastService.IsActive; hidden on Stop. -->
+    <Border x:Name="BannerBorder" Background="#DC2626" CornerRadius="0,0,8,8">
+        <TextBlock x:Name="BannerText"
+                   Text="🎥 Conference Camera LIVE — visible to all students"
+                   FontFamily="Segoe UI"
+                   Foreground="White"
+                   FontSize="15" FontWeight="Bold"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Border>
+</Window>

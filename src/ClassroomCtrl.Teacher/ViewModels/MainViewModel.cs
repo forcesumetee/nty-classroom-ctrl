@@ -1675,12 +1675,18 @@ public partial class MainViewModel : ObservableObject
 
     // ─────── Phase 9.5 / Phase 14-B (Tier 1): Camera Broadcast ───────
 
+    // Phase 14-B step 6 — privacy banner held by the ViewModel because the
+    // Camera toggle lives here (and ownership simplifies show/hide pairing
+    // with Start/Stop).  Singleton per session; nulled out on Hide.
+    private CamLiveBanner? _camBanner;
+
     private void ToggleCamera()
     {
         if (App.Camera == null) return;
         if (App.Camera.IsActive)
         {
             App.Camera.Stop();
+            HideCamBanner();
             AppendSystemChat(Loc.Get("Chat_CameraStopped"));
         }
         else
@@ -1699,7 +1705,10 @@ public partial class MainViewModel : ObservableObject
             }
             var dlg = new CameraSelectorDialog { Owner = System.Windows.Application.Current.MainWindow };
             if (dlg.ShowDialog() == true)
+            {
                 AppendSystemChat(Loc.Get("Chat_CameraStarted"));
+                ShowCamBanner();
+            }
             else if (!string.IsNullOrEmpty(App.Camera.LastError))
             {
                 // The selector either succeeded (DialogResult=true, handled above)
@@ -1713,6 +1722,30 @@ public partial class MainViewModel : ObservableObject
             }
         }
         UpdateCameraButtonText();
+    }
+
+    private void ShowCamBanner()
+    {
+        if (_camBanner != null) return;
+        try
+        {
+            _camBanner = new CamLiveBanner();
+            // Owner intentionally null so the banner stays visible even when
+            // the Teacher main window is minimized — the banner exists to
+            // remind the teacher the cam is live regardless of focus.
+            _camBanner.Closed += (_, _) => _camBanner = null;
+            _camBanner.Show();
+        }
+        catch
+        {
+            _camBanner = null;
+        }
+    }
+
+    private void HideCamBanner()
+    {
+        try { _camBanner?.Close(); } catch { }
+        _camBanner = null;
     }
 
     private void UpdateCameraButtonText()
@@ -1730,6 +1763,7 @@ public partial class MainViewModel : ObservableObject
     {
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
+            HideCamBanner();
             UpdateCameraButtonText();
             AppendSystemChat(string.Format(
                 Loc.Get("Conf_CamStartFailFmt", "Camera stopped: {0}"),
