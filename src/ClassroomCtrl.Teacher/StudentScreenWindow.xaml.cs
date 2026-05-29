@@ -326,13 +326,7 @@ public partial class StudentScreenWindow : Window
         bool isControlKey = IsControlKey(e.Key);
         bool hasShortcutModifier =
             (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) != 0;
-        App.LogDebug($"[Remote-DIAG] {(isDown ? "KD" : "KU")} Key={e.Key} VK={(int)KeyInterop.VirtualKeyFromKey(e.Key):X2} ctrl={isControlKey} shortcut={hasShortcutModifier} repeat={e.IsRepeat}"); // [Remote-DIAG]
-        if (!isControlKey && !hasShortcutModifier)
-        {
-            App.LogDebug($"[Remote-DIAG] {(isDown ? "KD" : "KU")} action=SKIP (printable, no shortcut — TextInput path)"); // [Remote-DIAG]
-            return;
-        }
-        App.LogDebug($"[Remote-DIAG] {(isDown ? "KD" : "KU")} action=SEND_VK"); // [Remote-DIAG]
+        if (!isControlKey && !hasShortcutModifier) return;
 
         var vk = KeyInterop.VirtualKeyFromKey(e.Key);
         var msg = new ClassroomCtrl.Shared.Protocol.RemoteKeyMessage
