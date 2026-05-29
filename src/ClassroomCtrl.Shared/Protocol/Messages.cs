@@ -313,6 +313,63 @@ public class ReactionMessage
     [Key(1)] public long ExpiresAtMs { get; set; }
 }
 
+// ───────────── Phase 16-B+ : In-frame Conference screen share ─────────────
+
+/// <summary>
+/// Phase 16-B+ — start signal for a Conference Mode in-frame screen share.
+/// Distinct from Classroom 0x0322 ScreenStreamStart (which is full-takeover
+/// + remote-control wired); this signal opens a Zoom-style ConferenceShareView
+/// inside the conference window with the source's frame as the primary tile
+/// and other participants as a filmstrip.
+///
+/// SourceEndpointId is duplicated from <see cref="Envelope.SenderId"/> for
+/// explicitness — receivers may use either; the envelope's value is the
+/// authoritative source identity, and the teacher relay preserves it as
+/// frames fan out.  SourceName is the display name to label the share
+/// banner ("X is sharing").
+/// </summary>
+[MessagePackObject]
+public class ConferenceShareStartMessage
+{
+    [Key(0)] public Guid SourceEndpointId { get; set; }
+    [Key(1)] public string SourceName { get; set; } = "";
+}
+
+/// <summary>
+/// Phase 16-B+ — one frame of an in-frame Conference share.  Wire shape
+/// mirrors <see cref="ScreenStreamFrameMessage"/> so the existing 11-B
+/// encoder + decoder paths can be reused; the only addition is
+/// SourceEndpointId for receiver-side routing when multiple shares are
+/// theoretically in flight (today only one share is active at a time per
+/// the constraint registered in 16-B+ primer Item 13 — multi-share is a
+/// v1.1 defer).
+/// </summary>
+[MessagePackObject]
+public class ConferenceShareFrameMessage
+{
+    [Key(0)] public Guid SourceEndpointId { get; set; }
+    [Key(1)] public byte[] FrameData { get; set; } = Array.Empty<byte>();
+    [Key(2)] public int Width { get; set; }
+    [Key(3)] public int Height { get; set; }
+    [Key(4)] public long TimestampUtcMs { get; set; }
+    [Key(5)] public int FrameSeq { get; set; }
+    [Key(6)] public VideoCodec Codec { get; set; } = VideoCodec.Mjpeg;
+    /// <summary>True if frame can be decoded standalone (always true for MJPEG; IDR for H.264).</summary>
+    [Key(7)] public bool IsKeyframe { get; set; } = true;
+}
+
+/// <summary>
+/// Phase 16-B+ — stop signal for a Conference Mode in-frame screen share.
+/// Receivers clear <c>ActiveShareEndpointId</c> + swap the gallery layout
+/// back from share-mode to tile-mode.  Single field so a future tier can
+/// disambiguate concurrent shares per source.
+/// </summary>
+[MessagePackObject]
+public class ConferenceShareStopMessage
+{
+    [Key(0)] public Guid SourceEndpointId { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]

@@ -306,6 +306,58 @@ int errors = 0;
     else { Pass("T16: ReactionMessage round-trip preserved (2 keys, UTF-16 emoji)"); }
 }
 
+// ──────── Test 17 (Phase 16-B+ step 5): ConferenceShareStartMessage round-trip ────────
+{
+    var msg = new ConferenceShareStartMessage
+    {
+        SourceEndpointId = Guid.NewGuid(),
+        SourceName = "Teacher Sirin",
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ConferenceShareStartMessage>(bytes);
+    if (back.SourceEndpointId != msg.SourceEndpointId) { errors += Fail("T17: SourceEndpointId mismatch"); }
+    else if (back.SourceName != msg.SourceName) { errors += Fail($"T17: SourceName mismatch (got '{back.SourceName}')"); }
+    else { Pass("T17: ConferenceShareStartMessage round-trip preserved (2 keys)"); }
+}
+
+// ──────── Test 18 (Phase 16-B+ step 5): ConferenceShareFrameMessage round-trip ────────
+{
+    var msg = new ConferenceShareFrameMessage
+    {
+        SourceEndpointId = Guid.NewGuid(),
+        FrameData = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46 },
+        Width = 1920,
+        Height = 1080,
+        TimestampUtcMs = 1_700_000_000_000L,
+        FrameSeq = 42,
+        Codec = VideoCodec.Mjpeg,
+        IsKeyframe = true,
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ConferenceShareFrameMessage>(bytes);
+    if (back.SourceEndpointId != msg.SourceEndpointId) { errors += Fail("T18: SourceEndpointId mismatch"); }
+    else if (back.FrameData.Length != msg.FrameData.Length) { errors += Fail("T18: FrameData length mismatch"); }
+    else if (back.Width != msg.Width) { errors += Fail("T18: Width mismatch"); }
+    else if (back.Height != msg.Height) { errors += Fail("T18: Height mismatch"); }
+    else if (back.TimestampUtcMs != msg.TimestampUtcMs) { errors += Fail("T18: TimestampUtcMs mismatch"); }
+    else if (back.FrameSeq != msg.FrameSeq) { errors += Fail("T18: FrameSeq mismatch"); }
+    else if (back.Codec != msg.Codec) { errors += Fail("T18: Codec mismatch"); }
+    else if (back.IsKeyframe != msg.IsKeyframe) { errors += Fail("T18: IsKeyframe mismatch"); }
+    else { Pass("T18: ConferenceShareFrameMessage round-trip preserved (8 keys)"); }
+}
+
+// ──────── Test 19 (Phase 16-B+ step 5): ConferenceShareStopMessage round-trip ────────
+{
+    var msg = new ConferenceShareStopMessage
+    {
+        SourceEndpointId = Guid.NewGuid(),
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ConferenceShareStopMessage>(bytes);
+    if (back.SourceEndpointId != msg.SourceEndpointId) { errors += Fail("T19: SourceEndpointId mismatch"); }
+    else { Pass("T19: ConferenceShareStopMessage round-trip preserved (1 key)"); }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");

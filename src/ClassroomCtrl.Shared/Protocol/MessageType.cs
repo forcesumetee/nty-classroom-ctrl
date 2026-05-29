@@ -194,4 +194,16 @@ public enum MessageType : ushort
     // badge.  Reactions are new because no equivalent classroom feature
     // exists — small reliable broadcast, ~1 KB max payload.
     Reaction = 0x0674,          // S↔T, reliable, ReactionMessage
+
+    // Phase 16-B+ (in-frame Conference share): mode-separated screen-share
+    // for Conference Mode.  Classroom 0x0322-0x0324 ScreenStream* stays
+    // full-takeover (StudentScreenWindow fullscreen + remote-control wired);
+    // these new codes carry a Zoom/Meet-style in-frame share that lives
+    // inside ConferenceShareView — large primary tile + tiles filmstrip.
+    // SourceEndpointId in payload + fan-out by teacher relay to all
+    // in-Conference participants except the source.  Frames lossy via
+    // _outbox; Start / Stop reliable via _reliableOutbox.
+    ConferenceShareStart = 0x0683,   // src→T→participants, ConferenceShareStartMessage
+    ConferenceShareFrame = 0x0684,   // src→T→participants, ConferenceShareFrameMessage
+    ConferenceShareStop  = 0x0685,   // src→T→participants, ConferenceShareStopMessage
 }
