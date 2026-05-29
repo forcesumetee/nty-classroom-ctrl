@@ -107,6 +107,58 @@ int errors = 0;
     catch (Exception ex) { errors += Fail($"T5: new(group-targeted)→vintage threw: {ex.Message}"); }
 }
 
+// ──────── Test 6 (Phase 13-C step 1): StudentGroupScreenStreamControlMessage
+//          round-trip.  New DTO added for Tier 2 host-presenter signaling.
+//          Verifies explicit Key(0..4) serialization shape stays stable. ────────
+{
+    var control = new StudentGroupScreenStreamControlMessage
+    {
+        GroupId = Guid.NewGuid(),
+        PresenterId = Guid.NewGuid(),
+        PresenterName = "Som",
+        Start = true,
+        Codec = VideoCodec.H264,
+    };
+    var bytes = MessagePackSerializer.Serialize(control);
+    var back = MessagePackSerializer.Deserialize<StudentGroupScreenStreamControlMessage>(bytes);
+    if (back.GroupId != control.GroupId) { errors += Fail("T6: GroupId round-trip mismatch"); }
+    else if (back.PresenterId != control.PresenterId) { errors += Fail("T6: PresenterId round-trip mismatch"); }
+    else if (back.PresenterName != control.PresenterName) { errors += Fail("T6: PresenterName round-trip mismatch"); }
+    else if (back.Start != control.Start) { errors += Fail("T6: Start round-trip mismatch"); }
+    else if (back.Codec != control.Codec) { errors += Fail("T6: Codec round-trip mismatch"); }
+    else { Pass("T6: StudentGroupScreenStreamControlMessage round-trip preserved (5 keys)"); }
+}
+
+// ──────── Test 7 (Phase 13-C step 1): StudentGroupScreenStream{Start,Frame,
+//          Stop} envelopes round-trip with TargetGroupId set, mirroring the
+//          host-presenter wire-up.  Frame envelope wraps a real
+//          ScreenStreamFrameMessage payload to confirm the existing frame
+//          DTO is unchanged (just a new MessageType wrapping). ────────
+{
+    var groupId = Guid.NewGuid();
+    var hostId = Guid.NewGuid();
+    var frame = new ScreenStreamFrameMessage
+    {
+        FrameData = new byte[] { 0x00, 0x00, 0x00, 0x01, 0x67, 0x42 },
+        Width = 1920,
+        Height = 1080,
+        FrameSeq = 42,
+        Codec = VideoCodec.H264,
+        IsKeyframe = true,
+    };
+    var framePayload = MessagePackSerializer.Serialize(frame);
+    var env = Envelope.CreateGroupTargeted(MessageType.StudentGroupScreenStreamFrame, framePayload, hostId, groupId);
+    var bytes = env.Serialize();
+    var back = Envelope.Deserialize(bytes);
+    var backFrame = MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(back.Payload);
+    if (back.Type != MessageType.StudentGroupScreenStreamFrame) { errors += Fail("T7: Type lost"); }
+    else if (back.TargetGroupId != groupId) { errors += Fail("T7: TargetGroupId lost"); }
+    else if (back.SenderId != hostId) { errors += Fail("T7: SenderId lost"); }
+    else if (backFrame.FrameSeq != frame.FrameSeq) { errors += Fail("T7: nested frame.FrameSeq mismatch"); }
+    else if (backFrame.IsKeyframe != frame.IsKeyframe) { errors += Fail("T7: nested frame.IsKeyframe mismatch"); }
+    else { Pass("T7: StudentGroupScreenStreamFrame envelope + nested ScreenStreamFrameMessage round-trip preserved"); }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");

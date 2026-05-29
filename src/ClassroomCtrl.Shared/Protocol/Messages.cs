@@ -154,6 +154,25 @@ public class GroupScreenStreamControlMessage
     [Key(2)] public VideoCodec Codec { get; set; }
 }
 
+/// <summary>
+/// Phase 13-C (Tier 2) — start/stop signal for the host-presenter's group
+/// screen broadcast.  PresenterId + PresenterName let the GroupPeerView label
+/// the stream ("Presenting: {name} · {group}").  Frames carry the unchanged
+/// ScreenStreamFrameMessage payload; only the MessageType
+/// (StudentGroupScreenStream{Start,Frame,Stop}) and the Envelope.TargetGroupId
+/// differ.  Sent by the host's StudentBroadcaster (S→T) and relayed by the
+/// teacher to in-group peers != PresenterId.
+/// </summary>
+[MessagePackObject]
+public class StudentGroupScreenStreamControlMessage
+{
+    [Key(0)] public Guid GroupId { get; set; }
+    [Key(1)] public Guid PresenterId { get; set; }
+    [Key(2)] public string PresenterName { get; set; } = "";
+    [Key(3)] public bool Start { get; set; }
+    [Key(4)] public VideoCodec Codec { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]

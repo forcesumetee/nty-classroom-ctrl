@@ -149,4 +149,13 @@ public enum MessageType : ushort
     GroupScreenStreamStart = 0x0623,   // T→group
     GroupScreenStreamFrame = 0x0624,   // T→group (reuses ScreenStreamFrameMessage payload)
     GroupScreenStreamStop  = 0x0625,   // T→group
+
+    // Phase 13-C (Tier 2): student↔student in-group screen share — presenter
+    // mode (the host of a group broadcasts to other in-group members).  Star
+    // topology: host → teacher (relay) → group peers != host.  Frames reuse
+    // ScreenStreamFrameMessage payload, just a different MessageType + the
+    // TargetGroupId envelope field set for the receiver-side IsForMe filter.
+    StudentGroupScreenStreamStart = 0x0630,   // host→T→group peers
+    StudentGroupScreenStreamFrame = 0x0631,   // host→T→group peers (reuses ScreenStreamFrameMessage)
+    StudentGroupScreenStreamStop  = 0x0632,   // host→T→group peers
 }
