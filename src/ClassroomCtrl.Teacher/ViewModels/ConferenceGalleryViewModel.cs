@@ -54,6 +54,11 @@ public partial class ConferenceTileViewModel : ObservableObject
     /// .OnHandRaiseReceived.</summary>
     [ObservableProperty] private DateTime? handRaisedAt;
 
+    /// <summary>Phase 15-E step 4 — transient reaction emoji shown floating
+    /// over the tile.  Set by MainViewModel.OnReactionReceived for ~3 s,
+    /// then cleared by a DispatcherTimer.  Empty string = no reaction.</summary>
+    [ObservableProperty] private string currentReactionEmoji = "";
+
     public ConferenceTileViewModel(Guid endpointId, string displayName, bool isSelf = false)
     {
         EndpointId = endpointId;

@@ -72,6 +72,20 @@
                             Visibility="{Binding IsHandRaised, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Text="✋" FontSize="12"/>
                     </Border>
+
+                    <!-- Phase 15-E step 4 — floating reaction emoji.  Shown for
+                         ~3 s by MainViewModel.ShowReactionOnTile via a
+                         DispatcherTimer.  Center-vertical so it draws over
+                         the cam frame rather than the bottom name strip;
+                         FontSize is large so it reads at a glance even on
+                         a 4-up grid (~330 px wide tile).  When the source
+                         CurrentReactionEmoji is empty, the empty-string
+                         binding-target naturally renders blank. -->
+                    <TextBlock Text="{Binding CurrentReactionEmoji}"
+                               FontSize="56"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False"/>
                 </Grid>
             </Border>
 

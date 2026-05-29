@@ -45,6 +45,17 @@
                 <Grid>
                     <Image x:Name="TeacherFrameImage" Stretch="Uniform"
                            Visibility="Collapsed"/>
+                    <!-- Phase 15-E step 4 — incoming reaction emoji overlay.
+                         Surfaced by ShowReaction(); auto-clears after 3 s
+                         via a DispatcherTimer.  Hit-test disabled so the
+                         underlying image (and a future click-through path)
+                         still receives input. -->
+                    <TextBlock x:Name="ReactionOverlay"
+                               FontSize="120"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False"
+                               Text=""/>
                     <StackPanel x:Name="WaitingPanel"
                                 HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock Text="🎥" FontSize="64" HorizontalAlignment="Center"

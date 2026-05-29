@@ -381,6 +381,18 @@ public partial class MainWindow : Window
                 catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] StudentRecordingNotify decode: {ex.Message}"); }
                 break;
 
+            // Phase 15-E step 4 — incoming Reaction envelope (could be teacher
+            // OR another student).  Decode + forward to the Conference window
+            // if it's open; ignored when no session is active.
+            case MessageType.Reaction:
+                try
+                {
+                    var rxn = MessagePack.MessagePackSerializer.Deserialize<ReactionMessage>(env.Payload);
+                    Dispatcher.Invoke(() => _confWindow?.ShowReaction(rxn.Emoji));
+                }
+                catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] Reaction decode: {ex.Message}"); }
+                break;
+
             // Phase 15-E step 3 — teacher Recognize: T→S HandLower forces
             // the student-side flag to false so a repeat-click on Raise Hand
             // toggles back to raised cleanly (rather than back to lowered).

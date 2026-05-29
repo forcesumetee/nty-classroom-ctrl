@@ -466,6 +466,12 @@ public partial class MainViewModel : ObservableObject
     // badge + queue entry so the sidebar updates without round-tripping.
     public IRelayCommand<ConferenceTileViewModel?> RecognizeHandCommand { get; }
 
+    /// <summary>Phase 15-E step 4 — Reaction toolbar picker.  Takes the
+    /// emoji string and broadcasts a ReactionMessage; the teacher's own
+    /// self-tile animates locally + ControlServer fans out to all
+    /// students.</summary>
+    public IRelayCommand<string?> SendReactionCommand { get; }
+
     // Phase 9.6: Net Movie
     public IRelayCommand OpenNetMovieCommand { get; }
 
@@ -640,6 +646,26 @@ public partial class MainViewModel : ObservableObject
             }
         });
 
+        // Phase 15-E step 4 — Reaction send.  Optimistically render the
+        // emoji over the teacher's self-tile locally so there's no
+        // round-trip delay, then broadcast.  ExpiresAtMs is now + 3 s.
+        SendReactionCommand = new RelayCommand<string?>(async emoji =>
+        {
+            if (string.IsNullOrEmpty(emoji)) return;
+            var selfId = App.Server?.TeacherEndpointId ?? System.Guid.Empty;
+            ShowReactionOnTile(selfId, emoji);
+            if (App.Server != null)
+            {
+                var msg = new ReactionMessage
+                {
+                    Emoji = emoji,
+                    ExpiresAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 3000,
+                };
+                try { await App.Server.BroadcastReactionAsync(msg, System.Threading.CancellationToken.None); }
+                catch (Exception ex) { AppendSystemChat(string.Format(Loc.Get("Err_GenericFmt", "Error: {0}"), ex.Message)); }
+            }
+        });
+
         OpenNetMovieCommand = new RelayCommand(OpenNetMovie);
         OpenMicMonitorCommand = new RelayCommand(OpenMicMonitor);
         OpenMultiRoomCommand = new RelayCommand(OpenGroupManager);
@@ -702,6 +728,8 @@ public partial class MainViewModel : ObservableObject
             App.Server.StudentLeft += OnStudentLeft;
             App.Server.ChatReceived += OnChatReceived;
             App.Server.HandRaiseReceived += OnHandRaiseReceived;
+            // Phase 15-E step 4 — reaction fan-out fires the floating emoji.
+            App.Server.ReactionReceived += OnReactionReceived;
             App.Server.ScreenshotReceived += OnScreenshotReceived;
             App.Server.StudentAudioStreamStarted += OnStudentAudioStarted;
             App.Server.StudentAudioStreamStopped += OnStudentAudioStopped;
@@ -2122,6 +2150,40 @@ public partial class MainViewModel : ObservableObject
             AppendSystemChat(string.Format(
                 Loc.Get("Conf_CamStartFailFmt", "Camera stopped: {0}"),
                 App.Camera?.LastError ?? ""));
+        });
+    }
+
+    /// <summary>Phase 15-E step 4 — display the floating emoji over the
+    /// matching tile for ~3 seconds.  Idempotent: a second reaction from
+    /// the same sender within the window replaces the first.  No-op when
+    /// no Conference session is active or the sender has no tile.</summary>
+    internal void ShowReactionOnTile(Guid senderId, string emoji)
+    {
+        if (!IsConferenceSessionActive || ConferenceGallery == null) return;
+        var tile = ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == senderId);
+        if (tile == null) return;
+        tile.CurrentReactionEmoji = emoji;
+        var clearTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(3),
+        };
+        clearTimer.Tick += (s, e) =>
+        {
+            clearTimer.Stop();
+            // Only clear if no newer reaction has replaced this one.
+            if (tile.CurrentReactionEmoji == emoji) tile.CurrentReactionEmoji = "";
+        };
+        clearTimer.Start();
+    }
+
+    /// <summary>Phase 15-E step 4 — fired by ControlServer when a Reaction
+    /// envelope arrives (student-originated; teacher-side has already
+    /// rendered via the optimistic local path in SendReactionCommand).</summary>
+    private void OnReactionReceived(object? sender, (Guid SenderId, ReactionMessage Msg) e)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            ShowReactionOnTile(e.SenderId, e.Msg.Emoji);
         });
     }
 

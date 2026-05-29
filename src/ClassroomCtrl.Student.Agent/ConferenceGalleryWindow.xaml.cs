@@ -74,4 +74,23 @@ public partial class ConferenceGalleryWindow : Window
         // anyway when the session ends.  Phase 15-D wires an opt-out envelope.
         Close();
     }
+
+    /// <summary>Phase 15-E step 4 — render the floating emoji over the
+    /// teacher tile for ~3 seconds.  A second reaction during the window
+    /// replaces the first.  Called from MainWindow.OnIpcMessage on inbound
+    /// Reaction envelopes.</summary>
+    public void ShowReaction(string emoji)
+    {
+        ReactionOverlay.Text = emoji ?? "";
+        var clearTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(3),
+        };
+        clearTimer.Tick += (s, e) =>
+        {
+            clearTimer.Stop();
+            if (ReactionOverlay.Text == emoji) ReactionOverlay.Text = "";
+        };
+        clearTimer.Start();
+    }
 }

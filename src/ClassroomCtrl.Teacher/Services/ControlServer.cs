@@ -495,6 +495,23 @@ public class ControlServer : IDisposable
         return _tcp.BroadcastAsync(env, ct);
     }
 
+    /// <summary>Phase 15-E step 4 — teacher reaction broadcast.  Reliable; the
+    /// envelope's SenderId is _teacherId so the receiver-side animation
+    /// targets the teacher's self-tile.  Student-originated reactions
+    /// arrive via the inbound dispatch path and are re-broadcast in the
+    /// switch arm so all peers see the floating emoji.</summary>
+    public Task BroadcastReactionAsync(ReactionMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.Reaction, bytes, _teacherId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 15-E step 4 — fires when a Reaction envelope arrives.
+    /// Originator is in Envelope.SenderId; the MainViewModel handler finds
+    /// the matching Conference tile and spawns a floating animation.</summary>
+    public event EventHandler<(Guid SenderId, ReactionMessage Msg)>? ReactionReceived;
+
     // ─────── Phase 9.2: Screen Pen — annotation overlay ───────
 
     public Task BroadcastDrawingStrokeAsync(DrawingStrokeMessage stroke, CancellationToken ct)
@@ -1196,6 +1213,20 @@ public class ControlServer : IDisposable
                 _logger.LogInformation("Hand {State} from {Student}",
                     hr.IsRaised ? "RAISED" : "lowered", hr.StudentName);
                 HandRaiseReceived?.Invoke(this, hr);
+                break;
+
+            case MessageType.Reaction:
+                {
+                    var rxn = MessagePack.MessagePackSerializer.Deserialize<ReactionMessage>(env.Payload);
+                    _logger.LogInformation("Reaction '{Emoji}' from {Sender}", rxn.Emoji, env.SenderId);
+                    ReactionReceived?.Invoke(this, (env.SenderId, rxn));
+                    // Re-broadcast to all peers so other students also see
+                    // the floating emoji over the sender's tile.  Rebuild
+                    // the envelope so SenderId stays the original sender
+                    // (rather than _teacherId).
+                    var relay = Envelope.Create(MessageType.Reaction, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(relay, System.Threading.CancellationToken.None);
+                }
                 break;
 
             case MessageType.ChatBroadcast:
