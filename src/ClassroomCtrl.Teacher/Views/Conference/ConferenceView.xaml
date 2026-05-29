@@ -76,6 +76,34 @@
                  sidebar toggle). -->
             <Grid Grid.Row="0">
                 <local:ConferenceGalleryView DataContext="{Binding ConferenceGallery}"/>
+
+                <!-- Phase 15-D step 4 — in-Conference screen share visual.
+                     The toolbar's 🖥 button (step 1) already invokes the
+                     existing 11-B ShareScreenCommand; frames continue to
+                     flow through TcpControlServer's _outbox (DropOldest 16)
+                     unchanged.  We only add a top-banner indicator so the
+                     teacher can see their share is live without having to
+                     check the toolbar pill state.  The full "Shared Screen
+                     tile + filmstrip reflow" is deferred until a customer
+                     site needs the in-gallery preview (today the teacher
+                     already monitors their share from the broadcaster's
+                     own preview surface). -->
+                <Border VerticalAlignment="Top" HorizontalAlignment="Center"
+                        Margin="0,12,0,0" Padding="14,8"
+                        CornerRadius="999"
+                        Background="#10B981"
+                        Visibility="{Binding IsScreenSharing,
+                                     Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🖥" FontSize="13" Margin="0,0,6,0"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Conf_ScreenShareBanner}"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="White"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
                 <local:ConferenceSidebar HorizontalAlignment="Right"
                                          Width="340"
                                          Visibility="{Binding IsConferenceSidebarVisible,
