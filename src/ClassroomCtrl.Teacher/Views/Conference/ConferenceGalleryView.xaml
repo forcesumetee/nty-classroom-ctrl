@@ -5,7 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
              xmlns:local="clr-namespace:ClassroomCtrl.Teacher.Views.Conference"
-             xmlns:vm="clr-namespace:ClassroomCtrl.Teacher.ViewModels"
+             xmlns:vm="clr-namespace:ClassroomCtrl.Shared.Wpf.ViewModels;assembly=ClassroomCtrl.Shared.Wpf"
              mc:Ignorable="d"
              Background="{DynamicResource Surface.Background}"
              FontFamily="Segoe UI"

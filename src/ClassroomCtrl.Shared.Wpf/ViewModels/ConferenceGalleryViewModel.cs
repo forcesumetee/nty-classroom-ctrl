@@ -3,76 +3,20 @@ using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Windows.Media.Imaging;
 
-namespace ClassroomCtrl.Teacher.ViewModels;
-
-/// <summary>
-/// Phase 15-C — per-tile state for the Conference gallery.  Each connected
-/// participant (student + teacher self) maps to one of these; the parent
-/// <see cref="ConferenceGalleryViewModel"/> owns the collection and routes
-/// frames + state updates here.
-///
-/// Properties are kept observable so a XAML DataTemplate can bind directly.
-/// Layout decisions (pinned / filmstrip / paged) live on the gallery VM,
-/// not on the tile.
-/// </summary>
-public partial class ConferenceTileViewModel : ObservableObject
-{
-    /// <summary>Source endpoint id - immutable for the lifetime of the tile.
-    /// Used by gallery sync (Phase 15-C step 1) + active-speaker routing
-    /// (step 4) + pin clicks (step 5).</summary>
-    public Guid EndpointId { get; }
-
-    /// <summary>True for the teacher's own tile.  Drives "(You)" suffix +
-    /// the cam-frame routing path (teacher frames come from
-    /// ControlServer.TeacherCameraFrameSent rather than the inbound dispatch).</summary>
-    public bool IsSelf { get; }
-
-    [ObservableProperty] private string displayName = "";
-
-    /// <summary>Latest JPEG-decoded frame; bound directly to a WPF Image.Source.
-    /// Null while the participant's cam is off or before the first frame
-    /// arrives.</summary>
-    [ObservableProperty] private BitmapSource? jpegFrame;
-
-    [ObservableProperty] private bool isMicLive;
-    [ObservableProperty] private bool isSpeaking;
-    [ObservableProperty] private bool isCamLive;
-    [ObservableProperty] private bool isHandRaised;
-
-    /// <summary>Set by <see cref="ConferenceGalleryViewModel"/> when this tile
-    /// is the active pin.  Drives a border accent + governs whether the
-    /// layout switches to filmstrip mode.</summary>
-    [ObservableProperty] private bool isPinned;
-
-    /// <summary>Phase 15-E — UTC wall-clock at which the participant raised
-    /// their hand.  Used by the gallery view-model's RaisedHandQueue to
-    /// order entries so the first-raised hand appears at the top of the
-    /// teacher's recognize list.  Null while no hand is raised; set
-    /// alongside <see cref="IsHandRaised"/> by MainViewModel
-    /// .OnHandRaiseReceived.</summary>
-    [ObservableProperty] private DateTime? handRaisedAt;
-
-    /// <summary>Phase 15-E step 4 — transient reaction emoji shown floating
-    /// over the tile.  Set by MainViewModel.OnReactionReceived for ~3 s,
-    /// then cleared by a DispatcherTimer.  Empty string = no reaction.</summary>
-    [ObservableProperty] private string currentReactionEmoji = "";
-
-    public ConferenceTileViewModel(Guid endpointId, string displayName, bool isSelf = false)
-    {
-        EndpointId = endpointId;
-        DisplayName = displayName;
-        IsSelf = isSelf;
-    }
-}
+namespace ClassroomCtrl.Shared.Wpf.ViewModels;
 
 /// <summary>
 /// Phase 15-C — host VM for the Conference gallery.  Owns the tile collection,
 /// the pin state, and the paging state for 17+-tile classrooms.  Used by both
 /// teacher's <c>ConferenceView</c> (sourced from <c>MainViewModel.Students</c>
-/// + self) and student's <c>ConferenceGalleryWindow</c> (single-tile: the
-/// teacher).  The gallery <c>UserControl</c> is dumb — it just binds.
+/// + self) and student's <c>ConferenceGalleryWindow</c> (single-tile today;
+/// Phase 16-C lights up peer-cam fan-out).  The gallery <c>UserControl</c> is
+/// dumb — it just binds.
+///
+/// Phase 16-B step 3 — moved from Teacher/ViewModels/ to Shared.Wpf so
+/// Student.Agent can host the same gallery surface via its
+/// StudentConferenceShellViewModel.
 /// </summary>
 public partial class ConferenceGalleryViewModel : ObservableObject
 {
@@ -116,14 +60,34 @@ public partial class ConferenceGalleryViewModel : ObservableObject
     /// <summary>Step 7 — page-counter text shown next to prev/next buttons.</summary>
     public string PageLabel => $"{CurrentPage} / {TotalPages}";
 
+    /// <summary>Phase 16-B step 5 — UniformGrid column count for the current
+    /// page's tile count, computed via the same breakpoint table as
+    /// <c>ParticipantCountToColumnsConverter</c>.  Exists as a plain int
+    /// property (not a collection-Count binding inside
+    /// ItemsPanelTemplate) so the binding resolves reliably at panel
+    /// realize-time AND re-evaluates on every <see cref="RebuildPageTiles"/>
+    /// — fixes the 15-C symptom where tiles rendered off-viewport because
+    /// the UniformGrid stalled at Columns=1.</summary>
+    public int ColumnsForPage
+    {
+        get
+        {
+            int n = PageTiles.Count;
+            if (n <= 1) return 1;
+            if (n == 2) return 2;
+            if (n <= 4) return 2;
+            if (n <= 9) return 3;
+            return 4;
+        }
+    }
+
     /// <summary>Phase 15-E — tiles whose participant currently has a hand
     /// raised, ordered by raise timestamp (oldest first = top of queue).
     /// Bound by the Conference sidebar's Participants tab when the teacher
     /// wants to recognize the next student.  Recomputed by
     /// <see cref="RefreshRaisedHandQueue"/> whenever a tile's
     /// IsHandRaised flips.</summary>
-    public System.Collections.ObjectModel.ObservableCollection<ConferenceTileViewModel> RaisedHandQueue { get; }
-        = new();
+    public ObservableCollection<ConferenceTileViewModel> RaisedHandQueue { get; } = new();
 
     public void RefreshRaisedHandQueue()
     {
@@ -185,12 +149,17 @@ public partial class ConferenceGalleryViewModel : ObservableObject
 
     /// <summary>Step 7 — refresh the <see cref="PageTiles"/> collection from
     /// the current 1-based <see cref="CurrentPage"/> + <see cref="TilesPerPage"/>.
-    /// Single-pass diff: clear + add (small N keeps this trivial).</summary>
+    /// Single-pass diff: clear + add (small N keeps this trivial).
+    ///
+    /// Phase 16-B step 5 — also raises PropertyChanged for ColumnsForPage so
+    /// the gallery's UniformGrid re-evaluates its column count after every
+    /// tile-collection change.</summary>
     public void RebuildPageTiles()
     {
         int start = (Math.Max(1, CurrentPage) - 1) * TilesPerPage;
         int end = Math.Min(Tiles.Count, start + TilesPerPage);
         PageTiles.Clear();
         for (int i = start; i < end; i++) PageTiles.Add(Tiles[i]);
+        OnPropertyChanged(nameof(ColumnsForPage));
     }
 }

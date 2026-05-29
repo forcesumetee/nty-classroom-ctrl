@@ -1,5 +1,5 @@
 using ClassroomCtrl.Shared.Localization;
-using ClassroomCtrl.Teacher.ViewModels;
+using ClassroomCtrl.Shared.Wpf.ViewModels;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;

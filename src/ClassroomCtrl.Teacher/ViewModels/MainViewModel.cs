@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using ClassroomCtrl.Shared.Branding;
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Shared.Protocol;
+using ClassroomCtrl.Shared.Wpf.ViewModels;
 using ClassroomCtrl.Teacher.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
