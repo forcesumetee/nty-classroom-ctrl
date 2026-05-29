@@ -279,7 +279,9 @@ public class ControlServer : IDisposable
     /// <summary>Phase 16-B+ — send the ConferenceShareStart signal that opens
     /// the in-frame share view on every in-Conference participant.  Reliable
     /// channel.  Distinct from <see cref="BroadcastScreenStreamControlAsync"/>
-    /// (Classroom full-takeover); this stays inside the Conference window.</summary>
+    /// (Classroom full-takeover); this stays inside the Conference window.
+    /// Also stamps <c>_activeConferenceSharerId</c> so the Hello-ack snapshot
+    /// path can replay the Start envelope to late-joining participants.</summary>
     public Task BroadcastConferenceShareStartAsync(string sourceName, CancellationToken ct)
     {
         var msg = new ConferenceShareStartMessage
@@ -287,6 +289,8 @@ public class ControlServer : IDisposable
             SourceEndpointId = _teacherId,
             SourceName = sourceName ?? "",
         };
+        _activeConferenceSharerId = _teacherId;
+        _activeConferenceSharerName = msg.SourceName;
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
         var env = Envelope.Create(MessageType.ConferenceShareStart, bytes, _teacherId);
         _logger.LogInformation("ConferenceShare START ({Name})", sourceName);
@@ -306,10 +310,14 @@ public class ControlServer : IDisposable
     }
 
     /// <summary>Phase 16-B+ — send the ConferenceShareStop signal that returns
-    /// every participant's gallery to tile-mode.  Reliable channel.</summary>
+    /// every participant's gallery to tile-mode.  Reliable channel.  Clears
+    /// <c>_activeConferenceSharerId</c> so late joiners after this point
+    /// won't receive a stale Start replay.</summary>
     public Task BroadcastConferenceShareStopAsync(CancellationToken ct)
     {
         var msg = new ConferenceShareStopMessage { SourceEndpointId = _teacherId };
+        _activeConferenceSharerId = null;
+        _activeConferenceSharerName = "";
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
         var env = Envelope.Create(MessageType.ConferenceShareStop, bytes, _teacherId);
         _logger.LogInformation("ConferenceShare STOP");
@@ -553,6 +561,35 @@ public class ControlServer : IDisposable
     /// Originator is in Envelope.SenderId; the MainViewModel handler finds
     /// the matching Conference tile and spawns a floating animation.</summary>
     public event EventHandler<(Guid SenderId, ReactionMessage Msg)>? ReactionReceived;
+
+    // ─────── Phase 16-B+ : In-frame Conference share — receiver side ───────
+
+    /// <summary>Phase 16-B+ — fires when a ConferenceShareStart envelope
+    /// arrives.  Today the teacher's own UI flips ActiveShareEndpointId
+    /// locally on ToggleShareScreen so this event isn't subscribed in
+    /// teacher MainViewModel; the relay below preserves Envelope.SenderId
+    /// for foundation completeness so future student-initiated Conference
+    /// share works without another ControlServer pass.</summary>
+    public event EventHandler<(Guid SourceId, ConferenceShareStartMessage Msg)>? ConferenceShareStartReceived;
+
+    /// <summary>Phase 16-B+ — fires when a ConferenceShareFrame envelope
+    /// arrives.  Receiver-side gallery decode + push happens in the UI
+    /// layer (Student.Agent.MainWindow or Teacher.MainViewModel —
+    /// today only Student.Agent subscribes for student-side rendering of
+    /// the teacher's share).</summary>
+    public event EventHandler<(Guid SourceId, ConferenceShareFrameMessage Msg)>? ConferenceShareFrameReceived;
+
+    /// <summary>Phase 16-B+ — fires when a ConferenceShareStop envelope
+    /// arrives.  Receivers clear ActiveShareEndpointId + swap the gallery
+    /// layout back from share-mode to tile-mode.</summary>
+    public event EventHandler<Guid>? ConferenceShareStopReceived;
+
+    /// <summary>Phase 16-B+ — endpoint id of the participant currently
+    /// sharing, or null when no Conference share is in flight.  Tracks the
+    /// last Start / Stop seen on the wire so the Hello-ack snapshot path
+    /// can replay the Start envelope to a late-joining participant.</summary>
+    private Guid? _activeConferenceSharerId;
+    private string _activeConferenceSharerName = "";
 
     // ─────── Phase 9.2: Screen Pen — annotation overlay ───────
 
@@ -1245,6 +1282,35 @@ public class ControlServer : IDisposable
                     }
                     catch (Exception ex) { _logger.LogWarning(ex, "Hello-ack snapshot send failed"); }
                 }
+                // Phase 16-B+ — late-joiner replay for an active Conference
+                // share.  A participant connecting mid-share missed the
+                // initial ConferenceShareStart broadcast; without this replay
+                // their gallery would stay in tile-mode and frames would
+                // arrive at a layout that ignores them.  SenderId on the
+                // replay envelope is the ORIGINAL sharer so the receiver
+                // attributes the share correctly even when the relay path
+                // had us in between.
+                if (_activeConferenceSharerId.HasValue)
+                {
+                    try
+                    {
+                        var replayMsg = new ConferenceShareStartMessage
+                        {
+                            SourceEndpointId = _activeConferenceSharerId.Value,
+                            SourceName = _activeConferenceSharerName,
+                        };
+                        var replayBytes = MessagePack.MessagePackSerializer.Serialize(replayMsg);
+                        var replayEnv = Envelope.CreateTargeted(
+                            MessageType.ConferenceShareStart,
+                            replayBytes,
+                            _activeConferenceSharerId.Value,
+                            hello.EndpointId);
+                        _ = _tcp.BroadcastAsync(replayEnv, System.Threading.CancellationToken.None);
+                        _logger.LogInformation("ConferenceShare late-joiner replay → {Peer} (source={Source})",
+                            hello.EndpointId, _activeConferenceSharerId.Value);
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceShare late-joiner replay failed"); }
+                }
                 break;
 
             case MessageType.HandRaise:
@@ -1268,6 +1334,63 @@ public class ControlServer : IDisposable
                     // (rather than _teacherId).
                     var relay = Envelope.Create(MessageType.Reaction, env.Payload, env.SenderId);
                     _ = _tcp.BroadcastAsync(relay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            // ─────── Phase 16-B+ : In-frame Conference share ───────
+            // Today only the teacher initiates a Conference share — those
+            // envelopes go out via BroadcastConferenceShare*Async above and
+            // never come back here (TCP doesn't echo to self).  The dispatch
+            // arms below are foundation work: when a future tier lands
+            // student-initiated Conference share, these arms relay frames to
+            // all peers != sender + fire local events for the teacher's UI.
+            //
+            // SenderId is preserved on the relay envelope so receivers know
+            // which tile the share originates from.
+
+            case MessageType.ConferenceShareStart:
+                {
+                    try
+                    {
+                        var startMsg = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareStartMessage>(env.Payload);
+                        _logger.LogInformation("ConferenceShareStart from {Sender} ({Name})", env.SenderId, startMsg.SourceName);
+                        _activeConferenceSharerId = env.SenderId;
+                        _activeConferenceSharerName = startMsg.SourceName;
+                        ConferenceShareStartReceived?.Invoke(this, (env.SenderId, startMsg));
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceShareStart decode failed"); }
+                    var startRelay = Envelope.Create(MessageType.ConferenceShareStart, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(startRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceShareFrame:
+                {
+                    try
+                    {
+                        var frameMsg = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareFrameMessage>(env.Payload);
+                        ConferenceShareFrameReceived?.Invoke(this, (env.SenderId, frameMsg));
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceShareFrame decode failed"); }
+                    // Relay frames to all peers — receiver self-loopback
+                    // filter (env.SenderId == own endpoint id) drops the
+                    // sender's own echo at the gallery layer.
+                    var frameRelay = Envelope.Create(MessageType.ConferenceShareFrame, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(frameRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceShareStop:
+                {
+                    _logger.LogInformation("ConferenceShareStop from {Sender}", env.SenderId);
+                    if (_activeConferenceSharerId == env.SenderId)
+                    {
+                        _activeConferenceSharerId = null;
+                        _activeConferenceSharerName = "";
+                    }
+                    ConferenceShareStopReceived?.Invoke(this, env.SenderId);
+                    var stopRelay = Envelope.Create(MessageType.ConferenceShareStop, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(stopRelay, System.Threading.CancellationToken.None);
                 }
                 break;
 
