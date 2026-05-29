@@ -63,6 +63,7 @@ public partial class MainWindow : Window
     // Step 7 UI.  Step 6 wires the actual PTT hotkey.
     private MicBroadcaster? _micBroadcaster;
     private VoiceMixer? _voiceMixer;
+    private PttKeyboardHook? _pttHook;
     private long _voiceFramesRxCount;
 
     // Phase 9 Section B / Phase 9.1 Section B+C — Bell + Notifications.
@@ -564,8 +565,7 @@ public partial class MainWindow : Window
                     if (_micBroadcaster != null)
                     {
                         _micBroadcaster.PttMode = pm.PttMode;
-                        // HotkeyVk is honored in Step 6's PttKeyboardHook; for
-                        // Step 4 the broadcaster only tracks PttMode itself.
+                        _pttHook?.SetHotkeyVk(pm.HotkeyVk == 0 ? PttKeyboardHook.DefaultHotkeyVk : pm.HotkeyVk);
                         _micBroadcaster.EmitStateUpdate();
                     }
                 }
@@ -1011,6 +1011,11 @@ public partial class MainWindow : Window
             SelfEndpointId = _myEndpointId,
             CurrentGroupId = _myRoomId,
         };
+        // Phase 13-D step 6 — global low-level keyboard hook for PTT.  Hook is
+        // installed once per Agent lifetime (paired with the broadcaster); the
+        // primer's hot-reconfig requirement is met by SetHotkeyVk on MicPttSet.
+        _pttHook = new PttKeyboardHook(_micBroadcaster);
+        Dispatcher.Invoke(() => _pttHook.Install());
         _micBroadcaster.VoiceFrameReady += async (_, tup) =>
         {
             if (App.Ipc == null) return;
