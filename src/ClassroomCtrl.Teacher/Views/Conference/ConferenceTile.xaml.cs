@@ -1,7 +1,10 @@
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Teacher.ViewModels;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace ClassroomCtrl.Teacher.Views.Conference;
 
@@ -10,6 +13,12 @@ namespace ClassroomCtrl.Teacher.Views.Conference;
 /// via its DataContext.  Style triggers in XAML do the work; code-behind
 /// only computes the localized "(You)" suffix for self-tiles since there's
 /// no clean way to do that purely in XAML without another converter.
+///
+/// Phase 15-E step 5 — code-behind also drives the reaction float-up
+/// animation: subscribes to the tile VM's PropertyChanged + starts the
+/// Storyboard when CurrentReactionEmoji becomes non-empty.  Storyboard
+/// is local (Begin on the TextBlock) so multiple simultaneous reactions
+/// across tiles don't share state.
 /// </summary>
 public partial class ConferenceTile : UserControl
 {
@@ -23,11 +32,18 @@ public partial class ConferenceTile : UserControl
         set => SetValue(SelfSuffixProperty, value);
     }
 
+    private ConferenceTileViewModel? _attached;
+
     public ConferenceTile()
     {
         InitializeComponent();
-        DataContextChanged += (_, _) => RefreshSelfSuffix();
+        DataContextChanged += (_, _) =>
+        {
+            RefreshSelfSuffix();
+            AttachReactionListener();
+        };
         RefreshSelfSuffix();
+        AttachReactionListener();
     }
 
     private void RefreshSelfSuffix()
@@ -40,5 +56,43 @@ public partial class ConferenceTile : UserControl
         {
             SelfSuffix = "";
         }
+    }
+
+    private void AttachReactionListener()
+    {
+        if (_attached != null) _attached.PropertyChanged -= OnTilePropertyChanged;
+        _attached = DataContext as ConferenceTileViewModel;
+        if (_attached != null) _attached.PropertyChanged += OnTilePropertyChanged;
+    }
+
+    private void OnTilePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ConferenceTileViewModel.CurrentReactionEmoji)) return;
+        if (sender is not ConferenceTileViewModel vm) return;
+        if (string.IsNullOrEmpty(vm.CurrentReactionEmoji)) return;
+        Dispatcher.Invoke(StartReactionFloat);
+    }
+
+    private void StartReactionFloat()
+    {
+        // Start position: 20 px below tile center, opacity 0.
+        // End position:   80 px above tile center, opacity 0.
+        // Peak: opacity 1 at ~20% of duration so the emoji is fully visible
+        // for most of the 3-second window before fading.
+        var fade = new DoubleAnimationUsingKeyFrames();
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, System.Windows.Media.Animation.KeyTime.FromPercent(0.0)));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, System.Windows.Media.Animation.KeyTime.FromPercent(0.15)));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, System.Windows.Media.Animation.KeyTime.FromPercent(0.7)));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, System.Windows.Media.Animation.KeyTime.FromPercent(1.0)));
+        fade.Duration = new System.Windows.Duration(System.TimeSpan.FromSeconds(2.8));
+
+        var rise = new DoubleAnimation
+        {
+            From = 20,
+            To = -80,
+            Duration = new System.Windows.Duration(System.TimeSpan.FromSeconds(2.8)),
+        };
+        ReactionFloater.BeginAnimation(OpacityProperty, fade);
+        ReactionFloaterTransform.BeginAnimation(TranslateTransform.YProperty, rise);
     }
 }

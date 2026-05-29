@@ -73,19 +73,24 @@
                         <TextBlock Text="✋" FontSize="12"/>
                     </Border>
 
-                    <!-- Phase 15-E step 4 — floating reaction emoji.  Shown for
-                         ~3 s by MainViewModel.ShowReactionOnTile via a
-                         DispatcherTimer.  Center-vertical so it draws over
-                         the cam frame rather than the bottom name strip;
-                         FontSize is large so it reads at a glance even on
-                         a 4-up grid (~330 px wide tile).  When the source
-                         CurrentReactionEmoji is empty, the empty-string
-                         binding-target naturally renders blank. -->
-                    <TextBlock Text="{Binding CurrentReactionEmoji}"
+                    <!-- Phase 15-E step 5 — floating reaction emoji.  Set by
+                         MainViewModel.ShowReactionOnTile via a DispatcherTimer.
+                         Float-up + fade-out Storyboard is started by the
+                         tile's code-behind on PropertyChanged when the
+                         emoji becomes non-empty.  RenderTransformOrigin
+                         keeps the translate centered so the float lifts
+                         straight up from the tile center. -->
+                    <TextBlock x:Name="ReactionFloater"
+                               Text="{Binding CurrentReactionEmoji}"
                                FontSize="56"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
-                               IsHitTestVisible="False"/>
+                               IsHitTestVisible="False"
+                               Opacity="0">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform x:Name="ReactionFloaterTransform" Y="0"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
                 </Grid>
             </Border>
 

@@ -2,6 +2,8 @@ using ClassroomCtrl.Shared.Localization;
 using System;
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 
 namespace ClassroomCtrl.Student.Agent;
@@ -75,22 +77,28 @@ public partial class ConferenceGalleryWindow : Window
         Close();
     }
 
-    /// <summary>Phase 15-E step 4 — render the floating emoji over the
-    /// teacher tile for ~3 seconds.  A second reaction during the window
-    /// replaces the first.  Called from MainWindow.OnIpcMessage on inbound
-    /// Reaction envelopes.</summary>
+    /// <summary>Phase 15-E step 4/5 — render the floating emoji over the
+    /// teacher tile.  Float-up + fade animation runs for ~3 s; a fresh
+    /// call mid-animation simply restarts the Storyboard with the new
+    /// emoji.  Called from MainWindow.OnIpcMessage on inbound Reaction
+    /// envelopes.</summary>
     public void ShowReaction(string emoji)
     {
         ReactionOverlay.Text = emoji ?? "";
-        var clearTimer = new System.Windows.Threading.DispatcherTimer
+        var fade = new DoubleAnimationUsingKeyFrames();
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromPercent(0.0)));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, KeyTime.FromPercent(0.15)));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, KeyTime.FromPercent(0.7)));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromPercent(1.0)));
+        fade.Duration = new Duration(TimeSpan.FromSeconds(2.8));
+
+        var rise = new DoubleAnimation
         {
-            Interval = TimeSpan.FromSeconds(3),
+            From = 40,
+            To = -120,
+            Duration = new Duration(TimeSpan.FromSeconds(2.8)),
         };
-        clearTimer.Tick += (s, e) =>
-        {
-            clearTimer.Stop();
-            if (ReactionOverlay.Text == emoji) ReactionOverlay.Text = "";
-        };
-        clearTimer.Start();
+        ReactionOverlay.BeginAnimation(OpacityProperty, fade);
+        ReactionOverlayTransform.BeginAnimation(TranslateTransform.YProperty, rise);
     }
 }

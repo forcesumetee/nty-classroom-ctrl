@@ -236,6 +236,10 @@ internal static class LocalizationData
         ["Conf_ScreenShareBanner"] = "🖥 Sharing your screen — visible to all students",
         ["Conf_BlockedLockAll"] = "Lock All is unavailable in Conference mode.",
         ["Conf_BlockedQuiz"] = "Quiz Manager is unavailable in Conference mode.",
+        // Phase 15-E — Hand-raise queue / Recognize / reaction picker text.
+        ["Conf_RaisedHandsHeader"] = "Raised hands",
+        ["Conf_Recognize"] = "Recognize",
+        ["Chat_TeacherRecognizedHand"] = "Teacher recognized your hand",
         ["Dlg_PolicyDuration"] = "Auto-revert after:",
         ["Dlg_DurationNoLimit"] = "No limit",
         ["Dlg_Duration15min"] = "15 minutes",
@@ -854,6 +858,10 @@ internal static class LocalizationData
         ["Conf_ScreenShareBanner"] = "🖥 กำลังแชร์หน้าจอ — นักเรียนทุกคนเห็น",
         ["Conf_BlockedLockAll"] = "ไม่สามารถล็อกหน้าจอทั้งหมดในโหมด Conference",
         ["Conf_BlockedQuiz"] = "ไม่สามารถเปิด Quiz Manager ในโหมด Conference",
+        // Phase 15-E — Hand-raise queue / Recognize / reaction picker text.
+        ["Conf_RaisedHandsHeader"] = "นักเรียนยกมือ",
+        ["Conf_Recognize"] = "รับทราบ",
+        ["Chat_TeacherRecognizedHand"] = "ครูรับทราบคำขอของคุณแล้ว",
         ["Dlg_PolicyDuration"] = "ยกเลิกอัตโนมัติหลัง:",
         ["Dlg_DurationNoLimit"] = "ไม่จำกัด",
         ["Dlg_Duration15min"] = "15 นาที",
