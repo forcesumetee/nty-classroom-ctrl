@@ -22,11 +22,15 @@
          Phase 16-B step 4 — moved from Teacher/Views/Conference/ to Shared.Wpf
          so Student.Agent renders the same tile via its
          StudentConferenceShellViewModel. -->
+    <!-- Phase 16-B+ step 3 — MinHeight prevents the tile from collapsing to
+         a thin label strip when the * row's measured height shrinks under
+         certain UniformGrid pages.  120 px keeps the avatar + "Camera off"
+         legible at the smallest packed layout (4-wide page). -->
     <Border x:Name="OuterBorder"
             CornerRadius="8" BorderThickness="2"
             BorderBrush="Transparent"
             Background="{DynamicResource Surface.Card}"
-            Padding="0" Margin="8">
+            Padding="0" Margin="8" MinHeight="120">
         <!-- Three style triggers in priority order:
              1. IsPinned=true        → purple accent (visual lock indicator)
              2. IsSpeaking=true      → green accent (active speaker)
@@ -50,25 +54,53 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Webcam frame area.  Cam-off placeholder is an Initial circle
-                 with the first character of the display name. -->
+            <!-- Webcam frame area.  Cam-off placeholder is a Zoom-style
+                 avatar circle (initial of display name) + "Camera off" label.
+                 Phase 16-B+ step 3 — replaced the 🚫 emoji + duplicate name
+                 placeholder (which collapsed visually with the bottom name
+                 strip) with a proper avatar surface so the tile reads as a
+                 real participant slot even when no cam frame is arriving. -->
             <Border Grid.Row="0" Background="#1F2937" CornerRadius="6,6,0,0">
                 <Grid>
                     <!-- Frame, visible whenever we have a BitmapSource. -->
                     <Image Source="{Binding JpegFrame}" Stretch="Uniform"
                            Visibility="{Binding JpegFrame, Converter={StaticResource NullToVisibility}}"/>
-                    <!-- Cam-off placeholder: large emoji centered.  Visible when
-                         JpegFrame == null. -->
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                                Visibility="{Binding JpegFrame, Converter={StaticResource NullToVisibility}, ConverterParameter=Inverted}">
-                        <TextBlock Text="🚫" FontSize="44" HorizontalAlignment="Center"
-                                   Foreground="#94A3B8" Margin="0,0,0,4"/>
-                        <TextBlock Text="{Binding DisplayName}"
-                                   FontSize="13" Foreground="#CBD5E1"
-                                   HorizontalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxWidth="220"/>
-                    </StackPanel>
+                    <!-- Cam-off placeholder: avatar circle (initial) +
+                         camera-off indicator.  Visible when
+                         JpegFrame == null OR IsCamLive == false (the bound
+                         JpegFrame stays after a frame arrives even if the
+                         participant stops their cam, so we bind to the
+                         null-converter on JpegFrame for the simple cam-off
+                         signal that today's pipeline already exposes
+                         — JpegFrame is cleared when CamLive flips off in
+                         ConferenceGalleryViewModel routing). -->
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Visibility="{Binding JpegFrame, Converter={StaticResource NullToVisibility}, ConverterParameter=Inverted}">
+                        <StackPanel>
+                            <!-- Avatar circle with first letter of name.  Sized
+                                 to read as a tile-anchor even at smallest
+                                 page layout; matches Meet / Zoom proportions. -->
+                            <Grid Width="72" Height="72"
+                                  HorizontalAlignment="Center"
+                                  Margin="0,0,0,8">
+                                <Ellipse Fill="#4F46E5"/>
+                                <TextBlock Text="{Binding Initial}"
+                                           FontSize="32" FontWeight="SemiBold"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
+                            <!-- Camera-off label below the avatar.  Small,
+                                 muted; "📷 Camera off" form to mirror the
+                                 conventional Zoom / Meet language. -->
+                            <TextBlock HorizontalAlignment="Center"
+                                       Foreground="#94A3B8" FontSize="12">
+                                <Run Text="📷"/>
+                                <Run Text=" "/>
+                                <Run Text="{DynamicResource Conf_CameraOff}"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
                     <!-- Top-right: hand-raise badge slot.  15-E binds IsHandRaised. -->
                     <Border HorizontalAlignment="Right" VerticalAlignment="Top"
                             Margin="6" Padding="6,2"

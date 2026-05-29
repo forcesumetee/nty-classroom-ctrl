@@ -32,6 +32,22 @@ public partial class ConferenceTileViewModel : ObservableObject
 
     [ObservableProperty] private string displayName = "";
 
+    /// <summary>Phase 16-B+ step 3 — first character of <see cref="DisplayName"/>,
+    /// uppercased, used as the avatar initial on the cam-off placeholder.
+    /// "?" when the display name is empty so the avatar circle never
+    /// renders blank.</summary>
+    public string Initial
+    {
+        get
+        {
+            var s = DisplayName?.Trim();
+            if (string.IsNullOrEmpty(s)) return "?";
+            return char.ToUpperInvariant(s[0]).ToString();
+        }
+    }
+
+    partial void OnDisplayNameChanged(string value) => OnPropertyChanged(nameof(Initial));
+
     /// <summary>Latest JPEG-decoded frame; bound directly to a WPF Image.Source.
     /// Null while the participant's cam is off or before the first frame
     /// arrives.</summary>
