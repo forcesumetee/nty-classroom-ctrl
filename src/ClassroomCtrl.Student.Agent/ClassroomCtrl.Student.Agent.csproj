@@ -35,5 +35,9 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.0.131" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Phase 14-B (Tier 1) — WebcamDeviceWatcher uses WMI (Win32_PnPEntity)
+         to enumerate cameras + watch device-arrival/removal events without
+         pulling AForge into Student.Agent until Tier 2 actually captures. -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 </Project>

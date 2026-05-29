@@ -67,6 +67,12 @@ public partial class MainWindow : Window
     private VoiceLiveBanner? _voiceBanner;
     private long _voiceFramesRxCount;
 
+    // Phase 14-B (Tier 1) — passive WMI-based webcam presence watcher.  No
+    // capture (that's Tier 2); just emits WebcamStateUpdate to teacher at
+    // startup + on plug/unplug so the per-student "has-cam" indicator is
+    // accurate.  Singleton per Agent process; disposed on window close.
+    private WebcamDeviceWatcher? _webcamWatcher;
+
     // Phase 9 Section B / Phase 9.1 Section B+C — Bell + Notifications.
     // The bell tracks unread NOTIFICATIONS (system events), not chat — chat
     // and system events are now separated: chat lives in the body ChatList,
@@ -100,6 +106,25 @@ public partial class MainWindow : Window
         Notifications.CollectionChanged += OnNotificationsChanged;
         Activated += (_, _) => ResetBellBadge();
         UpdateNoNotificationsPlaceholder();
+
+        // Phase 14-B (Tier 1) — start the webcam-presence watcher.  Synchronous
+        // WMI enumerate completes in a few hundred ms (acceptable startup
+        // cost; runs on the UI thread once).  Subsequent enumerates fire on
+        // the WMI background thread when devices arrive/depart.  Emits the
+        // initial state immediately + on every change; the Service side
+        // queues until the teacher TCP is connected if needed.
+        try
+        {
+            _webcamWatcher = new WebcamDeviceWatcher();
+            _webcamWatcher.DeviceChanged += () => EmitWebcamState();
+            EmitWebcamState();
+        }
+        catch (Exception ex)
+        {
+            // WMI access can fail on heavily-locked-down VMs — degrade
+            // gracefully (teacher just won't see a cam indicator for us).
+            IpcClient.LogToFile($"[MainWindow] WebcamDeviceWatcher init failed: {ex.Message}");
+        }
     }
 
     /// <summary>Phase 9.1 Section C — single entry point for system events.
@@ -220,6 +245,10 @@ public partial class MainWindow : Window
             IpcClient.LogToFile($"[MainWindow] Captured my endpoint id: {_myEndpointId}");
             EnsureMicBroadcaster();
             if (_micBroadcaster != null) _micBroadcaster.SelfEndpointId = _myEndpointId;
+            // Phase 14-B (Tier 1) — re-emit so teacher's per-student cam
+            // indicator picks us up reliably even if the very first emit (from
+            // the MainWindow ctor) happened before Service had a TCP route.
+            EmitWebcamState();
         }
 
         switch (env.Type)
@@ -995,6 +1024,34 @@ public partial class MainWindow : Window
                     AddSystemNotification(Loc.Get("Chat_TeacherForcedMute"), "🔇");
                 });
                 break;
+        }
+    }
+
+    /// <summary>Phase 14-B (Tier 1) — build a <see cref="WebcamStateUpdateMessage"/>
+    /// snapshot from the current <see cref="_webcamWatcher"/> state and send it
+    /// upstream via IPC.  Called at startup, on first endpoint capture, and on
+    /// every WMI device-arrival/removal event.  Tier 1 always reports
+    /// CamLive=false + Mode=Off because this agent doesn't capture; Tier 2's
+    /// StudentCameraBroadcaster will override these fields when it lands.</summary>
+    private void EmitWebcamState()
+    {
+        if (App.Ipc == null || _webcamWatcher == null) return;
+        try
+        {
+            var msg = new WebcamStateUpdateMessage
+            {
+                DeviceAvailable = _webcamWatcher.DeviceAvailable,
+                CamLive = false,
+                Mode = WebcamMode.Off,
+                LastError = "",
+            };
+            var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+            var env = Envelope.Create(MessageType.WebcamStateUpdate, bytes, Guid.Empty);
+            _ = App.Ipc.SendAsync(env, default);
+        }
+        catch (Exception ex)
+        {
+            IpcClient.LogToFile($"[MainWindow] WebcamStateUpdate emit: {ex.Message}");
         }
     }
 
