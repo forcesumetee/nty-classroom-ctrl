@@ -206,4 +206,18 @@ public enum MessageType : ushort
     ConferenceShareStart = 0x0683,   // src→T→participants, ConferenceShareStartMessage
     ConferenceShareFrame = 0x0684,   // src→T→participants, ConferenceShareFrameMessage
     ConferenceShareStop  = 0x0685,   // src→T→participants, ConferenceShareStopMessage
+
+    // Phase 16-C (Tier 2): Conference Mode — peer cam routing.  Each
+    // participant emits ConferenceCameraStart/Frame/Stop with their own
+    // EndpointId in Envelope.SenderId; teacher acts as star-topology relay
+    // and fans out to all in-Conference peers != sender.  Self-loopback
+    // filter mirrors Phase 13-D voice (env.SenderId == _myEndpointId).
+    // Classroom 0x0460-0x0462 stays unidirectional Teacher→student for the
+    // 9.5 cam-broadcast UX (pop-up cam window, NOT Conference gallery);
+    // mixing roles on one wire code would force every dispatch arm to
+    // discriminate by source.  Lossy channel: rides _outbox (DropOldest
+    // cap-16), same drop semantics as 0x0461.
+    ConferenceCameraStart = 0x0680,   // S→T→peers, ConferenceCameraStartMessage
+    ConferenceCameraFrame = 0x0681,   // S→T→peers, ConferenceCameraFrameMessage
+    ConferenceCameraStop  = 0x0682,   // S→T→peers, ConferenceCameraStopMessage
 }

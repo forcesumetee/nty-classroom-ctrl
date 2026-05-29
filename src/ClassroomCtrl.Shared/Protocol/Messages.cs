@@ -370,6 +370,74 @@ public class ConferenceShareStopMessage
     [Key(0)] public Guid SourceEndpointId { get; set; }
 }
 
+// ───────────── Phase 16-C : Peer cam routing (Conference Mode) ─────────────
+
+/// <summary>
+/// Phase 16-C — start signal for a Conference Mode peer cam stream.  Sent by
+/// each participant when they turn their cam on inside a Conference; teacher
+/// relays to all in-Conference peers != sender.  Distinct from the Classroom
+/// <see cref="MessageType.CameraStart"/> (9.5) which is teacher→student
+/// unidirectional + drives a pop-up cam window; this signal stays inside the
+/// Conference gallery and feeds the matching tile.
+///
+/// SessionId is matched against the receiver's active Conference session so a
+/// late envelope after Conference end is dropped before allocating a decoder.
+/// </summary>
+[MessagePackObject]
+public class ConferenceCameraStartMessage
+{
+    /// <summary>Per-session Guid matching <see cref="ConferenceStartMessage.SessionId"/>
+    /// (15-B).  Receivers verify they're in the same session before allocating
+    /// a decoder.</summary>
+    [Key(0)] public Guid SessionId { get; set; }
+
+    /// <summary>Source endpoint of the cam stream — duplicate of
+    /// <c>Envelope.SenderId</c> for explicit type safety + grep-friendly
+    /// diagnostics; mirrors <see cref="VoiceAudioFrameMessage.SourceEndpointId"/>
+    /// at Key 0.</summary>
+    [Key(1)] public Guid SourceEndpointId { get; set; }
+
+    /// <summary>Display name carried so receivers can label the tile without
+    /// resolving sender→name independently.  Mirrors
+    /// <see cref="ConferenceShareStartMessage.SourceName"/>.</summary>
+    [Key(2)] public string SourceName { get; set; } = "";
+
+    [Key(3)] public int Width  { get; set; } = 320;
+    [Key(4)] public int Height { get; set; } = 240;
+    [Key(5)] public int Fps    { get; set; } = 10;
+}
+
+/// <summary>
+/// Phase 16-C — one frame of a Conference Mode peer cam.  Lean shape matching
+/// the existing 9.5 <see cref="CameraFrameMessage"/> (JPEG bytes + timestamp)
+/// with the addition of <see cref="SourceEndpointId"/> so receivers can route
+/// the frame to the matching tile without re-reading the envelope.
+///
+/// Lossy by nature: rides the same <c>_outbox</c> lossy channel as 0x0461 cam
+/// frames; DropOldest cap-16 means a slow peer caps at the most recent ~1.6s
+/// of frames in flight before drop, identical to existing cam behavior.
+/// </summary>
+[MessagePackObject]
+public class ConferenceCameraFrameMessage
+{
+    [Key(0)] public Guid SourceEndpointId { get; set; }
+    [Key(1)] public byte[] JpegData { get; set; } = Array.Empty<byte>();
+    [Key(2)] public long TimestampMs { get; set; }
+}
+
+/// <summary>
+/// Phase 16-C — stop signal for a Conference Mode peer cam.  Receivers clear
+/// the matching tile's frame + set <c>IsCamLive=false</c> so the cam-off
+/// placeholder (avatar + "Camera off") swaps in.  Single field so future
+/// versions can disambiguate when multiple cams from the same physical sender
+/// are theoretically tracked (not used today).
+/// </summary>
+[MessagePackObject]
+public class ConferenceCameraStopMessage
+{
+    [Key(0)] public Guid SourceEndpointId { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]

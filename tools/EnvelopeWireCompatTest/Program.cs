@@ -358,6 +358,56 @@ int errors = 0;
     else { Pass("T19: ConferenceShareStopMessage round-trip preserved (1 key)"); }
 }
 
+// ──────── Test 20 (Phase 16-C step 1): ConferenceCameraStartMessage round-trip ────────
+{
+    var msg = new ConferenceCameraStartMessage
+    {
+        SessionId = Guid.NewGuid(),
+        SourceEndpointId = Guid.NewGuid(),
+        SourceName = "นักเรียน สมศรี",   // UTF-16 (Thai) name
+        Width = 640,
+        Height = 480,
+        Fps = 15,
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ConferenceCameraStartMessage>(bytes);
+    if (back.SessionId != msg.SessionId) { errors += Fail("T20: SessionId mismatch"); }
+    else if (back.SourceEndpointId != msg.SourceEndpointId) { errors += Fail("T20: SourceEndpointId mismatch"); }
+    else if (back.SourceName != msg.SourceName) { errors += Fail($"T20: SourceName mismatch (got '{back.SourceName}')"); }
+    else if (back.Width != msg.Width) { errors += Fail("T20: Width mismatch"); }
+    else if (back.Height != msg.Height) { errors += Fail("T20: Height mismatch"); }
+    else if (back.Fps != msg.Fps) { errors += Fail("T20: Fps mismatch"); }
+    else { Pass("T20: ConferenceCameraStartMessage round-trip preserved (6 keys, UTF-16 SourceName)"); }
+}
+
+// ──────── Test 21 (Phase 16-C step 1): ConferenceCameraFrameMessage round-trip ────────
+{
+    var msg = new ConferenceCameraFrameMessage
+    {
+        SourceEndpointId = Guid.NewGuid(),
+        JpegData = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46 },
+        TimestampMs = 1_700_000_000_000L,
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ConferenceCameraFrameMessage>(bytes);
+    if (back.SourceEndpointId != msg.SourceEndpointId) { errors += Fail("T21: SourceEndpointId mismatch"); }
+    else if (back.JpegData.Length != msg.JpegData.Length) { errors += Fail("T21: JpegData length mismatch"); }
+    else if (back.TimestampMs != msg.TimestampMs) { errors += Fail("T21: TimestampMs mismatch"); }
+    else { Pass("T21: ConferenceCameraFrameMessage round-trip preserved (3 keys)"); }
+}
+
+// ──────── Test 22 (Phase 16-C step 1): ConferenceCameraStopMessage round-trip ────────
+{
+    var msg = new ConferenceCameraStopMessage
+    {
+        SourceEndpointId = Guid.NewGuid(),
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ConferenceCameraStopMessage>(bytes);
+    if (back.SourceEndpointId != msg.SourceEndpointId) { errors += Fail("T22: SourceEndpointId mismatch"); }
+    else { Pass("T22: ConferenceCameraStopMessage round-trip preserved (1 key)"); }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");
