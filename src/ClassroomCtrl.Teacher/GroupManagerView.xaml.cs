@@ -190,6 +190,55 @@ public partial class GroupManagerView : Window
         }
         menu.Items.Add(setHost);
 
+        // Phase 13-D step 8 — per-group mic controls.  Mute All / Allow All
+        // operate on every group member; per-member submenu toggles based on
+        // the last-known MicLive state from the per-student heartbeat.
+        var mics = new MenuItem { Header = Loc.Get("GroupMgr_MenuMics", "Microphones") };
+        var muteAll = new MenuItem { Header = Loc.Get("GroupMgr_MicsMuteAll", "Mute All in Group") };
+        muteAll.Click += async (_, _) =>
+        {
+            foreach (var mid in r.MemberIds)
+            {
+                await App.Server.SendMicMuteRequestAsync(mid, true,
+                    Loc.Get("Voice_TeacherMutedYou"), CancellationToken.None);
+            }
+        };
+        mics.Items.Add(muteAll);
+        var allowAll = new MenuItem { Header = Loc.Get("GroupMgr_MicsAllowAll", "Allow All in Group") };
+        allowAll.Click += async (_, _) =>
+        {
+            foreach (var mid in r.MemberIds)
+            {
+                await App.Server.SendMicMuteRequestAsync(mid, false,
+                    Loc.Get("Voice_TeacherUnmutedYou"), CancellationToken.None);
+            }
+        };
+        mics.Items.Add(allowAll);
+        mics.Items.Add(new Separator());
+        foreach (var mid in r.MemberIds)
+        {
+            var capturedId = mid;
+            var s = _vm.Students.FirstOrDefault(x => x.EndpointId == capturedId);
+            var name = s?.DisplayName ?? capturedId.ToString().Substring(0, 8);
+            // Per-member toggle label reflects last-known state — if we know
+            // the mic is live, the menu offers "Force Mute"; if muted or
+            // unknown, it offers "Allow Speaking".  Either action is idempotent
+            // on the wire so a stale label is harmless.
+            bool live = s?.MicLive == true;
+            var label = live
+                ? string.Format(Loc.Get("GroupMgr_MicForceMuteFmt", "Force Mute · {0}"), name)
+                : string.Format(Loc.Get("GroupMgr_MicAllowFmt", "Allow Speaking · {0}"), name);
+            var perItem = new MenuItem { Header = label };
+            perItem.Click += async (_, _) =>
+            {
+                await App.Server.SendMicMuteRequestAsync(capturedId, live,
+                    live ? Loc.Get("Voice_TeacherMutedYou") : Loc.Get("Voice_TeacherUnmutedYou"),
+                    CancellationToken.None);
+            };
+            mics.Items.Add(perItem);
+        }
+        menu.Items.Add(mics);
+
         // Delete (confirms)
         var delete = new MenuItem { Header = Loc.Get("GroupMgr_MenuDelete") };
         delete.Click += async (_, _) =>

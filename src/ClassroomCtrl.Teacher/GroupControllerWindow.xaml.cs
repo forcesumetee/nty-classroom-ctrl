@@ -149,6 +149,29 @@ public partial class GroupControllerWindow : Window
         }
     }
 
+    // Phase 13-D step 8 — group-level Mute All / Allow All wire to
+    // ControlServer.SendMicMuteRequestAsync per member.  Reliable channel;
+    // student-side honors + emits an immediate MicStateUpdate echo.
+    private async void MuteAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Server == null) return;
+        var reason = Loc.Get("Voice_TeacherMutedYou");
+        foreach (var mid in _room.MemberIds)
+        {
+            await App.Server.SendMicMuteRequestAsync(mid, true, reason, CancellationToken.None);
+        }
+    }
+
+    private async void AllowAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Server == null) return;
+        var reason = Loc.Get("Voice_TeacherUnmutedYou");
+        foreach (var mid in _room.MemberIds)
+        {
+            await App.Server.SendMicMuteRequestAsync(mid, false, reason, CancellationToken.None);
+        }
+    }
+
     private async void Leave_Click(object sender, RoutedEventArgs e)
     {
         _leaveInProgress = true;
