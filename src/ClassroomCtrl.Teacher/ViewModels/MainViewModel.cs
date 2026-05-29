@@ -2261,6 +2261,21 @@ public partial class MainViewModel : ObservableObject
             s.MicLive = e.State.MicLive;
             s.MicPttMode = e.State.PttMode;
             s.MicIsSpeaking = e.State.IsSpeaking;
+
+            // Phase 15-C — mirror state onto the matching gallery tile.
+            // Pinned tiles win on accent (purple) over speaking (green),
+            // handled by the tile XAML style triggers.  No hysteresis here;
+            // the mic-broadcaster already produces a smoothed IsSpeaking
+            // signal (Phase 13-D VAD ~100 ms window with rate-limiting).
+            if (IsConferenceSessionActive)
+            {
+                var tile = ConferenceGallery?.Tiles.FirstOrDefault(t => t.EndpointId == e.StudentId);
+                if (tile != null)
+                {
+                    tile.IsMicLive = e.State.MicLive;
+                    tile.IsSpeaking = e.State.IsSpeaking;
+                }
+            }
         });
     }
 
