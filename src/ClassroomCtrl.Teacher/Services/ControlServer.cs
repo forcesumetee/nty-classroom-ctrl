@@ -14,6 +14,10 @@ public class ControlServer : IDisposable
     private readonly TcpControlServer _tcp;
     private readonly Guid _teacherId = Guid.NewGuid();
 
+    /// <summary>Phase 15-C — public accessor for the teacher's endpoint id.
+    /// Used by MainViewModel.RebuildConferenceGallery to tag the self-tile.</summary>
+    public Guid TeacherEndpointId => _teacherId;
+
     // Breakout state: endpointId → roomId (null/missing = main classroom)
     private readonly Dictionary<Guid, Guid?> _studentRoomMap = new();
     private readonly Dictionary<Guid, string> _roomNames = new();

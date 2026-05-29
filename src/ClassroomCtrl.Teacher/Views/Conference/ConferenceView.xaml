@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+             xmlns:local="clr-namespace:ClassroomCtrl.Teacher.Views.Conference"
              mc:Ignorable="d"
              Background="{DynamicResource Surface.Background}"
              TextElement.Foreground="{DynamicResource Text.Primary}"
@@ -60,30 +61,15 @@
             </StackPanel>
         </Grid>
 
-        <!-- (b) Conference in progress — placeholder until 15-C lands the gallery. -->
+        <!-- (b) Conference in progress — Phase 15-C gallery hosted here. -->
         <Grid Visibility="{Binding IsConferenceSessionActive,
                           Converter={StaticResource BoolToVisibility}}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <StackPanel Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center"
-                        MaxWidth="520">
-                <TextBlock Text="🎥"
-                           FontSize="56"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,12"/>
-                <TextBlock Text="{DynamicResource Conf_LiveTitle}"
-                           Style="{DynamicResource Text.H1}"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,8"/>
-                <TextBlock Text="{DynamicResource Conf_LiveHint}"
-                           Style="{DynamicResource Text.Body}"
-                           Foreground="{DynamicResource Text.Secondary}"
-                           HorizontalAlignment="Center"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"/>
-            </StackPanel>
+            <local:ConferenceGalleryView Grid.Row="0"
+                                         DataContext="{Binding ConferenceGallery}"/>
             <!-- Bottom action bar (placeholder).  15-D replaces this with the
                  Meet-style ConferenceToolbar (mic / cam / share / chat / hand /
                  more / end).  Today: just End Conference. -->

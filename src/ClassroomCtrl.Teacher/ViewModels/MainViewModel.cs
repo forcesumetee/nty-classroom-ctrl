@@ -75,7 +75,73 @@ public partial class MainViewModel : ObservableObject
     /// and the "in progress" placeholder.</summary>
     public bool IsConferenceSessionActive => ConferenceSessionId != Guid.Empty;
 
-    partial void OnConferenceSessionIdChanged(Guid value) => OnPropertyChanged(nameof(IsConferenceSessionActive));
+    /// <summary>Phase 15-C — gallery view-model for the active Conference.
+    /// Singleton per MainViewModel instance; tiles are rebuilt whenever the
+    /// session enters/leaves Conference mode.  Bound to the ConferenceView's
+    /// embedded ConferenceGalleryView (live-session state).</summary>
+    public ConferenceGalleryViewModel ConferenceGallery { get; } = new();
+
+    partial void OnConferenceSessionIdChanged(Guid value)
+    {
+        OnPropertyChanged(nameof(IsConferenceSessionActive));
+        RebuildConferenceGallery();
+    }
+
+    /// <summary>Phase 15-C — rebuild the gallery tiles from the current
+    /// <see cref="Students"/> collection plus a self-tile for the teacher.
+    /// Called on session start/end + when the Students collection changes
+    /// while a session is live (so a late-joining student gets a tile).
+    /// Idempotent: if the tile already exists for an endpoint, we keep it
+    /// (so its JpegFrame + IsSpeaking continuity survives).</summary>
+    private void RebuildConferenceGallery()
+    {
+        var gallery = ConferenceGallery;
+        if (!IsConferenceSessionActive)
+        {
+            gallery.Tiles.Clear();
+            gallery.PinnedEndpointId = null;
+            return;
+        }
+
+        // Build the desired tile set: self-tile first (teacher), then all
+        // connected students in their existing order.
+        var desired = new System.Collections.Generic.List<(Guid Id, string Name, bool IsSelf)>();
+        var selfId = App.Server?.TeacherEndpointId ?? Guid.Empty;
+        desired.Add((selfId, OrganizationSubtitle ?? "Teacher", true));
+        foreach (var s in Students)
+        {
+            desired.Add((s.EndpointId, s.DisplayName, false));
+        }
+
+        // Drop tiles whose endpoints aren't in the desired set.
+        for (int i = gallery.Tiles.Count - 1; i >= 0; i--)
+        {
+            var t = gallery.Tiles[i];
+            if (!desired.Exists(d => d.Id == t.EndpointId))
+                gallery.Tiles.RemoveAt(i);
+        }
+        // Add tiles for new endpoints + keep names current on existing ones.
+        for (int idx = 0; idx < desired.Count; idx++)
+        {
+            var d = desired[idx];
+            var existing = gallery.Tiles.FirstOrDefault(x => x.EndpointId == d.Id);
+            if (existing == null)
+            {
+                gallery.Tiles.Insert(Math.Min(idx, gallery.Tiles.Count),
+                    new ConferenceTileViewModel(d.Id, d.Name, d.IsSelf));
+            }
+            else if (existing.DisplayName != d.Name)
+            {
+                existing.DisplayName = d.Name;
+            }
+        }
+        // If the pinned endpoint left, clear the pin.
+        if (gallery.PinnedEndpointId.HasValue &&
+            !gallery.Tiles.Any(t => t.EndpointId == gallery.PinnedEndpointId.Value))
+        {
+            gallery.PinnedEndpointId = null;
+        }
+    }
 
     partial void OnIsInConferenceChanged(bool value)
     {
@@ -1498,6 +1564,9 @@ public partial class MainViewModel : ObservableObject
                 MachineName = hello.MachineName,
             });
             ConnectedCount = Students.Count;
+            // Phase 15-C — a late-joining student during a live Conference
+            // gets a tile so the teacher sees them appear in the gallery.
+            if (IsConferenceSessionActive) RebuildConferenceGallery();
         });
     }
 
@@ -1515,6 +1584,8 @@ public partial class MainViewModel : ObservableObject
             }
             // Phase 2 Section C — a student leaving might have had their hand raised.
             RaiseNotificationsChanged();
+            // Phase 15-C — purge the departed student's tile from the gallery.
+            if (IsConferenceSessionActive) RebuildConferenceGallery();
         });
     }
 

@@ -9,37 +9,56 @@
         Background="{DynamicResource Surface.Background}"
         TextElement.Foreground="{DynamicResource Text.Primary}"
         FontFamily="Segoe UI">
-    <!-- Phase 15-B (MVP) — student-side conference shell.  Skeleton only:
-         shows session host + "Leave" button.  Phase 15-C lights up the
-         gallery; Phase 15-D adds the Meet-style bottom toolbar. -->
+    <!-- Phase 15-C — student-side gallery.  Tier 1 only broadcasts the
+         teacher's cam, so the student gallery is a single tile (the
+         teacher).  Renders directly as a 16:9 Image instead of pulling in
+         the teacher's full gallery infrastructure (which Student.Agent has
+         no project reference to).  Phase 15-F or a dedicated Shared.Wpf
+         library can lift this to the multi-tile gallery later. -->
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <StackPanel Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center"
-                    MaxWidth="520">
-            <TextBlock Text="📹" FontSize="56"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,12"/>
-            <TextBlock Text="{DynamicResource Conf_LiveTitle}"
-                       Style="{DynamicResource Text.H1}"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,8"/>
-            <TextBlock x:Name="HostLineText"
-                       Style="{DynamicResource Text.Body}"
-                       Foreground="{DynamicResource Text.Secondary}"
-                       HorizontalAlignment="Center"
-                       TextWrapping="Wrap"
-                       TextAlignment="Center"/>
-            <TextBlock Text="{DynamicResource Conf_LiveHint}"
-                       Style="{DynamicResource Text.Caption}"
-                       Foreground="{DynamicResource Text.Muted}"
-                       HorizontalAlignment="Center"
-                       TextWrapping="Wrap"
-                       TextAlignment="Center"
-                       Margin="0,16,0,0"/>
-        </StackPanel>
+        <!-- Header bar with host line.  Replaces the centered placeholder
+             that lived here in 15-B. -->
+        <Border Grid.Row="0" Padding="20,10"
+                Background="{DynamicResource Surface.Elevated}"
+                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <TextBlock Text="📹" FontSize="20" Margin="0,0,12,0"
+                           VerticalAlignment="Center"/>
+                <TextBlock x:Name="HostLineText"
+                           VerticalAlignment="Center"
+                           FontSize="14" FontWeight="SemiBold"
+                           Foreground="{DynamicResource Text.Primary}"
+                           TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+        </Border>
+        <!-- Single tile: teacher cam frame.  Image.Source is updated by
+             UpdateFrame on every CameraFrame dispatch.  When no frame yet,
+             shows a placeholder with the host name + cam-off emoji. -->
+        <Grid Grid.Row="1" Margin="24">
+            <Border CornerRadius="8" Background="#111827"
+                    BorderThickness="2" BorderBrush="Transparent">
+                <Grid>
+                    <Image x:Name="TeacherFrameImage" Stretch="Uniform"
+                           Visibility="Collapsed"/>
+                    <StackPanel x:Name="WaitingPanel"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="🎥" FontSize="64" HorizontalAlignment="Center"
+                                   Foreground="#94A3B8" Margin="0,0,0,8"/>
+                        <TextBlock x:Name="WaitingLineText"
+                                   FontSize="16"
+                                   Foreground="#CBD5E1"
+                                   HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" TextAlignment="Center"
+                                   MaxWidth="520"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
         <!-- Bottom bar with single Leave action.  15-D replaces with full
              Meet-style ConferenceToolbar (mic / cam / share / chat / hand /
              more / leave). -->

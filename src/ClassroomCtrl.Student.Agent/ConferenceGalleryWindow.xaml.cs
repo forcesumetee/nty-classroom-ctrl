@@ -1,19 +1,20 @@
 using ClassroomCtrl.Shared.Localization;
 using System;
+using System.IO;
 using System.Windows;
+using System.Windows.Media.Imaging;
 
 namespace ClassroomCtrl.Student.Agent;
 
 /// <summary>
-/// Phase 15-B (MVP) — student-side conference shell.  Skeleton only:
-/// shows the host line and a Leave button.  Spawned by
-/// MainWindow on ConferenceStart dispatch; closed by MainWindow on
-/// ConferenceEnd dispatch OR by the student clicking Leave (which
-/// only closes the window — does NOT broadcast anything; Phase 15-D
-/// will wire an opt-out envelope when participants are tracked).
+/// Phase 15-B/C — student-side conference shell.  Hosts a single 16:9 tile
+/// for the teacher's webcam frame (Tier 1 only broadcasts teacher cam).
+/// Spawned by <c>MainWindow</c> on <c>ConferenceStart</c> dispatch; closed by
+/// <c>MainWindow</c> on <c>ConferenceEnd</c> dispatch OR by the student
+/// clicking Leave.
 ///
-/// Phase 15-C replaces the placeholder text with the actual gallery;
-/// Phase 15-D adds the Meet-style bottom toolbar.
+/// Phase 15-F (or a dedicated Shared.Wpf library) can lift this to the
+/// teacher-side multi-tile gallery when student-to-student cam ships.
 /// </summary>
 public partial class ConferenceGalleryWindow : Window
 {
@@ -24,9 +25,7 @@ public partial class ConferenceGalleryWindow : Window
         InitializeComponent();
         SessionId = sessionId;
 
-        // Localized "Hosted by {0}" if we have a host name, else just session
-        // running line.  Loc.Get with a fallback so the window is functional
-        // even before step 7 adds the keys.
+        // Header line: "Hosted by {name}" or generic "in progress" line.
         if (!string.IsNullOrWhiteSpace(hostName))
         {
             var fmt = Loc.Get("Conf_HostLineFmt", "Hosted by {0}");
@@ -36,15 +35,43 @@ public partial class ConferenceGalleryWindow : Window
         {
             HostLineText.Text = Loc.Get("Conf_HostLineUnknown", "Conference in progress");
         }
+
+        // Waiting placeholder: "Waiting for {host}'s camera…"
+        var waitingFmt = Loc.Get("Conf_WaitingForCamFmt", "Waiting for {0}'s camera…");
+        WaitingLineText.Text = string.Format(waitingFmt,
+            string.IsNullOrWhiteSpace(hostName) ? Loc.Get("Conf_HostLineUnknown", "the host") : hostName);
+    }
+
+    /// <summary>Phase 15-C step 3 — called from <c>MainWindow.xaml.cs</c>
+    /// CameraFrame dispatch when this window is open.  Decodes the JPEG into
+    /// a frozen BitmapImage and assigns to the teacher-frame Image; first
+    /// frame swaps the waiting placeholder for the frame.</summary>
+    public void UpdateFrame(byte[] jpeg)
+    {
+        try
+        {
+            var bmp = new BitmapImage();
+            using var ms = new MemoryStream(jpeg);
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            bmp.Freeze();
+            TeacherFrameImage.Source = bmp;
+            TeacherFrameImage.Visibility = Visibility.Visible;
+            WaitingPanel.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            // Decode failure: leave the waiting placeholder up, swallow.
+        }
     }
 
     private void Leave_Click(object sender, RoutedEventArgs e)
     {
-        // Phase 15-B: Leave is local-only.  Closing the window leaves the
-        // student in their normal tray-idle state; the teacher's End broadcast
-        // would have closed the window anyway when the session ends.  Phase
-        // 15-D wires participant tracking and an opt-out envelope so the
-        // teacher knows a student left mid-session.
+        // Phase 15-B/C: Leave is local-only.  Closing the window leaves the
+        // student in tray-idle; the teacher's End broadcast would close it
+        // anyway when the session ends.  Phase 15-D wires an opt-out envelope.
         Close();
     }
 }

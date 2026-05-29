@@ -1,0 +1,55 @@
+<UserControl x:Class="ClassroomCtrl.Teacher.Views.Conference.ConferenceGalleryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+             xmlns:local="clr-namespace:ClassroomCtrl.Teacher.Views.Conference"
+             xmlns:vm="clr-namespace:ClassroomCtrl.Teacher.ViewModels"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface.Background}"
+             FontFamily="Segoe UI"
+             d:DesignWidth="1280" d:DesignHeight="640">
+    <!-- Phase 15-C — shared gallery surface used by:
+           - Teacher's ConferenceView (data = MainViewModel.ConferenceGallery)
+           - Student's ConferenceGalleryWindow (data = own thin gallery VM)
+         Step 2 ships auto-layout only (UniformGrid with column count from
+         ParticipantCountToColumnsConverter).  Pin (step 5) and pagination
+         (step 7) extend this view; nothing else needs to change in the host
+         containers. -->
+    <UserControl.Resources>
+        <conv:ParticipantCountToColumnsConverter x:Key="CountToColumns"/>
+        <DataTemplate x:Key="ConferenceTileTemplate"
+                      DataType="{x:Type vm:ConferenceTileViewModel}">
+            <!-- Click anywhere on the tile to pin/unpin.  Forwarded via
+                 PinCommand on the gallery VM; CommandParameter is the tile VM
+                 itself.  Cursor=Hand so the affordance is discoverable. -->
+            <Button Background="Transparent" BorderThickness="0"
+                    Padding="0" Cursor="Hand"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    Focusable="False" FocusVisualStyle="{x:Null}"
+                    Command="{Binding DataContext.PinCommand,
+                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                    CommandParameter="{Binding}">
+                <local:ConferenceTile/>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <!-- Auto-layout: UniformGrid with Columns bound to Tiles.Count.
+         WPF UniformGrid auto-derives Rows from Columns when only one is set,
+         so we only bind Columns. -->
+    <Grid Margin="12">
+        <ItemsControl ItemsSource="{Binding Tiles}"
+                      ItemTemplate="{StaticResource ConferenceTileTemplate}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid
+                        Columns="{Binding Tiles.Count,
+                                          Converter={StaticResource CountToColumns}}"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+        </ItemsControl>
+    </Grid>
+</UserControl>
