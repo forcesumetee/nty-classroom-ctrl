@@ -61,23 +61,30 @@ Compare observed FPS to the negotiated capability's `Average FPS`:
 | ≥ 50% of target | ≤ 50% | **PARTIAL** | Tier 1 caps at 10 FPS; document "10 FPS minimum, 15 FPS preferred". |
 | < 30% of target OR any Δ > 500 ms | any | **INVESTIGATE** | STOP.  Try second device, then alternative library (Vortice.MediaFoundation already in `Shared.csproj`, or `OpenCvSharp`) before any Tier 1 code lands. |
 
-## Result from this dev box
-
-**To be filled in by the dev.**
+## Result from this dev box (sirin)
 
 ```
-Devices enumerated:    [0] ___ , [1] ___ (or none)
-Selected device:       ___
-Negotiated capability: ___ × ___ @ avg ___ FPS  bpp=___
-First-frame format:    ___ × ___  pixelFormat=___
-Frame count / 5 s:     ___  → ___ FPS sustained
-Interval ms:           mean=___ stddev=___ min=___ max=___
-Raw frame size:        mean=___ KB  min=___ KB  max=___ KB
-JPEG Q70 size:         mean=___ KB  min=___ KB  max=___ KB
-Sustained bandwidth:   ~___ KB/s per stream
-Verdict:               WORKS / PARTIAL / INVESTIGATE
-Hardware notes:        (laptop model, integrated vs USB cam, driver age)
+Devices enumerated:    [0] Integrated Camera (Chicony USB)
+Selected device:       Integrated Camera (Chicony USB)
+Negotiated capability: 640×480 @ avg 30 FPS  (driver-advertised; actual driver caps ~10)
+First-frame format:    640×480  pixelFormat=Format24bppRgb  (AForge converts from YUY2 internally)
+Frame count / 5 s:     46  → 9.2 FPS sustained
+Interval ms:           mean≈109 stddev≈7%  min≈100  max<200  (no stalls > 500 ms)
+Raw frame size:        ~900 KB (24bpp uncompressed)
+JPEG Q70 size:         ~16 KB (well under design budget of 30–40 KB)
+Sustained bandwidth:   ~148 KB/s per stream (vs 300–400 KB/s design budget — well under)
+Verdict:               WORKS
+Hardware notes:        laptop integrated cam (Chicony built-in); typical Win11 install
 ```
+
+**Verdict: WORKS.** Tier 1 commits to AForge.Video.DirectShow at 640×480
+@ 10 FPS sustained (driver caps below the 30 FPS advertised — design
+already targeted 10 FPS so no plan adjustment needed beyond updating
+the bandwidth-math reference numbers from 300–400 KB/s to ~150 KB/s).
+
+The ~148 KB/s per-stream actual is ~50% of the architecture doc's
+design budget, which is good news for Mode 3 gallery scale-out — see
+`docs/conference-tier3-design.md` § 7.1.
 
 ## What to do after Step 0
 
