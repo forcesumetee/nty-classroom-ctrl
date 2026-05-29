@@ -8,6 +8,7 @@
         xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
         xmlns:controls="clr-namespace:ClassroomCtrl.Teacher.Controls"
         xmlns:views="clr-namespace:ClassroomCtrl.Teacher.Views"
+        xmlns:confviews="clr-namespace:ClassroomCtrl.Teacher.Views.Conference"
         xmlns:models="clr-namespace:ClassroomCtrl.Shared.Models;assembly=ClassroomCtrl.Shared"
         Title="{DynamicResource Lbl_AppTitle}"
         Height="800" Width="1280"
@@ -746,6 +747,15 @@
                                Visibility="{Binding CurrentMainView,
                                             Converter={StaticResource ViewKindToVisibility},
                                             ConverterParameter=QuizManager}"/>
+
+        <!-- Phase 15-B (MVP) — embedded Conference shell.  Spans all 3 columns
+             of row 2 because the sidebar (Col 0) and chat rail (Col 2) are
+             Collapsed while IsInConference=true (see their Visibility bindings
+             above).  Same mutually-exclusive pattern via CurrentMainView. -->
+        <confviews:ConferenceView Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                  Visibility="{Binding CurrentMainView,
+                                               Converter={StaticResource ViewKindToVisibility},
+                                               ConverterParameter=Conference}"/>
 
         <!-- ═════════════════════ RIGHT RAIL (chat) ═════════════════════ -->
         <!-- Phase 15-B (MVP) — right rail collapses while in Conference (sibling

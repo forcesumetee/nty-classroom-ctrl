@@ -69,6 +69,14 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private Guid conferenceSessionId = Guid.Empty;
     [ObservableProperty] private DateTime? conferenceStartedAt;
 
+    /// <summary>Phase 15-B — true while ConferenceSessionId is a real Guid (set
+    /// by StartConferenceCommand, cleared by EndConferenceCommand).  The
+    /// ConferenceView XAML uses this to swap between the Start-CTA empty state
+    /// and the "in progress" placeholder.</summary>
+    public bool IsConferenceSessionActive => ConferenceSessionId != Guid.Empty;
+
+    partial void OnConferenceSessionIdChanged(Guid value) => OnPropertyChanged(nameof(IsConferenceSessionActive));
+
     partial void OnIsInConferenceChanged(bool value)
     {
         // Flipping the mode flag flips the content-cell view.  Flipping back
@@ -343,6 +351,14 @@ public partial class MainViewModel : ObservableObject
     public IRelayCommand EnterConferenceModeCommand { get; }
     public IRelayCommand ExitConferenceModeCommand { get; }
 
+    /// <summary>Phase 15-B (MVP) — Start/End the conference SESSION (distinct from
+    /// the mode-pill commands above).  Step 5 wires the actual ConferenceStart /
+    /// ConferenceEnd broadcasts + the breakout-dissolve confirm; today these
+    /// stubs only mutate the local session state so the ConferenceView's CTAs
+    /// react correctly under 2-PC manual smoke-testing.</summary>
+    public IRelayCommand StartConferenceCommand { get; }
+    public IRelayCommand EndConferenceCommand { get; }
+
     // Phase 9.6: Net Movie
     public IRelayCommand OpenNetMovieCommand { get; }
 
@@ -456,6 +472,19 @@ public partial class MainViewModel : ObservableObject
         // bound to the ConferenceView's own Start CTA.
         EnterConferenceModeCommand = new RelayCommand(() => IsInConference = true);
         ExitConferenceModeCommand  = new RelayCommand(() => IsInConference = false);
+        // Step 4 stub: local-only mutation so ConferenceView's CTA reacts.
+        // Step 5 swaps these for broadcast-emitting implementations that also
+        // pre-flight breakout dissolution.
+        StartConferenceCommand = new RelayCommand(() =>
+        {
+            ConferenceSessionId = Guid.NewGuid();
+            ConferenceStartedAt = DateTime.UtcNow;
+        });
+        EndConferenceCommand = new RelayCommand(() =>
+        {
+            ConferenceSessionId = Guid.Empty;
+            ConferenceStartedAt = null;
+        });
 
         OpenNetMovieCommand = new RelayCommand(OpenNetMovie);
         OpenMicMonitorCommand = new RelayCommand(OpenMicMonitor);
