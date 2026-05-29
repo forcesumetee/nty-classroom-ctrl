@@ -70,9 +70,27 @@
             </ItemsControl.Style>
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
+                    <!-- Phase 16-B step 5 — UI bug fix.  The old binding
+                         (PageTiles.Count via CountToColumns inside the
+                         ItemsPanelTemplate) stalled at realize-time: the
+                         UniformGrid's Columns property evaluated against
+                         a value of 0 before PageTiles was populated and
+                         did not always re-evaluate when the collection
+                         later grew.  When the binding got stuck at 0,
+                         UniformGrid fell back to its square-root rule,
+                         producing a vertical-stack layout that pushed
+                         tiles below the viewport (per Phase 16-A
+                         architecture doc § "UI Bug Diagnosis", H1).
+                         Replacement: a plain int property
+                         (ColumnsForPage) on the gallery VM, re-raised
+                         via OnPropertyChanged in RebuildPageTiles.
+                         RelativeSource walks to the outer ItemsControl
+                         whose DataContext IS the gallery VM, sidestepping
+                         the ItemsPanelTemplate DataContext gotcha
+                         entirely. -->
                     <UniformGrid
-                        Columns="{Binding PageTiles.Count,
-                                          Converter={StaticResource CountToColumns}}"/>
+                        Columns="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl},
+                                          Path=DataContext.ColumnsForPage}"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
         </ItemsControl>
