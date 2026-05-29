@@ -50,6 +50,20 @@ public class StudentBroadcaster : IDisposable
     /// <summary>Target bitrate for H.264 mode (CBR). Ignored for MJPEG.</summary>
     public int H264BitrateBps { get; set; } = 1_500_000;
 
+    /// <summary>
+    /// Phase 13-C (Tier 2) — when set, every captured frame is emitted TWICE:
+    /// once as the existing teacher-monitoring StudentStreamFrame, and once as
+    /// a group-targeted StudentGroupScreenStreamFrame with Envelope.TargetGroupId
+    /// = this groupId.  The Service-side IsForMe filter on receiving peers
+    /// drops it for non-group students; in-group peers (the host's own Agent
+    /// included) receive it after teacher relay.  The host's Agent self-filters
+    /// by SenderId == own EndpointId so it doesn't render its own broadcast.
+    ///
+    /// Lifecycle owner: MainWindow.  Set when this student is designated host
+    /// (Step 4); cleared when host role is revoked / student leaves group.
+    /// </summary>
+    public Guid? GroupBroadcastGroupId { get; set; }
+
     private VideoCodec _activeCodec = VideoCodec.Mjpeg;
     // Phase 11-B inc2 part 1 — was `H264EncoderWrapper? _h264;` with an inline
     // MJPEG fallback path.  Both codecs now go through IVideoEncoder; the
@@ -204,6 +218,20 @@ public class StudentBroadcaster : IDisposable
                         var bytes = MessagePack.MessagePackSerializer.Serialize(frame);
                         var env = Envelope.Create(MessageType.StudentStreamFrame, bytes, Guid.Empty);
                         await App.Ipc.SendAsync(env, ct);
+
+                        // Phase 13-C (Tier 2) — if I'm the group host (set by
+                        // MainWindow on receiving StudentGroupScreenStreamStart
+                        // from teacher in Step 4), additionally emit the same
+                        // frame bytes as a group-targeted envelope.  Teacher
+                        // relays to in-group peers; out-of-group students drop
+                        // it via Service-side IsForMe (TargetGroupId mismatch).
+                        if (GroupBroadcastGroupId is Guid gid)
+                        {
+                            var groupEnv = Envelope.CreateGroupTargeted(
+                                MessageType.StudentGroupScreenStreamFrame,
+                                bytes, Guid.Empty, gid);
+                            await App.Ipc.SendAsync(groupEnv, ct);
+                        }
                     }
                 }
             }

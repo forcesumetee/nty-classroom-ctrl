@@ -462,6 +462,18 @@ public class ClassroomWorker : BackgroundService
                 await _ipc.ForwardToAgentAsync(env, ct);
                 break;
 
+            // Phase 13-C (Tier 2) — host-presenter relay arriving from teacher.
+            // Same IsForMe gate (TargetGroupId match against _myRoomId).
+            // The host's own Agent receives its own frames here too; the
+            // Agent-side self-filter (env.SenderId == _myEndpointId) drops
+            // them before rendering — see MainWindow.OnEnvelopeFromService.
+            case MessageType.StudentGroupScreenStreamStart:
+            case MessageType.StudentGroupScreenStreamFrame:
+            case MessageType.StudentGroupScreenStreamStop:
+                if (!IsForMe(env)) return;
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
             // Phase 5b: PDPA notification — Teacher tells me they're recording my screen.
             case MessageType.StudentRecordingNotify:
                 if (!IsForMe(env)) return;

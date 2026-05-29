@@ -1115,6 +1115,37 @@ public class ControlServer : IDisposable
                 }
                 break;
 
+            // ─────── Phase 13-C (Tier 2) — student host-presenter relay ───────
+            //
+            // The host's StudentBroadcaster emits StudentGroupScreenStreamFrame
+            // envelopes (in addition to the existing StudentStreamFrame upstream
+            // path).  Teacher's job is pure relay: fan out to all peers via the
+            // existing BroadcastAsync, with TargetGroupId preserved so the
+            // Service-side IsForMe filter on receivers drops out-of-group
+            // students.  The host receives a loopback envelope too (Service
+            // IsForMe matches: same group) — the host's Agent self-filters by
+            // env.SenderId == own EndpointId so GroupPeerView never opens for
+            // own broadcast.
+            //
+            // Authorization: this implementation TRUSTS the sender — any
+            // student claiming a TargetGroupId gets relayed.  Tier 2 first-cut.
+            // A hardening pass could check that env.SenderId == _roomHostMap
+            // [env.TargetGroupId] before relaying; deferred to a polish round.
+            case MessageType.StudentGroupScreenStreamStart:
+            case MessageType.StudentGroupScreenStreamFrame:
+            case MessageType.StudentGroupScreenStreamStop:
+                {
+                    if (!env.TargetGroupId.HasValue) break;
+                    if (env.Type == MessageType.StudentGroupScreenStreamStart
+                        || env.Type == MessageType.StudentGroupScreenStreamStop)
+                    {
+                        _logger.LogInformation("{Type} host={Host} group={Group}",
+                            env.Type, env.SenderId, env.TargetGroupId);
+                    }
+                    _ = _tcp.BroadcastAsync(env, CancellationToken.None);
+                }
+                break;
+
             case MessageType.StudentAudioStreamStart:
                 _logger.LogInformation("Student {Id} mic ON", env.SenderId);
                 StudentAudioStreamStarted?.Invoke(this, env.SenderId);
