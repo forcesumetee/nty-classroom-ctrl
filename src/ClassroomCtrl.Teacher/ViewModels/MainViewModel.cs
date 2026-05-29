@@ -459,6 +459,13 @@ public partial class MainViewModel : ObservableObject
     public IRelayCommand SelectConferenceChatTabCommand { get; }
     public IRelayCommand SelectConferenceParticipantsTabCommand { get; }
 
+    // Phase 15-E step 3 — teacher Recognize action.  Targets a Conference tile
+    // and sends 0x0111 HandLower at the matching student; the student-side
+    // dispatch arm flips _handRaised back to false so the next click on
+    // their Raise Hand button raises cleanly.  Also clears the local tile
+    // badge + queue entry so the sidebar updates without round-tripping.
+    public IRelayCommand<ConferenceTileViewModel?> RecognizeHandCommand { get; }
+
     // Phase 9.6: Net Movie
     public IRelayCommand OpenNetMovieCommand { get; }
 
@@ -610,6 +617,27 @@ public partial class MainViewModel : ObservableObject
         SelectConferenceParticipantsTabCommand = new RelayCommand(() =>
         {
             if (IsConferenceSidebarVisible) ConferenceSidebarTabIndex = 1;
+        });
+
+        // Phase 15-E step 3 — Recognize.  Sends targeted HandLower, then
+        // locally clears the tile + queue so the UI feels immediate without
+        // waiting for the student-side echo (a S→T HandLower would loop
+        // back today, but our local cleanup makes the round-trip optional).
+        RecognizeHandCommand = new RelayCommand<ConferenceTileViewModel?>(async tile =>
+        {
+            if (tile == null) return;
+            tile.IsHandRaised = false;
+            tile.HandRaisedAt = null;
+            ConferenceGallery?.RefreshRaisedHandQueue();
+            // Mirror onto the Classroom-side state so the bell badge clears too.
+            var s = Students.FirstOrDefault(x => x.EndpointId == tile.EndpointId);
+            if (s != null) s.HandRaisedVisibility = System.Windows.Visibility.Collapsed;
+            RaiseNotificationsChanged();
+            if (App.Server != null)
+            {
+                try { await App.Server.SendHandLowerAsync(tile.EndpointId, System.Threading.CancellationToken.None); }
+                catch (Exception ex) { AppendSystemChat(string.Format(Loc.Get("Err_GenericFmt", "Error: {0}"), ex.Message)); }
+            }
         });
 
         OpenNetMovieCommand = new RelayCommand(OpenNetMovie);

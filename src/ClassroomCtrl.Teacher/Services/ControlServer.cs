@@ -475,6 +475,26 @@ public class ControlServer : IDisposable
         return _tcp.BroadcastAsync(env, ct);
     }
 
+    /// <summary>Phase 15-E step 3 — teacher Recognize action.  Sends a
+    /// targeted 0x0111 HandLower at the named student; the student-side
+    /// dispatch arm (Student.Agent.MainWindow OnIpcMessage HandLower case)
+    /// drops the local raised flag.  HandLower is normally student-initiated
+    /// (S→T) so the payload's StudentId is set on receive from
+    /// Envelope.SenderId; we mirror the same shape here for grep-friendly
+    /// auditing.  Reliable channel.</summary>
+    public Task SendHandLowerAsync(Guid studentId, CancellationToken ct)
+    {
+        var msg = new HandRaiseMessage
+        {
+            StudentId = studentId,
+            StudentName = "",
+            IsRaised = false,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.HandLower, bytes, _teacherId, studentId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
     // ─────── Phase 9.2: Screen Pen — annotation overlay ───────
 
     public Task BroadcastDrawingStrokeAsync(DrawingStrokeMessage stroke, CancellationToken ct)

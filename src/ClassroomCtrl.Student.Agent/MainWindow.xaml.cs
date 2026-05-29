@@ -381,6 +381,24 @@ public partial class MainWindow : Window
                 catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] StudentRecordingNotify decode: {ex.Message}"); }
                 break;
 
+            // Phase 15-E step 3 — teacher Recognize: T→S HandLower forces
+            // the student-side flag to false so a repeat-click on Raise Hand
+            // toggles back to raised cleanly (rather than back to lowered).
+            // We also surface a tray balloon so the student knows the teacher
+            // has acknowledged them.
+            case MessageType.HandLower:
+                Dispatcher.Invoke(() =>
+                {
+                    if (_handRaised)
+                    {
+                        _handRaised = false;
+                        AddSystemNotification(
+                            Loc.Get("Chat_TeacherRecognizedHand", "Teacher recognized your hand"),
+                            "✋");
+                    }
+                });
+                break;
+
             // Phase 6.6: PDPA balloon — teacher captured my screen
             case MessageType.StudentScreenshotNotify:
                 Dispatcher.Invoke(() =>
