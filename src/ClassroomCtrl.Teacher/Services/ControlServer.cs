@@ -310,11 +310,17 @@ public class ControlServer : IDisposable
     }
 
     // ─────── Phase 9.5: Camera Broadcast ───────
+    //
+    // Phase 14-B step 2 — Start + Stop promoted to BroadcastReliableAsync so a
+    // single dropped control envelope no longer leaves a student stuck with
+    // either no CameraViewWindow (Start lost) or a CameraViewWindow that
+    // never closes (Stop lost).  Frames stay on BroadcastAsync (lossy _outbox):
+    // dropping a stale frame is fine; dropping Start/Stop = stuck UI.
 
     public Task BroadcastCameraStartAsync(CameraStartMessage msg, CancellationToken ct)
     {
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
-        return _tcp.BroadcastAsync(Envelope.Create(MessageType.CameraStart, bytes, _teacherId), ct);
+        return _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.CameraStart, bytes, _teacherId), ct);
     }
 
     public Task BroadcastCameraFrameAsync(CameraFrameMessage msg, CancellationToken ct)
@@ -324,7 +330,7 @@ public class ControlServer : IDisposable
     }
 
     public Task BroadcastCameraStopAsync(CancellationToken ct)
-        => _tcp.BroadcastAsync(Envelope.Create(MessageType.CameraStop, Array.Empty<byte>(), _teacherId), ct);
+        => _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.CameraStop, Array.Empty<byte>(), _teacherId), ct);
 
     // ─────── Phase 9.6: Net Movie sync ───────
 
