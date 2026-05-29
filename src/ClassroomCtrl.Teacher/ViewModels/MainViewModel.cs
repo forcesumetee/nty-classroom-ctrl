@@ -486,6 +486,10 @@ public partial class MainViewModel : ObservableObject
             // route to the right StudentViewModel so per-student chips /
             // tiles can show "Muted / Live / Speaking" without polling.
             App.Server.MicStateUpdated += OnMicStateUpdated;
+            // Phase 14-B (Tier 1) — per-student webcam-presence heartbeat.
+            // Drives StudentViewModel.HasWebcam (data only in Tier 1; Tier 2
+            // wires the visual chip alongside the actual cam capture).
+            App.Server.WebcamStateUpdated += OnWebcamStateUpdated;
             // Phase 13-B (Tier 1) — sync local Rooms collection from canonical
             // server state on every mutation.  GroupManagerView + the Step-7
             // badges + status chip all read off Rooms.
@@ -1967,6 +1971,23 @@ public partial class MainViewModel : ObservableObject
         });
     }
 
+    /// <summary>Phase 14-B (Tier 1) — route WebcamStateUpdate heartbeat to the
+    /// right StudentViewModel.  Mirrors OnMicStateUpdated shape.  Tier 1 only
+    /// receives DeviceAvailable=true|false (student-side Tier 1 never
+    /// captures); Tier 2 will surface CamLive + CamMode transitions here.</summary>
+    private void OnWebcamStateUpdated(object? sender, (System.Guid StudentId, ClassroomCtrl.Shared.Protocol.WebcamStateUpdateMessage State) e)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            var s = Students.FirstOrDefault(x => x.EndpointId == e.StudentId);
+            if (s == null) return;
+            s.HasWebcam = e.State.DeviceAvailable;
+            s.CamLive = e.State.CamLive;
+            s.CamMode = e.State.Mode;
+            s.CamLastError = e.State.LastError ?? "";
+        });
+    }
+
     // ─────── Phase 5b: Per-student recording commands ───────
 
     private async void StartStudentRecording(StudentViewModel? s)
@@ -2209,6 +2230,15 @@ public partial class StudentViewModel : ObservableObject
             MicIndicatorVisibility = System.Windows.Visibility.Collapsed;
         }
     }
+    // Phase 14-B (Tier 1) — last-known webcam state from WebcamStateUpdate
+    // (Student.Agent's WebcamDeviceWatcher).  Tier 1 data plumbing only; the
+    // visual chip is wired in Tier 2 alongside the actual student-side capture.
+    // Sticky: last state persists until StudentLeft purges the row.
+    [ObservableProperty] private bool hasWebcam;
+    [ObservableProperty] private bool camLive;
+    [ObservableProperty] private WebcamMode camMode = WebcamMode.Off;
+    [ObservableProperty] private string camLastError = "";
+
     partial void OnIsHostChanged(bool value)
     {
         HostBadgeVisibility = value ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;

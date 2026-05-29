@@ -70,6 +70,17 @@ public class ControlServer : IDisposable
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, MicStateUpdateMessage> _micStates = new();
     public bool TryGetMicState(Guid studentId, out MicStateUpdateMessage state) => _micStates.TryGetValue(studentId, out state!);
 
+    /// <summary>Phase 14-B (Tier 1) — per-student webcam-state heartbeat from
+    /// the new WebcamDeviceWatcher.  Args = (studentId, latest state).  Teacher
+    /// UI subscribes to drive the per-student "has-cam" indicator + decide
+    /// whether to pre-flight cam-control affordances in Tier 2.</summary>
+    public event EventHandler<(Guid StudentId, WebcamStateUpdateMessage State)>? WebcamStateUpdated;
+
+    /// <summary>Phase 14-B (Tier 1) — latest webcam state per student.  Filled
+    /// by the WebcamStateUpdate handler; teacher UI reads on demand.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, WebcamStateUpdateMessage> _webcamStates = new();
+    public bool TryGetWebcamState(Guid studentId, out WebcamStateUpdateMessage state) => _webcamStates.TryGetValue(studentId, out state!);
+
     /// <summary>Phase 13-B (Tier 1) — fired whenever the canonical breakout state
     /// changes (group created/renamed/dissolved, member added/removed, host
     /// set, teacher join/leave).  ViewModels rebuild their Rooms collection.</summary>
@@ -1270,6 +1281,23 @@ public class ControlServer : IDisposable
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to decode MicStateUpdate");
+                }
+                break;
+
+            // Phase 14-B (Tier 1) — webcam-state heartbeat from student
+            // (WebcamDeviceWatcher).  Tracks per-student cam presence; Tier 2
+            // will also light up CamLive + Mode when the student-side
+            // broadcaster lands.
+            case MessageType.WebcamStateUpdate:
+                try
+                {
+                    var s = MessagePack.MessagePackSerializer.Deserialize<WebcamStateUpdateMessage>(env.Payload);
+                    _webcamStates[env.SenderId] = s;
+                    WebcamStateUpdated?.Invoke(this, (env.SenderId, s));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode WebcamStateUpdate");
                 }
                 break;
 
