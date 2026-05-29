@@ -99,7 +99,7 @@
                                             <TextBlock Style="{DynamicResource Text.H3}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center">
                                                 <Run Text="{Binding RoomName}"/>
                                                 <Run Text="  ("/>
-                                                <Run Text="{Binding MemberIds.Count}"/>
+                                                <Run Text="{Binding MemberIds.Count, Mode=OneWay}"/>
                                                 <Run Text=")"/>
                                             </TextBlock>
                                             <TextBlock VerticalAlignment="Center"
