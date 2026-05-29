@@ -70,27 +70,11 @@
             </Grid.RowDefinitions>
             <local:ConferenceGalleryView Grid.Row="0"
                                          DataContext="{Binding ConferenceGallery}"/>
-            <!-- Bottom action bar (placeholder).  15-D replaces this with the
-                 Meet-style ConferenceToolbar (mic / cam / share / chat / hand /
-                 more / end).  Today: just End Conference. -->
-            <Border Grid.Row="1"
-                    Background="{DynamicResource Surface.Elevated}"
-                    BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,1,0,0"
-                    Padding="24,12">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Style="{DynamicResource Button.Danger}"
-                            Command="{Binding EndConferenceCommand}"
-                            Padding="20,8">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="📞" FontSize="13" Margin="0,0,8,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Conf_EndConference}"
-                                       FontSize="13" FontWeight="SemiBold"
-                                       VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Border>
+            <!-- Phase 15-D step 1 — Meet-style toolbar replaces the 15-B
+                 placeholder End-only bar.  The toolbar's commands route
+                 through MainViewModel (this control's DataContext), so no
+                 DataContext override needed on the slot. -->
+            <local:ConferenceToolbar Grid.Row="1"/>
         </Grid>
     </Grid>
 </UserControl>

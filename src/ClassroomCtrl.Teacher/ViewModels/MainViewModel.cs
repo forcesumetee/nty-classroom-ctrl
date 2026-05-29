@@ -81,6 +81,31 @@ public partial class MainViewModel : ObservableObject
     /// embedded ConferenceGalleryView (live-session state).</summary>
     public ConferenceGalleryViewModel ConferenceGallery { get; } = new();
 
+    // Phase 15-D step 1 — slide-in sidebar state for the Meet-style shell.
+    // The sidebar hosts two tabs (Chat | Participants) that toggle via
+    // ConferenceSidebarTabIndex; visibility itself rides
+    // IsConferenceSidebarVisible.  Both default to "closed, Chat tab".
+    // ToggleConferenceSidebarCommand opens to whichever tab was last shown;
+    // ShowConferenceHandQueueCommand jumps straight to Participants so the
+    // teacher can see who's raised a hand without an extra click.
+    [ObservableProperty] private bool isConferenceSidebarVisible;
+    [ObservableProperty] private int conferenceSidebarTabIndex;
+    public bool IsConferenceChatTabSelected         => ConferenceSidebarTabIndex == 0;
+    public bool IsConferenceParticipantsTabSelected => ConferenceSidebarTabIndex == 1;
+
+    partial void OnConferenceSidebarTabIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsConferenceChatTabSelected));
+        OnPropertyChanged(nameof(IsConferenceParticipantsTabSelected));
+    }
+
+    /// <summary>Phase 15-D step 1 — mirrors <c>App.Camera?.IsActive</c> as an
+    /// observable bool so the ConferenceToolbar's mic / cam DataTriggers can
+    /// react to broadcast-state changes without polling.  Kept in sync from
+    /// <see cref="UpdateCameraButtonText"/> (called everywhere the cam state
+    /// flips today, including the 14-B StoppedDueToError handler).</summary>
+    [ObservableProperty] private bool isBroadcastingCamera;
+
     partial void OnConferenceSessionIdChanged(Guid value)
     {
         OnPropertyChanged(nameof(IsConferenceSessionActive));
@@ -425,6 +450,15 @@ public partial class MainViewModel : ObservableObject
     public IRelayCommand StartConferenceCommand { get; }
     public IRelayCommand EndConferenceCommand { get; }
 
+    // Phase 15-D step 1 — Meet-style bottom-toolbar commands.  Chat / Hand
+    // route through the slide-in sidebar (chat tab + participants tab); the
+    // ⋮ More button opens its picker directly from the toolbar's code-behind
+    // (no command — local UI state).
+    public IRelayCommand ToggleConferenceSidebarCommand { get; }
+    public IRelayCommand ShowConferenceHandQueueCommand { get; }
+    public IRelayCommand SelectConferenceChatTabCommand { get; }
+    public IRelayCommand SelectConferenceParticipantsTabCommand { get; }
+
     // Phase 9.6: Net Movie
     public IRelayCommand OpenNetMovieCommand { get; }
 
@@ -544,6 +578,39 @@ public partial class MainViewModel : ObservableObject
         // (0x0671) and resets local session state.
         StartConferenceCommand = new RelayCommand(StartConference);
         EndConferenceCommand   = new RelayCommand(EndConference);
+
+        // Phase 15-D step 1 — sidebar toggle + tab-select wiring.  Toggle
+        // closes the sidebar if it's already on the Chat tab; otherwise opens
+        // it and forces Chat.  Show-hand-queue opens directly to Participants.
+        // SelectChatTab / SelectParticipantsTab are no-ops while the sidebar
+        // is closed — they're called from the in-sidebar tab pill (Phase 15-D
+        // step 3) and we don't want a stray click outside the sidebar to
+        // surface it.
+        ToggleConferenceSidebarCommand = new RelayCommand(() =>
+        {
+            if (IsConferenceSidebarVisible && IsConferenceChatTabSelected)
+            {
+                IsConferenceSidebarVisible = false;
+            }
+            else
+            {
+                ConferenceSidebarTabIndex = 0;
+                IsConferenceSidebarVisible = true;
+            }
+        });
+        ShowConferenceHandQueueCommand = new RelayCommand(() =>
+        {
+            ConferenceSidebarTabIndex = 1;
+            IsConferenceSidebarVisible = true;
+        });
+        SelectConferenceChatTabCommand = new RelayCommand(() =>
+        {
+            if (IsConferenceSidebarVisible) ConferenceSidebarTabIndex = 0;
+        });
+        SelectConferenceParticipantsTabCommand = new RelayCommand(() =>
+        {
+            if (IsConferenceSidebarVisible) ConferenceSidebarTabIndex = 1;
+        });
 
         OpenNetMovieCommand = new RelayCommand(OpenNetMovie);
         OpenMicMonitorCommand = new RelayCommand(OpenMicMonitor);
@@ -1893,9 +1960,13 @@ public partial class MainViewModel : ObservableObject
 
     private void UpdateCameraButtonText()
     {
-        CameraButtonText = (App.Camera?.IsActive ?? false)
+        var active = App.Camera?.IsActive ?? false;
+        CameraButtonText = active
             ? Loc.Get("Btn_StopCamera")
             : Loc.Get("Btn_Camera");
+        // Phase 15-D step 1 — mirror cam-active state onto an observable bool
+        // so the Conference toolbar can react via DataTrigger.
+        IsBroadcastingCamera = active;
     }
 
     /// <summary>Phase 15-B (MVP) — Start the Conference session.  Pre-flight

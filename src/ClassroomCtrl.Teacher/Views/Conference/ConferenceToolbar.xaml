@@ -1,0 +1,218 @@
+<UserControl x:Class="ClassroomCtrl.Teacher.Views.Conference.ConferenceToolbar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+             mc:Ignorable="d"
+             Background="Transparent"
+             FontFamily="Segoe UI"
+             d:DesignWidth="900" d:DesignHeight="68">
+    <!-- Phase 15-D step 1 — Meet-style bottom toolbar.  Seven circular pill
+         buttons centered horizontally; the rightmost End button is red.
+         Each button reuses an existing command where available; new
+         commands (sidebar / hand / more) are wired alongside this control
+         in MainViewModel.  Step 1 ships the visual skeleton + bindings;
+         the sidebar / hand-raise / reaction-picker behaviors fill in
+         across steps 2–6 (15-D) and steps 2–4 (15-E). -->
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <!-- Toolbar pill button style.  Default state = neutral elevated
+             surface; toggle on/off variants set via DataTrigger on the
+             host's IsMicOn / IsScreenSharing / IsConferenceSidebarVisible
+             properties.  Cursor=Hand and Focusable=False match existing
+             toolbar buttons elsewhere in the shell (Phase 15-C gallery
+             tile, header pill). -->
+        <Style x:Key="ConfToolbarButton" TargetType="Button">
+            <Setter Property="Width" Value="56"/>
+            <Setter Property="Height" Value="56"/>
+            <Setter Property="Margin" Value="6,0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="{DynamicResource Surface.Elevated}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Pill" CornerRadius="999"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource Border.Soft}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Pill" Property="Background"
+                                        Value="{DynamicResource Surface.Card}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Same shape, danger accent (red).  Reserved for the End button. -->
+        <Style x:Key="ConfToolbarButtonDanger" TargetType="Button"
+               BasedOn="{StaticResource ConfToolbarButton}">
+            <Setter Property="Background" Value="#DC2626"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Active-state pill (e.g. mic on, sidebar open, screen-share on). -->
+        <Style x:Key="ConfToolbarButtonActive" TargetType="Button"
+               BasedOn="{StaticResource ConfToolbarButton}">
+            <Setter Property="Background" Value="#10B981"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource Surface.Elevated}"
+            BorderBrush="{DynamicResource Border.Soft}"
+            BorderThickness="0,1,0,0"
+            Padding="0,8">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <!-- Left cluster reserved for future elapsed-time chip. -->
+                <ColumnDefinition Width="*"/>
+                <!-- Center cluster: all controls. -->
+                <ColumnDefinition Width="Auto"/>
+                <!-- Right cluster reserved for future toggles. -->
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                        HorizontalAlignment="Center">
+
+                <!-- 🎙 Mic toggle.  Active style when mic is live. -->
+                <Button Command="{Binding ToggleMicCommand}"
+                        ToolTip="{Binding MicTooltipText}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMicOn}" Value="True">
+                                    <Setter Property="Background" Value="#10B981"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <TextBlock Text="🎙" FontSize="20"/>
+                </Button>
+
+                <!-- 📷 Camera toggle.  Active style when teacher cam is live. -->
+                <Button Command="{Binding ToggleCameraCommand}"
+                        ToolTip="{Binding CameraButtonText}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
+                            <Style.Triggers>
+                                <!-- Phase 15-D — App.Camera.IsActive is the source of truth
+                                     for "teacher cam is broadcasting"; surface that via the
+                                     existing IsBroadcastingCamera flag wired to the same
+                                     state in 14-B.  Falls back to dim when no cam.       -->
+                                <DataTrigger Binding="{Binding IsBroadcastingCamera}" Value="True">
+                                    <Setter Property="Background" Value="#10B981"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <TextBlock Text="📷" FontSize="20"/>
+                </Button>
+
+                <!-- 🖥 Screen share toggle.  Active style when share is live. -->
+                <Button Command="{Binding ShareScreenCommand}"
+                        ToolTip="{Binding ShareScreenButtonText}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsScreenSharing}" Value="True">
+                                    <Setter Property="Background" Value="#10B981"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <TextBlock Text="🖥" FontSize="20"/>
+                </Button>
+
+                <!-- 💬 Chat sidebar toggle.  Highlights when sidebar is open. -->
+                <Button Command="{Binding ToggleConferenceSidebarCommand}"
+                        ToolTip="{DynamicResource Conf_Tooltip_Chat}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsConferenceSidebarVisible}" Value="True">
+                                    <Setter Property="Background" Value="#10B981"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <TextBlock Text="💬" FontSize="20"/>
+                </Button>
+
+                <!-- ✋ Hand raise.  Phase 15-D ships as a sidebar-open shortcut
+                     to the Participants tab so the teacher can review the
+                     raised-hand queue.  Phase 15-E adds teacher-side
+                     Recognize semantics (per-row action). -->
+                <Button Command="{Binding ShowConferenceHandQueueCommand}"
+                        ToolTip="{DynamicResource Conf_Tooltip_Hand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasNotifications}" Value="True">
+                                    <Setter Property="Background" Value="#FBBF24"/>
+                                    <Setter Property="Foreground" Value="#1F2937"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <TextBlock Text="✋" FontSize="20"/>
+                </Button>
+
+                <!-- ⋮ More — opens the reaction picker popup (Phase 15-E
+                     fleshes the popup; this step ships the trigger). -->
+                <Button x:Name="MoreButton"
+                        ToolTip="{DynamicResource Conf_Tooltip_More}"
+                        Click="MoreButton_Click"
+                        Style="{StaticResource ConfToolbarButton}">
+                    <TextBlock Text="⋮" FontSize="22" FontWeight="Bold"/>
+
+                    <!-- Reaction picker popup — empty in step 1; populated
+                         in Phase 15-E step 4. -->
+                    <Button.Resources>
+                        <Popup x:Key="MorePopup" x:Name="MorePopup"
+                               PlacementTarget="{Binding ElementName=MoreButton}"
+                               Placement="Top"
+                               StaysOpen="False"
+                               AllowsTransparency="True">
+                            <Border Background="{DynamicResource Surface.Card}"
+                                    BorderBrush="{DynamicResource Border.Soft}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="12">
+                                <StackPanel Orientation="Vertical" MinWidth="180">
+                                    <TextBlock Text="{DynamicResource Conf_MoreReactionsPlaceholder}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource Text.Secondary}"/>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Button.Resources>
+                </Button>
+
+                <!-- 📞 End Conference.  Reuses existing EndConferenceCommand
+                     from Phase 15-B step 5. -->
+                <Button Command="{Binding EndConferenceCommand}"
+                        ToolTip="{DynamicResource Conf_EndConference}"
+                        Style="{StaticResource ConfToolbarButtonDanger}">
+                    <TextBlock Text="📞" FontSize="20"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>
