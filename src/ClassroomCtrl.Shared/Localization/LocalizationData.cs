@@ -229,6 +229,9 @@ internal static class LocalizationData
         ["Conf_WaitingForShare"] = "Waiting for the share to start…",
         ["Conf_IsSharing"] = "is sharing",
         ["Conf_TeacherDisplayName"] = "Teacher",
+        // Phase 16-B+ step 11 — Conference-share system chat messages.
+        ["Conf_ChatShareStarted"] = "[Conference] You started sharing your screen.",
+        ["Conf_ChatShareStopped"] = "[Conference] You stopped sharing your screen.",
         // Phase 15-D — Meet-style bottom toolbar + sidebar + share banner +
         // mode-exclusivity toasts.
         ["Conf_Tooltip_Chat"] = "Chat",
@@ -858,6 +861,9 @@ internal static class LocalizationData
         ["Conf_WaitingForShare"] = "กำลังรอการแชร์หน้าจอ…",
         ["Conf_IsSharing"] = "กำลังแชร์",
         ["Conf_TeacherDisplayName"] = "ครู",
+        // Phase 16-B+ step 11 — Conference-share system chat messages.
+        ["Conf_ChatShareStarted"] = "[Conference] คุณเริ่มแชร์หน้าจอแล้ว",
+        ["Conf_ChatShareStopped"] = "[Conference] คุณหยุดแชร์หน้าจอแล้ว",
         // Phase 15-D — Meet-style toolbar + sidebar + share banner + toasts.
         ["Conf_Tooltip_Chat"] = "แชท",
         ["Conf_Tooltip_Hand"] = "นักเรียนยกมือ",

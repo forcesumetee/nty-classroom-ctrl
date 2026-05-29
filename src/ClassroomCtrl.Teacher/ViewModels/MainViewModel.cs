@@ -1102,7 +1102,11 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 ConferenceGallery.ActiveShareSourceName = "";
                 ConferenceGallery.ActiveShareFrame = null;
             }
-            AppendSystemChat(Loc.Get("Chat_ScreenShareStopped"));
+            // Phase 16-B+ step 11 — Conference-specific chat string clearly
+            // distinguishes from Classroom share in the dev's chat log.
+            AppendSystemChat(Loc.Get(wasConferenceShare
+                ? "Conf_ChatShareStopped"
+                : "Chat_ScreenShareStopped"));
         }
         else
         {

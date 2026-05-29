@@ -217,10 +217,25 @@
         </Grid>
         </Grid><!-- Grid.Row=0 -->
 
-        <!-- Page navigation strip — only takes layout space when HasMultiplePages.
-             Centered prev/next with the "{page} / {total}" label between. -->
-        <Border Grid.Row="1" Padding="0,10,0,4"
-                Visibility="{Binding HasMultiplePages, Converter={StaticResource BoolToVisibility}}">
+        <!-- Page navigation strip — only takes layout space when HasMultiplePages
+             AND share-mode is NOT active.  Share-mode's filmstrip has its
+             own horizontal scroll; surfacing a separate page-nav strip
+             below it would double up on participants-paging UX.  Phase
+             16-B+ step 11 polish. -->
+        <Border Grid.Row="1" Padding="0,10,0,4">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasMultiplePages}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsShareActive}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Button Command="{Binding PrevPageCommand}"
                         Padding="14,4" Margin="0,0,8,0"
