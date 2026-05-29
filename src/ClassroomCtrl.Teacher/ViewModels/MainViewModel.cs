@@ -1789,6 +1789,16 @@ public partial class MainViewModel : ObservableObject
                     ? System.Windows.Visibility.Visible
                     : System.Windows.Visibility.Collapsed;
             }
+            // Phase 15-E step 2 — mirror onto the Conference tile so the badge
+            // shows in the gallery + the queue picks the participant up.
+            // HandRaisedAt drives queue ordering (first-raised at top).
+            var tile = ConferenceGallery?.Tiles.FirstOrDefault(t => t.EndpointId == hr.StudentId);
+            if (tile != null)
+            {
+                tile.IsHandRaised = hr.IsRaised;
+                tile.HandRaisedAt = hr.IsRaised ? DateTime.UtcNow : (DateTime?)null;
+                ConferenceGallery!.RefreshRaisedHandQueue();
+            }
             // Phase 3 Section D — raise events get a HandRaised-kind notification (special
             // icon, prominent in bell popup); lower events use plain System kind so they're
             // still visible in Activity but don't re-pulse the bell badge meaningfully.

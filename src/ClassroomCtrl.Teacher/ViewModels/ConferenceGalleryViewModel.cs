@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows.Media.Imaging;
 
 namespace ClassroomCtrl.Teacher.ViewModels;
@@ -44,6 +45,14 @@ public partial class ConferenceTileViewModel : ObservableObject
     /// is the active pin.  Drives a border accent + governs whether the
     /// layout switches to filmstrip mode.</summary>
     [ObservableProperty] private bool isPinned;
+
+    /// <summary>Phase 15-E — UTC wall-clock at which the participant raised
+    /// their hand.  Used by the gallery view-model's RaisedHandQueue to
+    /// order entries so the first-raised hand appears at the top of the
+    /// teacher's recognize list.  Null while no hand is raised; set
+    /// alongside <see cref="IsHandRaised"/> by MainViewModel
+    /// .OnHandRaiseReceived.</summary>
+    [ObservableProperty] private DateTime? handRaisedAt;
 
     public ConferenceTileViewModel(Guid endpointId, string displayName, bool isSelf = false)
     {
@@ -101,6 +110,25 @@ public partial class ConferenceGalleryViewModel : ObservableObject
 
     /// <summary>Step 7 — page-counter text shown next to prev/next buttons.</summary>
     public string PageLabel => $"{CurrentPage} / {TotalPages}";
+
+    /// <summary>Phase 15-E — tiles whose participant currently has a hand
+    /// raised, ordered by raise timestamp (oldest first = top of queue).
+    /// Bound by the Conference sidebar's Participants tab when the teacher
+    /// wants to recognize the next student.  Recomputed by
+    /// <see cref="RefreshRaisedHandQueue"/> whenever a tile's
+    /// IsHandRaised flips.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<ConferenceTileViewModel> RaisedHandQueue { get; }
+        = new();
+
+    public void RefreshRaisedHandQueue()
+    {
+        var ordered = Tiles
+            .Where(t => t.IsHandRaised)
+            .OrderBy(t => t.HandRaisedAt ?? DateTime.MinValue)
+            .ToList();
+        RaisedHandQueue.Clear();
+        foreach (var t in ordered) RaisedHandQueue.Add(t);
+    }
 
     partial void OnTotalPagesChanged(int value)
     {
