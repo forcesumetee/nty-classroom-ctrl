@@ -1,0 +1,43 @@
+<Window Icon="/Assets/logo.png" x:Class="ClassroomCtrl.Teacher.GroupControllerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource GroupCtrl_Title}"
+        Width="380" Height="160"
+        WindowStartupLocation="Manual"
+        WindowStyle="ToolWindow"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Background="{DynamicResource Surface.Background}"
+        TextElement.Foreground="{DynamicResource Text.Primary}"
+        FontFamily="Segoe UI">
+    <Border Padding="14" Background="{DynamicResource Surface.Elevated}"
+            BorderBrush="{DynamicResource Surface.Border}" BorderThickness="1"
+            CornerRadius="{DynamicResource CornerRadius.MD}">
+        <DockPanel>
+            <TextBlock DockPanel.Dock="Top"
+                       Style="{DynamicResource Text.H3}"
+                       FontWeight="Bold"
+                       Margin="0,0,0,4"
+                       x:Name="HeaderText"/>
+            <TextBlock DockPanel.Dock="Top"
+                       Style="{DynamicResource Text.Caption}"
+                       Margin="0,0,0,10"
+                       x:Name="SubText"/>
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="BtnOpenAll" Click="OpenAllTiles_Click"
+                        Style="{DynamicResource Button.Secondary}"
+                        Content="{DynamicResource GroupCtrl_OpenAll}"
+                        Margin="0,0,6,0"/>
+                <Button x:Name="BtnShareToggle" Click="ShareToggle_Click"
+                        Style="{DynamicResource Button.Secondary}"
+                        Margin="0,0,6,0">
+                    <TextBlock x:Name="ShareToggleText" Text="{DynamicResource GroupMgr_Share}"/>
+                </Button>
+                <Button x:Name="BtnLeave" Click="Leave_Click"
+                        Style="{DynamicResource Button.Primary}"
+                        Content="{DynamicResource GroupCtrl_Leave}"/>
+            </StackPanel>
+        </DockPanel>
+    </Border>
+</Window>

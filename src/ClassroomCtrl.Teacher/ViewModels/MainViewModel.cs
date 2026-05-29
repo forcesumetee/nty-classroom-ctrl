@@ -1708,7 +1708,24 @@ public partial class MainViewModel : ObservableObject
     private void OpenGroupManager()
     {
         var w = new GroupManagerView { Owner = System.Windows.Application.Current.MainWindow };
+        // Phase 13-B (Tier 1) Step 6 — wire the Join button on each group row to
+        // the new controller window.  Set on every open so the latest callback
+        // (which captures the current GroupManagerView's lifecycle) wins.
+        OpenGroupControllerForRoom = OpenGroupControllerInternal;
         w.Show();
+    }
+
+    /// <summary>Phase 13-B (Tier 1) Step 6 — open the floating
+    /// <see cref="GroupControllerWindow"/> for the chosen room.  Emits
+    /// TeacherJoinGroupAsync (which auto-leaves a previously-joined group),
+    /// then shows the controller (which opens N tiled StudentScreenWindows
+    /// on Loaded).</summary>
+    private async void OpenGroupControllerInternal(RoomViewModel room)
+    {
+        if (App.Server == null) return;
+        await App.Server.TeacherJoinGroupAsync(room.RoomId, System.Threading.CancellationToken.None);
+        var ctrl = new GroupControllerWindow(room) { Owner = System.Windows.Application.Current.MainWindow };
+        ctrl.Show();
     }
 
     /// <summary>Phase 13-B (Tier 1) — invoked on the dispatcher when App.Server.RoomsChanged
