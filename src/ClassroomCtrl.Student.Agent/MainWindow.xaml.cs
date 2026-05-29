@@ -62,7 +62,8 @@ public partial class MainWindow : Window
     // default until teacher's MicMuteRequest unmutes or local toggle in
     // Step 7 UI.  Step 6 wires the actual PTT hotkey.
     private MicBroadcaster? _micBroadcaster;
-    private long _voiceFramesRxCount;   // diag counter only — Step 5 wires actual playback
+    private VoiceMixer? _voiceMixer;
+    private long _voiceFramesRxCount;
 
     // Phase 9 Section B / Phase 9.1 Section B+C — Bell + Notifications.
     // The bell tracks unread NOTIFICATIONS (system events), not chat — chat
@@ -264,6 +265,14 @@ public partial class MainWindow : Window
                     // CurrentGroupId.HasValue.  Returning to main classroom
                     // implicitly stops voice frames flowing.
                     if (_micBroadcaster != null) _micBroadcaster.CurrentGroupId = newRoom;
+                    // Reset playback — the prior group's sources are no longer
+                    // relevant.  A fresh VoiceMixer is created on the next
+                    // VoiceAudioFrame arrival from the new room.
+                    if (_voiceMixer != null)
+                    {
+                        try { _voiceMixer.Dispose(); } catch { }
+                        _voiceMixer = null;
+                    }
 
                     // Phase 8.5: am I the host?
                     var iAmHost = assign.HostStudentId.HasValue
@@ -508,11 +517,11 @@ public partial class MainWindow : Window
                 try
                 {
                     var vmsg = MessagePack.MessagePackSerializer.Deserialize<VoiceAudioFrameMessage>(env.Payload);
-                    // Step 5 will route this to a VoiceMixer per-source buffer +
-                    // MixingSampleProvider for playback.  Step 4 stub: count.
+                    _voiceMixer ??= new VoiceMixer();
+                    _voiceMixer.PushFrame(vmsg.SourceEndpointId, vmsg.Pcm, vmsg.Ts);
                     System.Threading.Interlocked.Increment(ref _voiceFramesRxCount);
-                    if (_voiceFramesRxCount <= 5 || (_voiceFramesRxCount % 50) == 0)
-                        IpcClient.LogToFile($"[MainWindow] VoiceAudioFrame received #{_voiceFramesRxCount} from {vmsg.SourceEndpointId} ({vmsg.Pcm.Length} bytes, group={vmsg.GroupId})");
+                    if (_voiceFramesRxCount <= 5)
+                        IpcClient.LogToFile($"[MainWindow] VoiceAudioFrame #{_voiceFramesRxCount} from {vmsg.SourceEndpointId} ({vmsg.Pcm.Length} bytes, group={vmsg.GroupId})");
                 }
                 catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] VoiceAudioFrame decode: {ex.Message}"); }
                 break;
