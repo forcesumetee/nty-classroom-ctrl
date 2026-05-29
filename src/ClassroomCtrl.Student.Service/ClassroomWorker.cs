@@ -474,6 +474,21 @@ public class ClassroomWorker : BackgroundService
                 await _ipc.ForwardToAgentAsync(env, ct);
                 break;
 
+            // Phase 13-D (Tier 3) — group voice + mic control routing.
+            // VoiceAudioFrame is group-targeted; the speaker's own loopback
+            // is filtered Agent-side via env.SenderId == _myEndpointId.
+            // MicMuteRequest + MicPttSet are endpoint-targeted (teacher → me).
+            case MessageType.VoiceAudioFrame:
+                if (!IsForMe(env)) return;
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
+            case MessageType.MicMuteRequest:
+            case MessageType.MicPttSet:
+                if (!IsForMe(env)) return;
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
             // Phase 5b: PDPA notification — Teacher tells me they're recording my screen.
             case MessageType.StudentRecordingNotify:
                 if (!IsForMe(env)) return;

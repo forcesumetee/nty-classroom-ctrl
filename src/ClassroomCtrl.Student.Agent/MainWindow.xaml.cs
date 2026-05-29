@@ -56,6 +56,14 @@ public partial class MainWindow : Window
     private MoviePlayerWindow? _movieWindow;
     private RemoteControlBanner? _remoteBanner;
 
+    // Phase 13-D (Tier 3): per-group voice chat.  Single MicBroadcaster
+    // instance per Agent process; CurrentGroupId / SelfEndpointId tracked
+    // alongside via BreakoutAssign + Hello capture.  Stays in muted+PTT
+    // default until teacher's MicMuteRequest unmutes or local toggle in
+    // Step 7 UI.  Step 6 wires the actual PTT hotkey.
+    private MicBroadcaster? _micBroadcaster;
+    private long _voiceFramesRxCount;   // diag counter only — Step 5 wires actual playback
+
     // Phase 9 Section B / Phase 9.1 Section B+C — Bell + Notifications.
     // The bell tracks unread NOTIFICATIONS (system events), not chat — chat
     // and system events are now separated: chat lives in the body ChatList,
@@ -207,6 +215,8 @@ public partial class MainWindow : Window
         {
             _myEndpointId = env.TargetEndpointId;
             IpcClient.LogToFile($"[MainWindow] Captured my endpoint id: {_myEndpointId}");
+            EnsureMicBroadcaster();
+            if (_micBroadcaster != null) _micBroadcaster.SelfEndpointId = _myEndpointId;
         }
 
         switch (env.Type)
@@ -250,6 +260,10 @@ public partial class MainWindow : Window
                     var newRoom = assign.RoomId == System.Guid.Empty ? (System.Guid?)null : assign.RoomId;
                     _myRoomId = newRoom;
                     _myRoomName = assign.RoomName;
+                    // Phase 13-D (Tier 3) — voice gating: emission requires
+                    // CurrentGroupId.HasValue.  Returning to main classroom
+                    // implicitly stops voice frames flowing.
+                    if (_micBroadcaster != null) _micBroadcaster.CurrentGroupId = newRoom;
 
                     // Phase 8.5: am I the host?
                     var iAmHost = assign.HostStudentId.HasValue
@@ -482,6 +496,71 @@ public partial class MainWindow : Window
                     });
                 }
                 catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStop decode: {ex.Message}"); }
+                break;
+
+            // ─────── Phase 13-D (Tier 3) — voice + mic control ───────
+            // VoiceAudioFrame from another in-group peer.  Self-filter: the
+            // sender's own Agent receives a loopback (same group match);
+            // skip render so we don't echo our own voice.  Routing to a
+            // mixer comes in Step 5; for now we just log + drop.
+            case MessageType.VoiceAudioFrame:
+                if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
+                try
+                {
+                    var vmsg = MessagePack.MessagePackSerializer.Deserialize<VoiceAudioFrameMessage>(env.Payload);
+                    // Step 5 will route this to a VoiceMixer per-source buffer +
+                    // MixingSampleProvider for playback.  Step 4 stub: count.
+                    System.Threading.Interlocked.Increment(ref _voiceFramesRxCount);
+                    if (_voiceFramesRxCount <= 5 || (_voiceFramesRxCount % 50) == 0)
+                        IpcClient.LogToFile($"[MainWindow] VoiceAudioFrame received #{_voiceFramesRxCount} from {vmsg.SourceEndpointId} ({vmsg.Pcm.Length} bytes, group={vmsg.GroupId})");
+                }
+                catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] VoiceAudioFrame decode: {ex.Message}"); }
+                break;
+
+            // Teacher force-mute (or unmute).  Honor + emit immediate
+            // MicStateUpdate echo so teacher UI confirms.  Reason shown in
+            // a balloon notification per primer.
+            case MessageType.MicMuteRequest:
+                try
+                {
+                    var mm = MessagePack.MessagePackSerializer.Deserialize<MicMuteRequestMessage>(env.Payload);
+                    IpcClient.LogToFile($"[MainWindow] MicMuteRequest muted={mm.Muted} reason='{mm.Reason}'");
+                    EnsureMicBroadcaster();
+                    if (_micBroadcaster != null)
+                    {
+                        _micBroadcaster.IsMuted = mm.Muted;
+                        _micBroadcaster.EmitStateUpdate();
+                    }
+                    Dispatcher.Invoke(() =>
+                    {
+                        var title = Loc.Get("Lbl_AppName");
+                        var body = mm.Muted
+                            ? (string.IsNullOrEmpty(mm.Reason) ? "Teacher muted your microphone." : mm.Reason)
+                            : "Teacher allowed your microphone.";
+                        App.Tray?.ShowBalloon(title, body);
+                        AddSystemNotification(body, "🎤");
+                    });
+                }
+                catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] MicMuteRequest decode: {ex.Message}"); }
+                break;
+
+            // Teacher sets PTT vs always-on (+ hotkey).  Step 6 reads the
+            // HotkeyVk when wiring the global hook; Step 4 just persists.
+            case MessageType.MicPttSet:
+                try
+                {
+                    var pm = MessagePack.MessagePackSerializer.Deserialize<MicPttSetMessage>(env.Payload);
+                    IpcClient.LogToFile($"[MainWindow] MicPttSet pttMode={pm.PttMode} hotkey=0x{pm.HotkeyVk:X4}");
+                    EnsureMicBroadcaster();
+                    if (_micBroadcaster != null)
+                    {
+                        _micBroadcaster.PttMode = pm.PttMode;
+                        // HotkeyVk is honored in Step 6's PttKeyboardHook; for
+                        // Step 4 the broadcaster only tracks PttMode itself.
+                        _micBroadcaster.EmitStateUpdate();
+                    }
+                }
+                catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] MicPttSet decode: {ex.Message}"); }
                 break;
 
             // ─────── Phase 9.1: Student Demonstration ───────
@@ -910,6 +989,45 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Lazily create the fullscreen viewer window.</summary>
+    /// <summary>Phase 13-D (Tier 3) — lazy-init MicBroadcaster on first Hello-ack
+    /// capture of our endpoint id.  Wires the broadcaster's outbound events
+    /// (VoiceFrameReady, StateUpdateReady) to App.Ipc — frames go upstream to
+    /// teacher, who relays group-targeted to in-group peers.  Singleton per
+    /// Agent process; never disposed except at shutdown.</summary>
+    private void EnsureMicBroadcaster()
+    {
+        if (_micBroadcaster != null) return;
+        _micBroadcaster = new MicBroadcaster
+        {
+            SelfEndpointId = _myEndpointId,
+            CurrentGroupId = _myRoomId,
+        };
+        _micBroadcaster.VoiceFrameReady += async (_, tup) =>
+        {
+            if (App.Ipc == null) return;
+            try
+            {
+                var (msg, gid) = tup;
+                var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+                var env = Envelope.CreateGroupTargeted(MessageType.VoiceAudioFrame, bytes, Guid.Empty, gid);
+                await App.Ipc.SendAsync(env, default);
+            }
+            catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] VoiceAudioFrame send: {ex.Message}"); }
+        };
+        _micBroadcaster.StateUpdateReady += async (_, msg) =>
+        {
+            if (App.Ipc == null) return;
+            try
+            {
+                var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+                var env = Envelope.Create(MessageType.MicStateUpdate, bytes, Guid.Empty);
+                await App.Ipc.SendAsync(env, default);
+            }
+            catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] MicStateUpdate send: {ex.Message}"); }
+        };
+        IpcClient.LogToFile("[MainWindow] MicBroadcaster initialized (muted=true, PTT-default)");
+    }
+
     private void EnsureScreenViewWindow()
     {
         if (_screenViewWindow == null)

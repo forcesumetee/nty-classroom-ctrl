@@ -60,6 +60,16 @@ public class ControlServer : IDisposable
     /// <summary>Phase 8.5: Host of a breakout room changed (or cleared). Args = (roomId, newHostId|null).</summary>
     public event EventHandler<(Guid RoomId, Guid? NewHostId)>? HostChanged;
 
+    /// <summary>Phase 13-D (Tier 3) — per-student mic-state heartbeat from
+    /// Tier 3 voice chat.  Args = (studentId, latest state).  Teacher UI
+    /// subscribes (Step 7) to drive the per-student mic indicator.</summary>
+    public event EventHandler<(Guid StudentId, MicStateUpdateMessage State)>? MicStateUpdated;
+
+    /// <summary>Phase 13-D (Tier 3) — latest mic state per student.  Filled
+    /// by the MicStateUpdate handler; teacher UI reads on demand.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, MicStateUpdateMessage> _micStates = new();
+    public bool TryGetMicState(Guid studentId, out MicStateUpdateMessage state) => _micStates.TryGetValue(studentId, out state!);
+
     /// <summary>Phase 13-B (Tier 1) — fired whenever the canonical breakout state
     /// changes (group created/renamed/dissolved, member added/removed, host
     /// set, teacher join/leave).  ViewModels rebuild their Rooms collection.</summary>
@@ -394,6 +404,30 @@ public class ControlServer : IDisposable
 
     public Task SendMicMonitorStopAsync(Guid studentId, CancellationToken ct)
         => _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.MicMonitorStop, Array.Empty<byte>(), _teacherId, studentId), ct);
+
+    // ─────── Phase 13-D (Tier 3) — teacher mute / PTT mode controls ───────
+
+    /// <summary>Phase 13-D (Tier 3) — teacher force-mute (or unmute) one
+    /// student.  Reliable channel.  The student-side Agent honors the request
+    /// and emits an immediate MicStateUpdate so the teacher's per-student
+    /// indicator (Step 7) confirms the new state within one round trip.</summary>
+    public Task SendMicMuteRequestAsync(Guid studentId, bool muted, string reason, CancellationToken ct)
+    {
+        var msg = new MicMuteRequestMessage { TargetEndpointId = studentId, Muted = muted, Reason = reason ?? "" };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.MicMuteRequest, bytes, _teacherId, studentId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 13-D (Tier 3) — switch one student between PTT and
+    /// always-on mode and (optionally) set a new PTT hotkey.</summary>
+    public Task SendMicPttSetAsync(Guid studentId, bool pttMode, ushort hotkeyVk, CancellationToken ct)
+    {
+        var msg = new MicPttSetMessage { TargetEndpointId = studentId, PttMode = pttMode, HotkeyVk = hotkeyVk };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.MicPttSet, bytes, _teacherId, studentId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
 
     // ─────── Phase 9.2: Screen Pen — annotation overlay ───────
 
@@ -1191,6 +1225,45 @@ public class ControlServer : IDisposable
                             env.Type, env.SenderId, env.TargetGroupId);
                     }
                     _ = _tcp.BroadcastAsync(env, CancellationToken.None);
+                }
+                break;
+
+            // ─────── Phase 13-D (Tier 3) — group voice relay + mic state ───────
+            //
+            // Star topology mirrors Tier 2 screen relay: voice frames arrive
+            // from the speaker with TargetGroupId set; teacher fans out via
+            // SendVoiceAsync (Step 2's _voiceOutbox).  Group-membership
+            // filtering is done at the receiver Service via IsForMe (same
+            // TargetGroupId match as Tier 1/2).  Sender receives a loopback
+            // copy too; the speaker's Agent self-filters in MainWindow via
+            // env.SenderId == _myEndpointId so the VoiceMixer doesn't echo
+            // back the speaker's own voice.
+            //
+            // Defensive group-membership check: validate that the sender is
+            // actually in the claimed group.  If the namespace is mismatched
+            // (sender not in any room, or in a different room), drop silently
+            // — first-cut auth, polish round can tighten further.
+            case MessageType.VoiceAudioFrame:
+                {
+                    if (!env.TargetGroupId.HasValue) break;
+                    if (_studentRoomMap.TryGetValue(env.SenderId, out var senderRoom)
+                        && senderRoom == env.TargetGroupId.Value)
+                    {
+                        _ = _tcp.SendVoiceAsync(env, CancellationToken.None);
+                    }
+                }
+                break;
+
+            case MessageType.MicStateUpdate:
+                try
+                {
+                    var s = MessagePack.MessagePackSerializer.Deserialize<MicStateUpdateMessage>(env.Payload);
+                    _micStates[env.SenderId] = s;
+                    MicStateUpdated?.Invoke(this, (env.SenderId, s));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode MicStateUpdate");
                 }
                 break;
 
