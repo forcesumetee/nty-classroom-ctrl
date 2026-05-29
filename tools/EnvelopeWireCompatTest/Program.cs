@@ -159,6 +159,71 @@ int errors = 0;
     else { Pass("T7: StudentGroupScreenStreamFrame envelope + nested ScreenStreamFrameMessage round-trip preserved"); }
 }
 
+// ──────── Tests 8-11 (Phase 13-D step 1): Tier 3 voice + mic DTOs.
+//          One round-trip test per new DTO.  Voice path is performance-
+//          sensitive (100ms frame rate) — Key ordering on these DTOs is
+//          load-bearing for future schema changes. ────────
+{
+    var msg = new VoiceAudioFrameMessage
+    {
+        SourceEndpointId = Guid.NewGuid(),
+        GroupId = Guid.NewGuid(),
+        Pcm = new byte[] { 0x01, 0x00, 0xFF, 0xFF, 0x00, 0x80 },
+        Ts = 1_700_000_000_000L,
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<VoiceAudioFrameMessage>(bytes);
+    if (back.SourceEndpointId != msg.SourceEndpointId) { errors += Fail("T8: SourceEndpointId mismatch"); }
+    else if (back.GroupId != msg.GroupId) { errors += Fail("T8: GroupId mismatch"); }
+    else if (back.Pcm.Length != msg.Pcm.Length) { errors += Fail("T8: Pcm length mismatch"); }
+    else if (back.Ts != msg.Ts) { errors += Fail("T8: Ts mismatch"); }
+    else { Pass("T8: VoiceAudioFrameMessage round-trip preserved (4 keys)"); }
+}
+{
+    var msg = new MicMuteRequestMessage
+    {
+        TargetEndpointId = Guid.NewGuid(),
+        Muted = true,
+        Reason = "Teacher muted you for the class discussion.",
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<MicMuteRequestMessage>(bytes);
+    if (back.TargetEndpointId != msg.TargetEndpointId) { errors += Fail("T9: TargetEndpointId mismatch"); }
+    else if (back.Muted != msg.Muted) { errors += Fail("T9: Muted mismatch"); }
+    else if (back.Reason != msg.Reason) { errors += Fail("T9: Reason mismatch"); }
+    else { Pass("T9: MicMuteRequestMessage round-trip preserved (3 keys)"); }
+}
+{
+    var msg = new MicStateUpdateMessage
+    {
+        EndpointId = Guid.NewGuid(),
+        MicLive = true,
+        PttMode = true,
+        IsSpeaking = false,
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<MicStateUpdateMessage>(bytes);
+    if (back.EndpointId != msg.EndpointId) { errors += Fail("T10: EndpointId mismatch"); }
+    else if (back.MicLive != msg.MicLive) { errors += Fail("T10: MicLive mismatch"); }
+    else if (back.PttMode != msg.PttMode) { errors += Fail("T10: PttMode mismatch"); }
+    else if (back.IsSpeaking != msg.IsSpeaking) { errors += Fail("T10: IsSpeaking mismatch"); }
+    else { Pass("T10: MicStateUpdateMessage round-trip preserved (4 keys)"); }
+}
+{
+    var msg = new MicPttSetMessage
+    {
+        TargetEndpointId = Guid.NewGuid(),
+        PttMode = false,
+        HotkeyVk = 0x20,   // VK_SPACE
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<MicPttSetMessage>(bytes);
+    if (back.TargetEndpointId != msg.TargetEndpointId) { errors += Fail("T11: TargetEndpointId mismatch"); }
+    else if (back.PttMode != msg.PttMode) { errors += Fail("T11: PttMode mismatch"); }
+    else if (back.HotkeyVk != msg.HotkeyVk) { errors += Fail("T11: HotkeyVk mismatch"); }
+    else { Pass("T11: MicPttSetMessage round-trip preserved (3 keys)"); }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");

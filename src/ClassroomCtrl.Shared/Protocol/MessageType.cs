@@ -158,4 +158,15 @@ public enum MessageType : ushort
     StudentGroupScreenStreamStart = 0x0630,   // host→T→group peers
     StudentGroupScreenStreamFrame = 0x0631,   // host→T→group peers (reuses ScreenStreamFrameMessage)
     StudentGroupScreenStreamStop  = 0x0632,   // host→T→group peers
+
+    // Phase 13-D (Tier 3): per-group voice chat.  PTT default, push-to-talk
+    // serialization is the primary echo mitigation (Layer 1 of 3-layer AEC
+    // strategy); Layer 2 = WASAPI AEC on Communications-role capture; Layer 3
+    // = "USB headset recommended" doc.  Star topology (teacher relay) reuses
+    // the Tier 2 screen pattern; voice rides a dedicated _voiceOutbox so
+    // teacher loopback audio (_audioOutbox) isn't evicted by voice bursts.
+    VoiceAudioFrame  = 0x0640,   // student→T→group peers != sender, lossy via _voiceOutbox
+    MicMuteRequest   = 0x0641,   // T→S targeted, reliable
+    MicStateUpdate   = 0x0642,   // S→T heartbeat / on-change, reliable
+    MicPttSet        = 0x0643,   // T→S targeted, reliable — sets PTT vs always-on mode
 }

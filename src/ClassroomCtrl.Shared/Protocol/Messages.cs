@@ -173,6 +173,62 @@ public class StudentGroupScreenStreamControlMessage
     [Key(4)] public VideoCodec Codec { get; set; }
 }
 
+// ───────────── Phase 13-D (Tier 3): per-group voice chat DTOs ─────────────
+
+/// <summary>
+/// Phase 13-D (Tier 3) — one mic-captured audio frame from a student.  PCM is
+/// 16 kHz mono 16-bit little-endian, 100ms frames (≈ 3200 bytes).
+/// SourceEndpointId + GroupId are also in Envelope.SenderId / TargetGroupId;
+/// embedding them in the payload keeps diagnostics grep-friendly and lets the
+/// VoiceMixer keep per-source state even if envelope SenderId is rewritten.
+/// </summary>
+[MessagePackObject]
+public class VoiceAudioFrameMessage
+{
+    [Key(0)] public Guid SourceEndpointId { get; set; }
+    [Key(1)] public Guid GroupId { get; set; }
+    [Key(2)] public byte[] Pcm { get; set; } = Array.Empty<byte>();
+    [Key(3)] public long Ts { get; set; }
+}
+
+/// <summary>
+/// Phase 13-D (Tier 3) — teacher → student force-mute (or unmute).  Reason is
+/// shown in a balloon notification on the student so the mute isn't silent.
+/// </summary>
+[MessagePackObject]
+public class MicMuteRequestMessage
+{
+    [Key(0)] public Guid TargetEndpointId { get; set; }
+    [Key(1)] public bool Muted { get; set; }
+    [Key(2)] public string Reason { get; set; } = "";
+}
+
+/// <summary>
+/// Phase 13-D (Tier 3) — student → teacher mic-state heartbeat.  Sent every
+/// 1-2 seconds and on any state change.  Drives the teacher-side per-student
+/// mic indicator.
+/// </summary>
+[MessagePackObject]
+public class MicStateUpdateMessage
+{
+    [Key(0)] public Guid EndpointId { get; set; }
+    [Key(1)] public bool MicLive { get; set; }   // true while capturing + emitting
+    [Key(2)] public bool PttMode { get; set; }   // true = hold-key, false = always-on
+    [Key(3)] public bool IsSpeaking { get; set; } // RMS > threshold over last frame
+}
+
+/// <summary>
+/// Phase 13-D (Tier 3) — teacher → student set PTT vs always-on mode.
+/// HotkeyVk is the Win32 virtual-key code for the PTT key (default 0x20 = VK_SPACE).
+/// </summary>
+[MessagePackObject]
+public class MicPttSetMessage
+{
+    [Key(0)] public Guid TargetEndpointId { get; set; }
+    [Key(1)] public bool PttMode { get; set; }
+    [Key(2)] public ushort HotkeyVk { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]
