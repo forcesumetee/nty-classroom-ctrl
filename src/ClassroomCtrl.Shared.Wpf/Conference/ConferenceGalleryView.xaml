@@ -1,11 +1,11 @@
-<UserControl x:Class="ClassroomCtrl.Teacher.Views.Conference.ConferenceGalleryView"
+<UserControl x:Class="ClassroomCtrl.Shared.Wpf.Conference.ConferenceGalleryView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
-             xmlns:local="clr-namespace:ClassroomCtrl.Teacher.Views.Conference"
-             xmlns:vm="clr-namespace:ClassroomCtrl.Shared.Wpf.ViewModels;assembly=ClassroomCtrl.Shared.Wpf"
+             xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters"
+             xmlns:local="clr-namespace:ClassroomCtrl.Shared.Wpf.Conference"
+             xmlns:vm="clr-namespace:ClassroomCtrl.Shared.Wpf.ViewModels"
              mc:Ignorable="d"
              Background="{DynamicResource Surface.Background}"
              FontFamily="Segoe UI"
@@ -13,10 +13,10 @@
     <!-- Phase 15-C — shared gallery surface used by:
            - Teacher's ConferenceView (data = MainViewModel.ConferenceGallery)
            - Student's ConferenceGalleryWindow (data = own thin gallery VM)
-         Step 2 ships auto-layout only (UniformGrid with column count from
-         ParticipantCountToColumnsConverter).  Pin (step 5) and pagination
-         (step 7) extend this view; nothing else needs to change in the host
-         containers. -->
+
+         Phase 16-B step 4 — moved from Teacher/Views/Conference/ to
+         Shared.Wpf so both Teacher and Student.Agent host the same
+         control. -->
     <UserControl.Resources>
         <conv:ParticipantCountToColumnsConverter x:Key="CountToColumns"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>

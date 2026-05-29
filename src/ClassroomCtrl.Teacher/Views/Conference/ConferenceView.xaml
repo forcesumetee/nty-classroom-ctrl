@@ -4,7 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
-             xmlns:local="clr-namespace:ClassroomCtrl.Teacher.Views.Conference"
+             xmlns:confctrls="clr-namespace:ClassroomCtrl.Shared.Wpf.Conference;assembly=ClassroomCtrl.Shared.Wpf"
              mc:Ignorable="d"
              Background="{DynamicResource Surface.Background}"
              TextElement.Foreground="{DynamicResource Text.Primary}"
@@ -75,7 +75,7 @@
                  (overlay, not push — gallery layout doesn't reflow on
                  sidebar toggle). -->
             <Grid Grid.Row="0">
-                <local:ConferenceGalleryView DataContext="{Binding ConferenceGallery}"/>
+                <confctrls:ConferenceGalleryView DataContext="{Binding ConferenceGallery}"/>
 
                 <!-- Phase 15-D step 4 — in-Conference screen share visual.
                      The toolbar's 🖥 button (step 1) already invokes the
@@ -104,7 +104,7 @@
                     </StackPanel>
                 </Border>
 
-                <local:ConferenceSidebar HorizontalAlignment="Right"
+                <confctrls:ConferenceSidebar HorizontalAlignment="Right"
                                          Width="340"
                                          Visibility="{Binding IsConferenceSidebarVisible,
                                                       Converter={StaticResource BoolToVisibility}}"/>
@@ -113,7 +113,7 @@
                  placeholder End-only bar.  The toolbar's commands route
                  through MainViewModel (this control's DataContext), so no
                  DataContext override needed on the slot. -->
-            <local:ConferenceToolbar Grid.Row="1"/>
+            <confctrls:ConferenceToolbar Grid.Row="1"/>
         </Grid>
     </Grid>
 </UserControl>

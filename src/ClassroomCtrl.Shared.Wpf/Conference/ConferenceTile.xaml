@@ -1,9 +1,9 @@
-<UserControl x:Class="ClassroomCtrl.Teacher.Views.Conference.ConferenceTile"
+<UserControl x:Class="ClassroomCtrl.Shared.Wpf.Conference.ConferenceTile"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+             xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters"
              mc:Ignorable="d"
              Background="Transparent"
              FontFamily="Segoe UI"
@@ -17,7 +17,11 @@
          Inner Border is the 16:9 surface; webcam frame OR placeholder fills it.
          Bottom overlay: name + mic/cam state.
          Top-right slot: hand-raise badge placeholder (Phase 15-E wires).
-         Click anywhere → PinCommand (forwarded by parent gallery DataTemplate). -->
+         Click anywhere → PinCommand (forwarded by parent gallery DataTemplate).
+
+         Phase 16-B step 4 — moved from Teacher/Views/Conference/ to Shared.Wpf
+         so Student.Agent renders the same tile via its
+         StudentConferenceShellViewModel. -->
     <Border x:Name="OuterBorder"
             CornerRadius="8" BorderThickness="2"
             BorderBrush="Transparent"

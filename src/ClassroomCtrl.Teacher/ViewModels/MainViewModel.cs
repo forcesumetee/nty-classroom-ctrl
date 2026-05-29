@@ -25,7 +25,7 @@ using ConversationKind = ClassroomCtrl.Shared.Models.ConversationKind;
 
 namespace ClassroomCtrl.Teacher.ViewModels;
 
-public partial class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
 {
     public ObservableCollection<StudentViewModel> Students { get; } = new();
     public ObservableCollection<RoomViewModel> Rooms { get; } = new();

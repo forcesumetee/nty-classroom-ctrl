@@ -1,9 +1,9 @@
-<UserControl x:Class="ClassroomCtrl.Teacher.Views.Conference.ConferenceToolbar"
+<UserControl x:Class="ClassroomCtrl.Shared.Wpf.Conference.ConferenceToolbar"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
+             xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters"
              mc:Ignorable="d"
              Background="Transparent"
              FontFamily="Segoe UI"
@@ -14,7 +14,13 @@
          commands (sidebar / hand / more) are wired alongside this control
          in MainViewModel.  Step 1 ships the visual skeleton + bindings;
          the sidebar / hand-raise / reaction-picker behaviors fill in
-         across steps 2–6 (15-D) and steps 2–4 (15-E). -->
+         across steps 2–6 (15-D) and steps 2–4 (15-E).
+
+         Phase 16-B step 4 — moved from Teacher/Views/Conference/ to
+         Shared.Wpf so both Teacher and Student.Agent host the same
+         toolbar.  Commands continue to bind by DataContext + name;
+         Student.Agent's StudentConferenceShellViewModel exposes the
+         same command names so the toolbar Just Works on both shells. -->
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
 
@@ -109,10 +115,6 @@
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
                             <Style.Triggers>
-                                <!-- Phase 15-D — App.Camera.IsActive is the source of truth
-                                     for "teacher cam is broadcasting"; surface that via the
-                                     existing IsBroadcastingCamera flag wired to the same
-                                     state in 14-B.  Falls back to dim when no cam.       -->
                                 <DataTrigger Binding="{Binding IsBroadcastingCamera}" Value="True">
                                     <Setter Property="Background" Value="#10B981"/>
                                     <Setter Property="Foreground" Value="White"/>
@@ -174,8 +176,7 @@
                     <TextBlock Text="✋" FontSize="20"/>
                 </Button>
 
-                <!-- ⋮ More — opens the reaction picker popup (Phase 15-E
-                     fleshes the popup; this step ships the trigger). -->
+                <!-- ⋮ More — opens the reaction picker popup. -->
                 <Button x:Name="MoreButton"
                         ToolTip="{DynamicResource Conf_Tooltip_More}"
                         Click="MoreButton_Click"

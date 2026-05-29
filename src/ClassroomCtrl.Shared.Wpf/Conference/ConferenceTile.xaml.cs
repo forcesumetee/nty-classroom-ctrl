@@ -6,7 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 
-namespace ClassroomCtrl.Teacher.Views.Conference;
+namespace ClassroomCtrl.Shared.Wpf.Conference;
 
 /// <summary>
 /// Phase 15-C — single conference tile.  Hosts a <see cref="ConferenceTileViewModel"/>
@@ -19,6 +19,8 @@ namespace ClassroomCtrl.Teacher.Views.Conference;
 /// Storyboard when CurrentReactionEmoji becomes non-empty.  Storyboard
 /// is local (Begin on the TextBlock) so multiple simultaneous reactions
 /// across tiles don't share state.
+///
+/// Phase 16-B step 4 — moved from Teacher/Views/Conference/ to Shared.Wpf.
 /// </summary>
 public partial class ConferenceTile : UserControl
 {
