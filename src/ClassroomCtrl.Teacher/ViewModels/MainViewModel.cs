@@ -1057,6 +1057,16 @@ public partial class MainViewModel : ObservableObject
     {
         if (App.Server == null) return;
 
+        // Phase 15-D step 5 — Conference mode is mode-exclusive with classroom
+        // lock per architecture § 3.  No-op + system-chat toast when invoked
+        // while a session is live so the dev sees feedback in the chat history.
+        if (IsInConference)
+        {
+            AppendSystemChat(Loc.Get("Conf_BlockedLockAll",
+                "Lock All is unavailable in Conference mode."));
+            return;
+        }
+
         ScreensLocked = !ScreensLocked;
 
         try
@@ -1605,7 +1615,19 @@ public partial class MainViewModel : ObservableObject
     // Phase 3 Section G — Quiz Manager is now an embedded view.  Sidebar's "ระบบข้อสอบ"
     // command flips CurrentMainView; the Window-level QuizManagerWindow file is kept as
     // a deprecated shim until Phase 5 cleanup.
-    private void OpenQuizManager() => CurrentMainView = MainViewKind.QuizManager;
+    private void OpenQuizManager()
+    {
+        // Phase 15-D step 5 — Quiz Manager is mode-exclusive with Conference
+        // per architecture § 3 (cam frames + exam UI on a single PC at the
+        // same time would compete for attention).  Toast + return.
+        if (IsInConference)
+        {
+            AppendSystemChat(Loc.Get("Conf_BlockedQuiz",
+                "Quiz Manager is unavailable in Conference mode."));
+            return;
+        }
+        CurrentMainView = MainViewKind.QuizManager;
+    }
 
     [RelayCommand]
     private void OpenStudentGridView() => CurrentMainView = MainViewKind.StudentGrid;
@@ -2039,6 +2061,10 @@ public partial class MainViewModel : ObservableObject
         ConferenceSessionId = Guid.Empty;
         ConferenceStartedAt = null;
         IsInConference = false;
+        // Phase 15-D step 5 — drop any sidebar / tab state that was left
+        // open during the session so the next Start opens a fresh shell.
+        IsConferenceSidebarVisible = false;
+        ConferenceSidebarTabIndex = 0;
     }
 
     /// <summary>Phase 14-B (Tier 1) — runtime cam failure handler.  Wired in
