@@ -1,23 +1,12 @@
-﻿using System;
-using System.Globalization;
-using System.Windows;
-using System.Windows.Data;
-
 namespace ClassroomCtrl.Teacher.Converters;
 
 /// <summary>
-/// True → Visible, False → Collapsed. ConverterParameter "Inverted" flips the mapping.
+/// Phase 16-B step 2 — thin re-export shim.  Real implementation lives in
+/// <see cref="ClassroomCtrl.Shared.Wpf.Converters.BoolToVisibilityConverter"/>.
+/// Existing XAML refs (<c>xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"</c>)
+/// keep working across the 40+ usage sites; a future polish round can
+/// sweep them onto the Shared.Wpf namespace and delete this shim.
 /// </summary>
-public class BoolToVisibilityConverter : IValueConverter
+public class BoolToVisibilityConverter : ClassroomCtrl.Shared.Wpf.Converters.BoolToVisibilityConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        bool on = value is bool b && b;
-        bool inverted = parameter is string s && s.Equals("Inverted", StringComparison.OrdinalIgnoreCase);
-        if (inverted) on = !on;
-        return on ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => Binding.DoNothing;
 }

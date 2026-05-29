@@ -1,25 +1,9 @@
-using System;
-using System.Globalization;
-using System.Windows;
-using System.Windows.Data;
-
 namespace ClassroomCtrl.Teacher.Converters;
 
 /// <summary>
-/// Phase 15-C — null → Collapsed, non-null → Visible.  ConverterParameter
-/// "Inverted" flips the mapping (used to show a cam-off placeholder when
-/// JpegFrame is null).
+/// Phase 16-B step 2 — thin re-export shim.  Real implementation lives in
+/// <see cref="ClassroomCtrl.Shared.Wpf.Converters.NullToVisibilityConverter"/>.
 /// </summary>
-public class NullToVisibilityConverter : IValueConverter
+public class NullToVisibilityConverter : ClassroomCtrl.Shared.Wpf.Converters.NullToVisibilityConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        bool isNull = value is null;
-        bool inverted = parameter is string s && s.Equals("Inverted", StringComparison.OrdinalIgnoreCase);
-        bool show = inverted ? isNull : !isNull;
-        return show ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => Binding.DoNothing;
 }
