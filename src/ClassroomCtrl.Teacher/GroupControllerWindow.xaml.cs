@@ -52,6 +52,9 @@ public partial class GroupControllerWindow : Window
     {
         HeaderText.Text = string.Format(Loc.Get("GroupCtrl_HeaderFmt"), _room.RoomName);
         SubText.Text = string.Format(Loc.Get("GroupCtrl_MemberCountFmt"), _room.MemberIds.Count);
+        // Phase 13-C (Tier 2) Step 5 — chat-location hint.  Sourced from
+        // localization so TH/EN both get translated copy.
+        ChatHintText.Text = string.Format(Loc.Get("GroupCtrl_ChatHintFmt", "💬 In-group chat appears in the main window prefixed with [{0}]"), _room.RoomName);
     }
 
     private void UpdateShareToggleLabel()

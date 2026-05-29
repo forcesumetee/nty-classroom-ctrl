@@ -1497,7 +1497,16 @@ public partial class MainViewModel : ObservableObject
                 return;
             }
 
-            var prefix = chat.RoomId.HasValue ? "[Room] " : "";
+            // Phase 13-C (Tier 2) Step 5 — group-name prefix so the teacher
+            // can tell which breakout the chat is coming from instead of a
+            // generic "[Room]" tag.  Falls back to the generic prefix only
+            // if the RoomId is unknown (room rebuilt / not yet in Rooms).
+            string prefix = "";
+            if (chat.RoomId.HasValue)
+            {
+                var room = Rooms.FirstOrDefault(r => r.RoomId == chat.RoomId.Value);
+                prefix = room != null ? $"[{room.RoomName}] " : "[Room] ";
+            }
             AppendStudentChat(chat.SenderName, prefix + chat.Text);
             ShowChatToastIfNotActive(chat.SenderName, prefix + chat.Text);
         });
