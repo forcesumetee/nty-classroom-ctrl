@@ -229,6 +229,35 @@ public class MicPttSetMessage
     [Key(2)] public ushort HotkeyVk { get; set; }
 }
 
+// ───────────── Phase 14-B (Tier 1): Conference Mode ─────────────
+
+/// <summary>
+/// Phase 14-B (Tier 1) — student → teacher webcam-state heartbeat.  Sent at
+/// agent startup, on WMI device-arrival/removal events (cam plug/unplug),
+/// and on any local toggle.  Drives the teacher-side per-student cam
+/// indicator + lets the teacher UI know which students will receive
+/// teacher-cam broadcasts.
+///
+/// In Tier 1 the student never *captures* a cam — DeviceAvailable reflects
+/// presence (via Win32_PnPEntity), CamLive is always false, Mode is always
+/// Off.  Tier 2 lights CamLive / Mode up when StudentCameraBroadcaster lands.
+/// </summary>
+[MessagePackObject]
+public class WebcamStateUpdateMessage
+{
+    [Key(0)] public bool DeviceAvailable { get; set; }
+    [Key(1)] public bool CamLive { get; set; }
+    [Key(2)] public WebcamMode Mode { get; set; }
+    [Key(3)] public string LastError { get; set; } = "";
+}
+
+/// <summary>
+/// Phase 14-B (Tier 1) — student-side webcam capture mode.  Mirrors
+/// Phase 13-D's mic-mode shape (Off / PTT / AlwaysOn).  Tier 1 only ever
+/// reports Off; Tier 2 wires PTT + AlwaysOn for actual student cam.
+/// </summary>
+public enum WebcamMode : byte { Off = 0, Ptt = 1, AlwaysOn = 2 }
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]

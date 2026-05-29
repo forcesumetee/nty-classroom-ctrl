@@ -169,4 +169,11 @@ public enum MessageType : ushort
     MicMuteRequest   = 0x0641,   // T→S targeted, reliable
     MicStateUpdate   = 0x0642,   // S→T heartbeat / on-change, reliable
     MicPttSet        = 0x0643,   // T→S targeted, reliable — sets PTT vs always-on mode
+
+    // Phase 14-B (Tier 1): Conference Mode — teacher webcam broadcast.  Closes
+    // Phase 9.5 UX gaps around the existing CameraStart/Frame/Stop
+    // (0x0460-0x0462) by adding bidirectional cam-state visibility so the
+    // teacher UI knows which students have a webcam (data plumbing only in
+    // Tier 1; Tier 2 lights it up).  Reliable channel; small + must arrive.
+    WebcamStateUpdate = 0x0650,   // S→T heartbeat / on-change, reliable
 }

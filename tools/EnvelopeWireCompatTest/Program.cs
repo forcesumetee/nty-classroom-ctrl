@@ -224,6 +224,44 @@ int errors = 0;
     else { Pass("T11: MicPttSetMessage round-trip preserved (3 keys)"); }
 }
 
+// ──────── Test 12 (Phase 14-B step 1): WebcamStateUpdateMessage round-trip ────────
+{
+    var msg = new WebcamStateUpdateMessage
+    {
+        DeviceAvailable = true,
+        CamLive = false,           // Tier 1 always reports false; Tier 2 lights it up
+        Mode = WebcamMode.Off,
+        LastError = "",
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<WebcamStateUpdateMessage>(bytes);
+    if (back.DeviceAvailable != msg.DeviceAvailable) { errors += Fail("T12: DeviceAvailable mismatch"); }
+    else if (back.CamLive != msg.CamLive) { errors += Fail("T12: CamLive mismatch"); }
+    else if (back.Mode != msg.Mode) { errors += Fail("T12: Mode mismatch"); }
+    else if (back.LastError != msg.LastError) { errors += Fail("T12: LastError mismatch"); }
+    else { Pass("T12: WebcamStateUpdateMessage round-trip preserved (4 keys, Tier 1 default)"); }
+}
+
+// ──────── Test 13 (Phase 14-B step 1): WebcamStateUpdateMessage with all
+//          fields exercised — non-empty LastError, AlwaysOn mode, CamLive=true.
+//          Confirms enum byte-encoding + UTF-8 string round-trip. ────────
+{
+    var msg = new WebcamStateUpdateMessage
+    {
+        DeviceAvailable = true,
+        CamLive = true,
+        Mode = WebcamMode.AlwaysOn,
+        LastError = "Camera held by another app",
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<WebcamStateUpdateMessage>(bytes);
+    if (back.DeviceAvailable != msg.DeviceAvailable) { errors += Fail("T13: DeviceAvailable mismatch"); }
+    else if (back.CamLive != msg.CamLive) { errors += Fail("T13: CamLive mismatch"); }
+    else if (back.Mode != WebcamMode.AlwaysOn) { errors += Fail($"T13: Mode mismatch (got {back.Mode})"); }
+    else if (back.LastError != msg.LastError) { errors += Fail("T13: LastError mismatch"); }
+    else { Pass("T13: WebcamStateUpdateMessage fully-populated round-trip preserved"); }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");
