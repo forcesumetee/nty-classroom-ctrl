@@ -1,31 +1,36 @@
 using ClassroomCtrl.Shared.Localization;
+using ClassroomCtrl.Shared.Wpf.ViewModels;
+using ClassroomCtrl.Student.Agent.ViewModels;
 using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 
 namespace ClassroomCtrl.Student.Agent;
 
 /// <summary>
-/// Phase 15-B/C — student-side conference shell.  Hosts a single 16:9 tile
-/// for the teacher's webcam frame (Tier 1 only broadcasts teacher cam).
-/// Spawned by <c>MainWindow</c> on <c>ConferenceStart</c> dispatch; closed by
-/// <c>MainWindow</c> on <c>ConferenceEnd</c> dispatch OR by the student
-/// clicking Leave.
+/// Phase 15-B/C — student-side conference shell.
 ///
-/// Phase 15-F (or a dedicated Shared.Wpf library) can lift this to the
-/// teacher-side multi-tile gallery when student-to-student cam ships.
+/// Phase 16-B step 7 — fully rewritten to host the Shared.Wpf gallery +
+/// toolbar + sidebar (Conference parity with Teacher).  The single-tile
+/// Image is replaced by a full ConferenceGalleryView; cam frames from
+/// the teacher route to the matching ConferenceTileViewModel by
+/// EndpointId.  Phase 16-C peer cam adds tiles for other students.
 /// </summary>
 public partial class ConferenceGalleryWindow : Window
 {
     public Guid SessionId { get; }
 
-    public ConferenceGalleryWindow(Guid sessionId, string hostName)
+    private readonly StudentConferenceShellViewModel _vm;
+
+    public ConferenceGalleryWindow(Guid sessionId, Guid teacherEndpointId, string hostName)
     {
         InitializeComponent();
         SessionId = sessionId;
+        _vm = new StudentConferenceShellViewModel(sessionId, teacherEndpointId, hostName);
+        _vm.RequestClose += (_, _) => Close();
+        DataContext = _vm;
 
         // Header line: "Hosted by {name}" or generic "in progress" line.
         if (!string.IsNullOrWhiteSpace(hostName))
@@ -37,18 +42,13 @@ public partial class ConferenceGalleryWindow : Window
         {
             HostLineText.Text = Loc.Get("Conf_HostLineUnknown", "Conference in progress");
         }
-
-        // Waiting placeholder: "Waiting for {host}'s camera…"
-        var waitingFmt = Loc.Get("Conf_WaitingForCamFmt", "Waiting for {0}'s camera…");
-        WaitingLineText.Text = string.Format(waitingFmt,
-            string.IsNullOrWhiteSpace(hostName) ? Loc.Get("Conf_HostLineUnknown", "the host") : hostName);
     }
 
-    /// <summary>Phase 15-C step 3 — called from <c>MainWindow.xaml.cs</c>
-    /// CameraFrame dispatch when this window is open.  Decodes the JPEG into
-    /// a frozen BitmapImage and assigns to the teacher-frame Image; first
-    /// frame swaps the waiting placeholder for the frame.</summary>
-    public void UpdateFrame(byte[] jpeg)
+    /// <summary>Phase 16-B step 7 — called from <c>MainWindow.xaml.cs</c>
+    /// CameraFrame dispatch when this window is open.  Routes the frame
+    /// to the matching tile by sender EndpointId (today only the teacher
+    /// tile exists; 16-C peer cam adds more).</summary>
+    public void UpdateFrame(Guid senderId, byte[] jpeg)
     {
         try
         {
@@ -59,46 +59,29 @@ public partial class ConferenceGalleryWindow : Window
             bmp.StreamSource = ms;
             bmp.EndInit();
             bmp.Freeze();
-            TeacherFrameImage.Source = bmp;
-            TeacherFrameImage.Visibility = Visibility.Visible;
-            WaitingPanel.Visibility = Visibility.Collapsed;
+
+            var tile = _vm.ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == senderId);
+            if (tile != null)
+            {
+                tile.JpegFrame = bmp;
+                tile.IsCamLive = true;
+            }
         }
         catch
         {
-            // Decode failure: leave the waiting placeholder up, swallow.
+            // Decode failure: leave the placeholder up, swallow.
         }
     }
 
-    private void Leave_Click(object sender, RoutedEventArgs e)
-    {
-        // Phase 15-B/C: Leave is local-only.  Closing the window leaves the
-        // student in tray-idle; the teacher's End broadcast would close it
-        // anyway when the session ends.  Phase 15-D wires an opt-out envelope.
-        Close();
-    }
-
     /// <summary>Phase 15-E step 4/5 — render the floating emoji over the
-    /// teacher tile.  Float-up + fade animation runs for ~3 s; a fresh
-    /// call mid-animation simply restarts the Storyboard with the new
-    /// emoji.  Called from MainWindow.OnIpcMessage on inbound Reaction
-    /// envelopes.</summary>
+    /// teacher tile.  Tier 1: routes to the teacher tile only; 16-C
+    /// will surface reactions per-sender to the matching tile.</summary>
     public void ShowReaction(string emoji)
     {
-        ReactionOverlay.Text = emoji ?? "";
-        var fade = new DoubleAnimationUsingKeyFrames();
-        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromPercent(0.0)));
-        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, KeyTime.FromPercent(0.15)));
-        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, KeyTime.FromPercent(0.7)));
-        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromPercent(1.0)));
-        fade.Duration = new Duration(TimeSpan.FromSeconds(2.8));
-
-        var rise = new DoubleAnimation
+        var tile = _vm.ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == _vm.TeacherEndpointId);
+        if (tile != null)
         {
-            From = 40,
-            To = -120,
-            Duration = new Duration(TimeSpan.FromSeconds(2.8)),
-        };
-        ReactionOverlay.BeginAnimation(OpacityProperty, fade);
-        ReactionOverlayTransform.BeginAnimation(TranslateTransform.YProperty, rise);
+            tile.CurrentReactionEmoji = emoji ?? "";
+        }
     }
 }

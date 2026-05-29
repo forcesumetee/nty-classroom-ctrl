@@ -729,13 +729,16 @@ public partial class MainWindow : Window
                 try
                 {
                     var cf = MessagePack.MessagePackSerializer.Deserialize<CameraFrameMessage>(env.Payload);
+                    var senderId = env.SenderId;
                     Dispatcher.Invoke(() =>
                     {
                         _cameraWindow?.UpdateFrame(cf.JpegData);
                         // Phase 15-C — also route into the Conference window's
                         // teacher tile when a conference is active so the
                         // student sees the teacher's cam in the gallery.
-                        _confWindow?.UpdateFrame(cf.JpegData);
+                        // Phase 16-B step 7 — UpdateFrame now takes sender id
+                        // for per-tile routing in the Shared.Wpf gallery.
+                        _confWindow?.UpdateFrame(senderId, cf.JpegData);
                     });
                 }
                 catch { }
@@ -755,10 +758,13 @@ public partial class MainWindow : Window
                 try
                 {
                     var cs = MessagePack.MessagePackSerializer.Deserialize<ConferenceStartMessage>(env.Payload);
+                    var teacherId = env.SenderId;
                     Dispatcher.Invoke(() =>
                     {
                         if (_confWindow != null) return;   // idempotent on repeat envelopes
-                        _confWindow = new ConferenceGalleryWindow(cs.SessionId, cs.HostName);
+                        // Phase 16-B step 7 — ctor now takes teacher EndpointId
+                        // so the gallery seeds with a tile matching the sender.
+                        _confWindow = new ConferenceGalleryWindow(cs.SessionId, teacherId, cs.HostName);
                         _confWindow.Closed += (_, _) => _confWindow = null;
                         _confWindow.Show();
                     });

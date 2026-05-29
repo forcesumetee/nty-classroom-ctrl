@@ -1,6 +1,8 @@
 <Window Icon="/Assets/classroom_icon.ico" x:Class="ClassroomCtrl.Student.Agent.ConferenceGalleryWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters;assembly=ClassroomCtrl.Shared.Wpf"
+        xmlns:confctrls="clr-namespace:ClassroomCtrl.Shared.Wpf.Conference;assembly=ClassroomCtrl.Shared.Wpf"
         Title="{DynamicResource Conf_LiveTitle}"
         Height="720" Width="1280"
         MinHeight="480" MinWidth="800"
@@ -9,20 +11,24 @@
         Background="{DynamicResource Surface.Background}"
         TextElement.Foreground="{DynamicResource Text.Primary}"
         FontFamily="Segoe UI">
-    <!-- Phase 15-C — student-side gallery.  Tier 1 only broadcasts the
-         teacher's cam, so the student gallery is a single tile (the
-         teacher).  Renders directly as a 16:9 Image instead of pulling in
-         the teacher's full gallery infrastructure (which Student.Agent has
-         no project reference to).  Phase 15-F or a dedicated Shared.Wpf
-         library can lift this to the multi-tile gallery later. -->
+    <!-- Phase 16-B step 7 — student-side conference shell rewrite.  Hosts the
+         same Shared.Wpf ConferenceGalleryView + ConferenceToolbar +
+         ConferenceSidebar as the teacher (Conference parity).
+         DataContext = StudentConferenceShellViewModel.  Tier 1: the gallery
+         starts with one teacher tile that gets cam frames via UpdateFrame;
+         Phase 16-C peer cam adds more tiles as students join. -->
+    <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <!-- Header bar with host line.  Replaces the centered placeholder
-             that lived here in 15-B. -->
+
+        <!-- Header bar with host line.  Mirrors the teacher's ConferenceView
+             header chip pattern (Phase 15-B step 7). -->
         <Border Grid.Row="0" Padding="20,10"
                 Background="{DynamicResource Surface.Elevated}"
                 BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1">
@@ -36,68 +42,23 @@
                            TextTrimming="CharacterEllipsis"/>
             </DockPanel>
         </Border>
-        <!-- Single tile: teacher cam frame.  Image.Source is updated by
-             UpdateFrame on every CameraFrame dispatch.  When no frame yet,
-             shows a placeholder with the host name + cam-off emoji. -->
-        <Grid Grid.Row="1" Margin="24">
-            <Border CornerRadius="8" Background="#111827"
-                    BorderThickness="2" BorderBrush="Transparent">
-                <Grid>
-                    <Image x:Name="TeacherFrameImage" Stretch="Uniform"
-                           Visibility="Collapsed"/>
-                    <!-- Phase 15-E step 4/5 — incoming reaction emoji overlay
-                         with float-up + fade animation.  Surfaced by
-                         ShowReaction(); Storyboard begins on each call.
-                         Hit-test disabled so the underlying image still
-                         receives input. -->
-                    <TextBlock x:Name="ReactionOverlay"
-                               FontSize="120"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               IsHitTestVisible="False"
-                               Opacity="0"
-                               Text="">
-                        <TextBlock.RenderTransform>
-                            <TranslateTransform x:Name="ReactionOverlayTransform" Y="0"/>
-                        </TextBlock.RenderTransform>
-                    </TextBlock>
-                    <StackPanel x:Name="WaitingPanel"
-                                HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="🎥" FontSize="64" HorizontalAlignment="Center"
-                                   Foreground="#94A3B8" Margin="0,0,0,8"/>
-                        <TextBlock x:Name="WaitingLineText"
-                                   FontSize="16"
-                                   Foreground="#CBD5E1"
-                                   HorizontalAlignment="Center"
-                                   TextWrapping="Wrap" TextAlignment="Center"
-                                   MaxWidth="520"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
+
+        <!-- Gallery surface + sidebar overlay.  Mirrors the teacher's
+             ConferenceView Row 0 inner Grid layout exactly (gallery
+             beneath, sidebar floats right). -->
+        <Grid Grid.Row="1">
+            <confctrls:ConferenceGalleryView DataContext="{Binding ConferenceGallery}"/>
+            <confctrls:ConferenceSidebar HorizontalAlignment="Right"
+                                         Width="340"
+                                         Visibility="{Binding IsConferenceSidebarVisible,
+                                                      Converter={StaticResource BoolToVisibility}}"/>
         </Grid>
-        <!-- Bottom bar with single Leave action.  15-D replaces with full
-             Meet-style ConferenceToolbar (mic / cam / share / chat / hand /
-             more / leave).
-             Phase 16-B step 6 — UI bug #2 fix: was Grid.Row="1" which
-             overlapped the tile area at the middle row; Row 2 is the
-             intended slot per the RowDefinitions (Auto / * / Auto). -->
-        <Border Grid.Row="2"
-                Background="{DynamicResource Surface.Elevated}"
-                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,1,0,0"
-                Padding="24,12">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Style="{DynamicResource Button.Danger}"
-                        Click="Leave_Click"
-                        Padding="20,8">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🚪" FontSize="13" Margin="0,0,8,0"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="{DynamicResource Conf_Leave}"
-                                   FontSize="13" FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-            </StackPanel>
-        </Border>
+
+        <!-- Bottom Meet-style toolbar.  Same control as teacher; for the
+             student it's wired with stubs in StudentConferenceShellViewModel
+             (Phase 16-D adds the full IConferenceShellViewModel + role
+             gating that hides admin actions on student).  End/Leave button
+             closes the window via RequestClose event. -->
+        <confctrls:ConferenceToolbar Grid.Row="2"/>
     </Grid>
 </Window>
