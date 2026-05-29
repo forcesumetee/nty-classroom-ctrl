@@ -120,6 +120,94 @@
                             ToolTip="{DynamicResource Btn_CopyIP}">
                         <TextBlock Text="📋" FontSize="14"/>
                     </Button>
+                    <!-- Phase 15-B (MVP) — mode-toggle pill.  Two side-by-side capsules
+                         that flip MainViewModel.IsInConference.  Each button uses a
+                         style trigger keyed on IsInConference to render active vs idle
+                         (active = white card + primary text; idle = transparent + on-accent text).
+                         The toggle is purely a UI mode preference — clicking does NOT
+                         start a conference session.  The actual broadcast (ConferenceStart
+                         0x0670) happens in step 5 only when the teacher hits the
+                         "Start Conference" CTA inside the ConferenceView itself.
+                         Conference is mode-exclusive with QuizManager (see architecture
+                         doc § 3 table); both share the same content cell. -->
+                    <Border Margin="0,0,8,0" Padding="2"
+                            Background="#33FFFFFF" CornerRadius="999"
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Command="{Binding ExitConferenceModeCommand}"
+                                    ToolTip="{DynamicResource Conf_ModeClassroomTip}"
+                                    Padding="12,4" BorderThickness="0" Cursor="Hand"
+                                    Focusable="False" FocusVisualStyle="{x:Null}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource Text.OnAccent}"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Cap" Background="{TemplateBinding Background}"
+                                                            CornerRadius="999" Padding="{TemplateBinding Padding}">
+                                                        <ContentPresenter VerticalAlignment="Center"
+                                                                          HorizontalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsInConference}" Value="False">
+                                                <Setter Property="Background"
+                                                        Value="{DynamicResource Surface.Card}"/>
+                                                <Setter Property="Foreground"
+                                                        Value="{DynamicResource Accent.Primary}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📚" FontSize="12" Margin="0,0,4,0"/>
+                                    <TextBlock Text="{DynamicResource Conf_ModeClassroom}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding EnterConferenceModeCommand}"
+                                    ToolTip="{DynamicResource Conf_ModeConferenceTip}"
+                                    Padding="12,4" BorderThickness="0" Cursor="Hand"
+                                    Focusable="False" FocusVisualStyle="{x:Null}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource Text.OnAccent}"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}"
+                                                            CornerRadius="999" Padding="{TemplateBinding Padding}">
+                                                        <ContentPresenter VerticalAlignment="Center"
+                                                                          HorizontalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsInConference}" Value="True">
+                                                <Setter Property="Background"
+                                                        Value="{DynamicResource Surface.Card}"/>
+                                                <Setter Property="Foreground"
+                                                        Value="{DynamicResource Accent.Primary}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📹" FontSize="12" Margin="0,0,4,0"/>
+                                    <TextBlock Text="{DynamicResource Conf_ModeConference}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Border>
                     <!-- Phase 3 Section D — Notifications bell.  Badge shows the unread
                          notification count; click marks all read and toggles the popup. -->
                     <Button x:Name="NotificationsBellBtn"
@@ -244,9 +332,17 @@
         </Border>
 
         <!-- ═════════════════════ SIDEBAR (Grid.Row=2 / Col=0) ═════════════════════ -->
+        <!-- Phase 15-B (MVP) — sidebar collapses while the shell is in Conference
+             mode so the gallery can use the full row 2 width (ConferenceView slots in
+             at Grid.ColumnSpan="3" — step 4).  Column definition stays 240px; only
+             Visibility flips, which lets the swap reverse cleanly when the teacher
+             ends the conference. -->
         <Border Grid.Row="2" Grid.Column="0"
                 Background="{DynamicResource Surface.Elevated}"
-                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,1,0">
+                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,1,0"
+                Visibility="{Binding IsInConference,
+                             Converter={StaticResource BoolToVisibility},
+                             ConverterParameter=Inverted}">
             <DockPanel>
                 <!-- Bottom CTA area pinned so it stays visible regardless of scroll -->
                 <Border DockPanel.Dock="Bottom"
@@ -652,9 +748,14 @@
                                             ConverterParameter=QuizManager}"/>
 
         <!-- ═════════════════════ RIGHT RAIL (chat) ═════════════════════ -->
+        <!-- Phase 15-B (MVP) — right rail collapses while in Conference (sibling
+             pattern to the sidebar above). -->
         <Border Grid.Row="2" Grid.Column="2"
                 Background="{DynamicResource Surface.Elevated}"
-                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1,0,0,0">
+                BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1,0,0,0"
+                Visibility="{Binding IsInConference,
+                             Converter={StaticResource BoolToVisibility},
+                             ConverterParameter=Inverted}">
             <DockPanel>
                 <!-- Phase 2 Section F — right-rail tabs.  Clicking sets RightRailTabIndex
                      which toggles the Chat vs Activity panels' Visibility below. -->

@@ -334,6 +334,15 @@ public partial class MainViewModel : ObservableObject
     public IRelayCommand ToggleCameraCommand { get; }
     [ObservableProperty] private string cameraButtonText = "";
 
+    // Phase 15-B (MVP) — header mode-toggle pill commands.  These ONLY flip
+    // the UI mode preference (CurrentMainView via OnIsInConferenceChanged);
+    // they do NOT broadcast ConferenceStart/End.  The actual session
+    // lifecycle commands StartConferenceCommand / EndConferenceCommand
+    // live alongside the ConferenceView's Start CTA and are wired in
+    // step 5.
+    public IRelayCommand EnterConferenceModeCommand { get; }
+    public IRelayCommand ExitConferenceModeCommand { get; }
+
     // Phase 9.6: Net Movie
     public IRelayCommand OpenNetMovieCommand { get; }
 
@@ -440,6 +449,14 @@ public partial class MainViewModel : ObservableObject
 
         ToggleCameraCommand = new RelayCommand(ToggleCamera);
         UpdateCameraButtonText();
+
+        // Phase 15-B (MVP) — mode-pill commands.  Flip IsInConference; the
+        // OnIsInConferenceChanged partial swaps CurrentMainView.  Step 5 adds
+        // the broadcast-emitting StartConferenceCommand / EndConferenceCommand
+        // bound to the ConferenceView's own Start CTA.
+        EnterConferenceModeCommand = new RelayCommand(() => IsInConference = true);
+        ExitConferenceModeCommand  = new RelayCommand(() => IsInConference = false);
+
         OpenNetMovieCommand = new RelayCommand(OpenNetMovie);
         OpenMicMonitorCommand = new RelayCommand(OpenMicMonitor);
         OpenMultiRoomCommand = new RelayCommand(OpenGroupManager);
