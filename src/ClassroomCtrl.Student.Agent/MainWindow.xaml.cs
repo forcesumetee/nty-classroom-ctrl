@@ -45,6 +45,12 @@ public partial class MainWindow : Window
     private PeerScreenViewWindow? _demoPeerWindow;
     private Guid? _demoSourceId;
 
+    // Phase 13-C (Tier 2): group-presenter viewer — opened when the in-group
+    // host starts presenting; closed on host change, host clear, or this
+    // student being moved to a different room.  Host's own Agent never opens
+    // it (sender-side self-filter on env.SenderId == _myEndpointId).
+    private GroupPeerView? _groupPeerView;
+
     // Phase 9.5: Camera view + Phase 9.6: Movie player + Phase 6.5: Remote banner
     private CameraViewWindow? _cameraWindow;
     private MoviePlayerWindow? _movieWindow;
@@ -276,6 +282,16 @@ public partial class MainWindow : Window
                                 _hostToolbar = null;
                             }
                         }
+
+                        // Phase 13-C (Tier 2) — if my room changed, any open
+                        // GroupPeerView is for the wrong group's presenter.
+                        // Close it; a new Start envelope (relayed for the new
+                        // group's host) will reopen if applicable.
+                        if (_groupPeerView != null && _groupPeerView.GroupId != newRoom.GetValueOrDefault())
+                        {
+                            _groupPeerView.Close();
+                            _groupPeerView = null;
+                        }
                     });
                 }
                 break;
@@ -365,6 +381,76 @@ public partial class MainWindow : Window
                 {
                     _screenViewWindow?.Close();
                     _screenViewWindow = null;
+                });
+                break;
+
+            // ─────── Phase 13-C (Tier 2): in-group peer presenter ───────
+            // The host's StudentBroadcaster emits a Start envelope, per-frame
+            // Frame envelopes, and a Stop envelope.  All carry TargetGroupId
+            // for the Service-side IsForMe filter; Service forwards to Agent.
+            // The host's OWN Agent also receives loopback envelopes — filter
+            // by env.SenderId == _myEndpointId so the host doesn't view its
+            // own broadcast.
+            case MessageType.StudentGroupScreenStreamStart:
+                if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
+                try
+                {
+                    var ctrl = MessagePack.MessagePackSerializer.Deserialize<StudentGroupScreenStreamControlMessage>(env.Payload);
+                    IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStart presenter={ctrl.PresenterName} group={ctrl.GroupId} codec={ctrl.Codec}");
+                    Dispatcher.Invoke(() =>
+                    {
+                        // Host changed under us (e.g. teacher reassigned) —
+                        // close the prior viewer so the new presenter opens fresh.
+                        if (_groupPeerView != null && _groupPeerView.PresenterId != ctrl.PresenterId)
+                        {
+                            _groupPeerView.Close();
+                            _groupPeerView = null;
+                        }
+                        if (_groupPeerView == null)
+                        {
+                            _groupPeerView = new GroupPeerView(ctrl.PresenterId, ctrl.PresenterName, ctrl.GroupId, _myRoomName ?? "");
+                            _groupPeerView.Closed += (_, _) => _groupPeerView = null;
+                            _groupPeerView.Show();
+                        }
+                    });
+                }
+                catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStart decode: {ex.Message}"); }
+                break;
+
+            case MessageType.StudentGroupScreenStreamFrame:
+                if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
+                try
+                {
+                    var frame = MessagePack.MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(env.Payload);
+                    var presenterId = env.SenderId;
+                    Dispatcher.Invoke(() =>
+                    {
+                        // Defensive: open the viewer on first frame if we
+                        // missed the Start envelope (e.g. teacher restart).
+                        // Without a name we fall back to the GroupId — Step 4
+                        // refresh would correct labeling via the next Start.
+                        if (_groupPeerView == null && env.TargetGroupId.HasValue)
+                        {
+                            _groupPeerView = new GroupPeerView(presenterId, "", env.TargetGroupId.Value, _myRoomName ?? "");
+                            _groupPeerView.Closed += (_, _) => _groupPeerView = null;
+                            _groupPeerView.Show();
+                        }
+                        _groupPeerView?.UpdateFrame(
+                            frame.FrameData, frame.Width, frame.Height,
+                            frame.TimestampUtcMs, frame.FrameSeq,
+                            frame.Codec, frame.IsKeyframe);
+                    });
+                }
+                catch { /* drop bad frames quietly */ }
+                break;
+
+            case MessageType.StudentGroupScreenStreamStop:
+                if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
+                IpcClient.LogToFile($"[MainWindow] StudentGroupScreenStreamStop sender={env.SenderId}");
+                Dispatcher.Invoke(() =>
+                {
+                    _groupPeerView?.Close();
+                    _groupPeerView = null;
                 });
                 break;
 
