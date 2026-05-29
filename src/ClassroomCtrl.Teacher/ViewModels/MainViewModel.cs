@@ -749,6 +749,11 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             // Phase 15-C — route the teacher's own cam JPEG into the self-tile
             // so the Conference gallery shows the teacher's own preview.
             App.Server.TeacherCameraFrameSent += OnTeacherCameraFrameSent;
+            // Phase 16-C — same self-tile preview path for the new Conference
+            // cam wire (0x0681).  When the teacher is in Conference mode the
+            // CameraBroadcastService routes through this event instead.  Single
+            // handler reuse — decode + push to self-tile is identical.
+            App.Server.TeacherConferenceCameraFrameSent += OnTeacherCameraFrameSent;
             // Phase 13-B (Tier 1) — sync local Rooms collection from canonical
             // server state on every mutation.  GroupManagerView + the Step-7
             // badges + status chip all read off Rooms.
@@ -2074,6 +2079,23 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Information);
                 return;
+            }
+            // Phase 16-C — mode-aware cam emission.  Set Routing + the
+            // Conference session id / source name BEFORE the dialog's Start
+            // path runs.  Cleared on Stop() so a stale flag doesn't carry
+            // into the next Start.  Mode pick-up happens here (not inside
+            // the dialog) so the dialog stays mode-agnostic.
+            if (IsInConference)
+            {
+                App.Camera.Routing = ClassroomCtrl.Teacher.Services.CamRouting.Conference;
+                App.Camera.ConferenceSessionId = ConferenceSessionId;
+                App.Camera.ConferenceSourceName = Loc.Get("Conf_TeacherDisplayName", "Teacher");
+            }
+            else
+            {
+                App.Camera.Routing = ClassroomCtrl.Teacher.Services.CamRouting.Classroom;
+                App.Camera.ConferenceSessionId = System.Guid.Empty;
+                App.Camera.ConferenceSourceName = "";
             }
             var dlg = new CameraSelectorDialog { Owner = System.Windows.Application.Current.MainWindow };
             if (dlg.ShowDialog() == true)

@@ -15,9 +15,26 @@ namespace ClassroomCtrl.Teacher.Services;
 
 public record CameraDeviceDescriptor(string Moniker, string Name);
 
+/// <summary>Phase 16-C — mode-aware emission selector.  One physical capture,
+/// two possible wire paths driven by which mode the teacher is in.</summary>
+public enum CamRouting
+{
+    /// <summary>Classroom 9.5 — emits 0x0460-0x0462 (CameraStart/Frame/Stop);
+    /// pops a cam window on each student.</summary>
+    Classroom = 0,
+    /// <summary>Conference 16-C — emits 0x0680-0x0682 (ConferenceCameraStart/
+    /// Frame/Stop); routes to the matching tile in the gallery surface.</summary>
+    Conference = 1,
+}
+
 /// <summary>
 /// Phase 9.5: Webcam capture via DirectShow → JPEG → broadcast to all students.
 /// Wraps AForge.Video.DirectShow.VideoCaptureDevice.
+///
+/// Phase 16-C — gained <see cref="Routing"/> so the same capture pipeline can
+/// feed either the Classroom 9.5 wire (0x0460-0x0462) or the Conference
+/// 16-C wire (0x0680-0x0682) depending on UI mode.  Mirrors the
+/// 16-B+ ScreenBroadcaster three-way switch pattern.
 /// </summary>
 public class CameraBroadcastService : IDisposable
 {
@@ -29,6 +46,24 @@ public class CameraBroadcastService : IDisposable
 
     public bool IsActive { get; private set; }
     public int JpegQuality { get; set; } = 70;
+
+    /// <summary>Phase 16-C — emission target.  Read on every frame + on
+    /// Start/Stop so the broadcaster picks the right wire envelope.  Set by
+    /// UI BEFORE Start() when the teacher is in Conference mode; reset on
+    /// Stop().  Mutually exclusive at the UI level (Classroom and Conference
+    /// modes are exclusive).</summary>
+    public CamRouting Routing { get; set; } = CamRouting.Classroom;
+
+    /// <summary>Phase 16-C — session id stamped into the Conference Start
+    /// envelope so receivers verify they're in the same session before
+    /// allocating a decoder.  Set alongside <see cref="Routing"/> when in
+    /// Conference mode; <see cref="Guid.Empty"/> when in Classroom mode.</summary>
+    public Guid ConferenceSessionId { get; set; }
+
+    /// <summary>Phase 16-C — display name carried in the Conference Start
+    /// envelope so receivers can label the tile without resolving sender→name
+    /// independently.  Set alongside <see cref="Routing"/>.</summary>
+    public string ConferenceSourceName { get; set; } = "";
 
     /// <summary>Phase 14-B (Tier 1) — last error from the AForge layer.  Set
     /// by <see cref="Start"/> on failure and by the runtime
@@ -84,8 +119,29 @@ public class CameraBroadcastService : IDisposable
             _device.Start();
             IsActive = true;
 
-            var startMsg = new CameraStartMessage { Width = width, Height = height, Fps = fps };
-            _ = _server.BroadcastCameraStartAsync(startMsg, CancellationToken.None);
+            // Phase 16-C — mode-aware Start envelope.  Classroom emits 0x0460
+            // (pops a cam window on every student); Conference emits 0x0680
+            // (lands in the gallery tile keyed by sender id).  ConferenceSessionId
+            // + ConferenceSourceName are read here so the UI must set them before
+            // Start when Routing = Conference.
+            if (Routing == CamRouting.Conference)
+            {
+                var startMsg = new ConferenceCameraStartMessage
+                {
+                    SessionId = ConferenceSessionId,
+                    SourceEndpointId = Guid.Empty,   // server stamps with _teacherId
+                    SourceName = ConferenceSourceName,
+                    Width = width,
+                    Height = height,
+                    Fps = fps,
+                };
+                _ = _server.BroadcastConferenceCameraStartAsync(startMsg, CancellationToken.None);
+            }
+            else
+            {
+                var startMsg = new CameraStartMessage { Width = width, Height = height, Fps = fps };
+                _ = _server.BroadcastCameraStartAsync(startMsg, CancellationToken.None);
+            }
             return true;
         }
         catch (Exception ex)
@@ -99,6 +155,9 @@ public class CameraBroadcastService : IDisposable
     public void Stop()
     {
         if (!IsActive) return;
+        // Phase 16-C — snapshot the mode flag BEFORE we tear down so the Stop
+        // envelope picks the right wire path even after the device cleanup.
+        var wasConference = Routing == CamRouting.Conference;
         try
         {
             if (_device != null)
@@ -112,7 +171,19 @@ public class CameraBroadcastService : IDisposable
         }
         catch { }
         IsActive = false;
-        _ = _server.BroadcastCameraStopAsync(CancellationToken.None);
+        if (wasConference)
+        {
+            _ = _server.BroadcastConferenceCameraStopAsync(CancellationToken.None);
+        }
+        else
+        {
+            _ = _server.BroadcastCameraStopAsync(CancellationToken.None);
+        }
+        // Reset to Classroom default so a stale Conference flag doesn't carry
+        // into the next Start() if the UI flow forgets to set it.
+        Routing = CamRouting.Classroom;
+        ConferenceSessionId = Guid.Empty;
+        ConferenceSourceName = "";
     }
 
     /// <summary>Phase 14-B (Tier 1) — runtime-error path.  AForge fires this on
@@ -136,13 +207,31 @@ public class CameraBroadcastService : IDisposable
         {
             using var ms = new MemoryStream();
             EncodeJpeg(e.Frame, ms, JpegQuality);
-            var msg = new CameraFrameMessage
-            {
-                JpegData = ms.ToArray(),
-                TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            };
+            var jpeg = ms.ToArray();
             Interlocked.Increment(ref _frameSeq);
-            _ = _server.BroadcastCameraFrameAsync(msg, CancellationToken.None);
+            // Phase 16-C — mode-aware emission.  One encode, two possible wire
+            // paths; the encode + JPEG bytes are identical so a future polish
+            // round could even fan out to BOTH (mixed-mode UX) without
+            // re-encoding.
+            if (Routing == CamRouting.Conference)
+            {
+                var msg = new ConferenceCameraFrameMessage
+                {
+                    SourceEndpointId = Guid.Empty,   // server stamps with _teacherId
+                    JpegData = jpeg,
+                    TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                };
+                _ = _server.BroadcastConferenceCameraFrameAsync(msg, CancellationToken.None);
+            }
+            else
+            {
+                var msg = new CameraFrameMessage
+                {
+                    JpegData = jpeg,
+                    TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                };
+                _ = _server.BroadcastCameraFrameAsync(msg, CancellationToken.None);
+            }
         }
         catch (Exception ex)
         {

@@ -406,6 +406,63 @@ public class ControlServer : IDisposable
     public Task BroadcastCameraStopAsync(CancellationToken ct)
         => _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.CameraStop, Array.Empty<byte>(), _teacherId), ct);
 
+    // ─────── Phase 16-C : Peer cam routing (Conference Mode) ───────
+
+    /// <summary>Phase 16-C — start signal for the teacher's own cam stream
+    /// inside a Conference.  Distinct from <see cref="BroadcastCameraStartAsync"/>
+    /// (9.5) which is Classroom-mode unidirectional and pops a cam window;
+    /// this stays inside the gallery surface.  Reliable channel.  Also stamps
+    /// the in-process <see cref="_activeConferenceCamSenders"/> tracker so
+    /// the Hello-ack snapshot path can replay Start envelopes to
+    /// late-joining peers.</summary>
+    public Task BroadcastConferenceCameraStartAsync(ConferenceCameraStartMessage msg, CancellationToken ct)
+    {
+        msg.SourceEndpointId = _teacherId;
+        _activeConferenceCamSenders[_teacherId] = msg;
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.ConferenceCameraStart, bytes, _teacherId);
+        _logger.LogInformation("ConferenceCamera START (teacher, {W}x{H}@{F})", msg.Width, msg.Height, msg.Fps);
+        return _tcp.BroadcastReliableAsync(env, ct);
+    }
+
+    /// <summary>Phase 16-C — one frame of the teacher's own Conference cam.
+    /// Lossy via _outbox same as 9.5 0x0461.  Also fires
+    /// <see cref="TeacherConferenceCameraFrameSent"/> so the teacher's local
+    /// Conference gallery self-tile renders without a wire round-trip
+    /// (mirrors <see cref="TeacherCameraFrameSent"/> for the 9.5 path).</summary>
+    public Task BroadcastConferenceCameraFrameAsync(ConferenceCameraFrameMessage msg, CancellationToken ct)
+    {
+        msg.SourceEndpointId = _teacherId;
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        try { TeacherConferenceCameraFrameSent?.Invoke(this, msg.JpegData); } catch { }
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.ConferenceCameraFrame, bytes, _teacherId), ct);
+    }
+
+    /// <summary>Phase 16-C — fired on every teacher Conference cam broadcast
+    /// so the local Conference gallery self-tile can render the same JPEG
+    /// without a round-trip through the wire.  Subscribers marshal to UI.</summary>
+    public event EventHandler<byte[]>? TeacherConferenceCameraFrameSent;
+
+    /// <summary>Phase 16-C — stop signal for the teacher's own Conference cam.
+    /// Reliable channel.  Clears the in-process tracker so late joiners after
+    /// this point don't receive a stale Start replay.</summary>
+    public Task BroadcastConferenceCameraStopAsync(CancellationToken ct)
+    {
+        var msg = new ConferenceCameraStopMessage { SourceEndpointId = _teacherId };
+        _activeConferenceCamSenders.Remove(_teacherId);
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.ConferenceCameraStop, bytes, _teacherId);
+        _logger.LogInformation("ConferenceCamera STOP (teacher)");
+        return _tcp.BroadcastReliableAsync(env, ct);
+    }
+
+    /// <summary>Phase 16-C — endpoint→Start payload map of every participant
+    /// currently broadcasting a Conference cam.  Hello-ack snapshot path
+    /// (Step 3) reads this to replay Start envelopes to late joiners so a
+    /// participant joining mid-Conference sees existing cams populate tiles
+    /// without waiting for the next cam toggle from each peer.</summary>
+    private readonly Dictionary<Guid, ConferenceCameraStartMessage> _activeConferenceCamSenders = new();
+
     // ─────── Phase 15-B (MVP): Conference Mode session lifecycle ───────
     //
     // Both Start and End ride BroadcastReliableAsync (Wait, cap 4) because a
