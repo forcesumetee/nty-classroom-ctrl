@@ -47,9 +47,36 @@ public partial class MainViewModel : ObservableObject
     // Phase 3 Section G/H — main content area view router.  StudentGrid is the default;
     // QuizManager swaps in the embedded QuizManagerView. New embedded views go here as
     // they're added in later phases (Class Roster etc.).
-    public enum MainViewKind { StudentGrid, QuizManager }
+    // Phase 15-B (MVP) — Conference value added.  CurrentMainView flips to
+    // Conference when the header mode-toggle pill is clicked OR when a
+    // ConferenceStart envelope arrives (mode-exclusive with the other two
+    // values; same ViewKindToVisibilityConverter pattern as StudentGrid /
+    // QuizManager).
+    public enum MainViewKind { StudentGrid, QuizManager, Conference }
 
     [ObservableProperty] private MainViewKind currentMainView = MainViewKind.StudentGrid;
+
+    // Phase 15-B (MVP) — Conference Mode state.  IsInConference is the
+    // single source of truth for "the teacher's shell is in Conference mode".
+    // OnIsInConferenceChanged flips CurrentMainView so the
+    // ViewKindToVisibilityConverter swaps the content cell.
+    //
+    // ConferenceSessionId is Guid.Empty when no session is active; set to
+    // a fresh Guid by StartConferenceCommand and broadcast as the
+    // ConferenceStartMessage.SessionId.  ConferenceStartedAt is the wall-
+    // clock UTC anchor used by the future elapsed-time chip (Phase 15-C/D).
+    [ObservableProperty] private bool isInConference;
+    [ObservableProperty] private Guid conferenceSessionId = Guid.Empty;
+    [ObservableProperty] private DateTime? conferenceStartedAt;
+
+    partial void OnIsInConferenceChanged(bool value)
+    {
+        // Flipping the mode flag flips the content-cell view.  Flipping back
+        // out of Conference returns to the StudentGrid default; the
+        // QuizManager view is only reachable via its explicit OpenQuizManager
+        // command, so we never auto-route there.
+        CurrentMainView = value ? MainViewKind.Conference : MainViewKind.StudentGrid;
+    }
 
     // Phase 3 Section C — system / error / hand-raised events.  Newest-first (Insert at 0)
     // so the bell popup and Activity tab show recent activity without reversing.  Capped at
