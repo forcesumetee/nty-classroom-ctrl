@@ -19,6 +19,7 @@
          containers. -->
     <UserControl.Resources>
         <conv:ParticipantCountToColumnsConverter x:Key="CountToColumns"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
         <DataTemplate x:Key="ConferenceTileTemplate"
                       DataType="{x:Type vm:ConferenceTileViewModel}">
             <!-- Click anywhere on the tile to pin/unpin.  Forwarded via
@@ -46,8 +47,16 @@
          simple: bind both layouts to the same Tiles collection; the small
          filmstrip ItemTemplate is the same ConferenceTile UserControl. -->
     <Grid Margin="12">
-        <!-- (a) Gallery (auto-layout) — visible iff IsPinnedView == false. -->
-        <ItemsControl ItemsSource="{Binding Tiles}"
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <!-- Bottom page-nav strip; only takes layout when there's > 1 page. -->
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid Grid.Row="0">
+        <!-- (a) Gallery (auto-layout) — visible iff IsPinnedView == false.
+             Binds to PageTiles (paged subset of Tiles) so > TilesPerPage
+             participants paginate via the bar below. -->
+        <ItemsControl ItemsSource="{Binding PageTiles}"
                       ItemTemplate="{StaticResource ConferenceTileTemplate}">
             <ItemsControl.Style>
                 <Style TargetType="ItemsControl">
@@ -62,7 +71,7 @@
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <UniformGrid
-                        Columns="{Binding Tiles.Count,
+                        Columns="{Binding PageTiles.Count,
                                           Converter={StaticResource CountToColumns}}"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
@@ -155,5 +164,39 @@
                 </ItemsControl>
             </ScrollViewer>
         </Grid>
+        </Grid><!-- Grid.Row=0 -->
+
+        <!-- Page navigation strip — only takes layout space when HasMultiplePages.
+             Centered prev/next with the "{page} / {total}" label between. -->
+        <Border Grid.Row="1" Padding="0,10,0,4"
+                Visibility="{Binding HasMultiplePages, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Command="{Binding PrevPageCommand}"
+                        Padding="14,4" Margin="0,0,8,0"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource Border.Soft}"
+                        Background="{DynamicResource Surface.Card}"
+                        Focusable="False" FocusVisualStyle="{x:Null}"
+                        Cursor="Hand">
+                    <TextBlock Text="◀" FontSize="13"/>
+                </Button>
+                <Border Background="{DynamicResource Surface.Elevated}"
+                        CornerRadius="999" Padding="14,4"
+                        VerticalAlignment="Center" Margin="0,0,8,0">
+                    <TextBlock Text="{Binding PageLabel}"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Text.Primary}"/>
+                </Border>
+                <Button Command="{Binding NextPageCommand}"
+                        Padding="14,4"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource Border.Soft}"
+                        Background="{DynamicResource Surface.Card}"
+                        Focusable="False" FocusVisualStyle="{x:Null}"
+                        Cursor="Hand">
+                    <TextBlock Text="▶" FontSize="13"/>
+                </Button>
+            </StackPanel>
+        </Border>
     </Grid>
 </UserControl>

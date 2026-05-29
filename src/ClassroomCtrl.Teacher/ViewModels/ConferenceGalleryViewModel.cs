@@ -88,12 +88,31 @@ public partial class ConferenceGalleryViewModel : ObservableObject
     }
 
     /// <summary>1-based current page.  Step 7 (pagination) drives the
-    /// view's filter.</summary>
+    /// view's filter via <see cref="PageTiles"/>.</summary>
     [ObservableProperty] private int currentPage = 1;
     [ObservableProperty] private int totalPages = 1;
     public bool HasMultiplePages => TotalPages > 1;
 
-    partial void OnTotalPagesChanged(int value) => OnPropertyChanged(nameof(HasMultiplePages));
+    /// <summary>Visible tiles for <see cref="CurrentPage"/>.  Rebuilt by
+    /// <see cref="RebuildPageTiles"/> on Tiles change or page change so the
+    /// gallery's <c>ItemsControl</c> can bind to this collection directly
+    /// (rather than filtering Tiles in XAML).</summary>
+    public ObservableCollection<ConferenceTileViewModel> PageTiles { get; } = new();
+
+    /// <summary>Step 7 — page-counter text shown next to prev/next buttons.</summary>
+    public string PageLabel => $"{CurrentPage} / {TotalPages}";
+
+    partial void OnTotalPagesChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasMultiplePages));
+        OnPropertyChanged(nameof(PageLabel));
+    }
+
+    partial void OnCurrentPageChanged(int value)
+    {
+        OnPropertyChanged(nameof(PageLabel));
+        RebuildPageTiles();
+    }
 
     public IRelayCommand<ConferenceTileViewModel?> PinCommand { get; }
     public IRelayCommand PrevPageCommand { get; }
@@ -115,7 +134,12 @@ public partial class ConferenceGalleryViewModel : ObservableObject
         {
             if (CurrentPage < TotalPages) CurrentPage++;
         });
-        Tiles.CollectionChanged += (_, _) => RecomputePagination();
+        Tiles.CollectionChanged += (_, _) =>
+        {
+            RecomputePagination();
+            RebuildPageTiles();
+        };
+        RebuildPageTiles();
     }
 
     public void RecomputePagination()
@@ -124,5 +148,16 @@ public partial class ConferenceGalleryViewModel : ObservableObject
         if (newTotal != TotalPages) TotalPages = newTotal;
         if (CurrentPage > TotalPages) CurrentPage = TotalPages;
         if (CurrentPage < 1) CurrentPage = 1;
+    }
+
+    /// <summary>Step 7 — refresh the <see cref="PageTiles"/> collection from
+    /// the current 1-based <see cref="CurrentPage"/> + <see cref="TilesPerPage"/>.
+    /// Single-pass diff: clear + add (small N keeps this trivial).</summary>
+    public void RebuildPageTiles()
+    {
+        int start = (Math.Max(1, CurrentPage) - 1) * TilesPerPage;
+        int end = Math.Min(Tiles.Count, start + TilesPerPage);
+        PageTiles.Clear();
+        for (int i = start; i < end; i++) PageTiles.Add(Tiles[i]);
     }
 }
