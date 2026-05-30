@@ -1929,6 +1929,15 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                     Kind = ChatMessageKind.Student,
                     MessageText = chat.Text,
                 });
+
+                // Phase 17 step 4 — slide-in card.  Suppress when the
+                // teacher is already viewing the Conference chat tab (sidebar
+                // visible + chat tab selected) so the corner overlay doesn't
+                // double-up on a message the teacher just watched land in the
+                // sidebar.  Any other state (sidebar closed, participants tab
+                // open, Conference window minimized) → notify.
+                if (!(IsConferenceSidebarVisible && IsConferenceChatTabSelected))
+                    ShowChatNotification(chat.SenderName, chat.Text);
                 return;
             }
 
@@ -1970,6 +1979,12 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 // Phase 10.14 (Item 9) — toast for the DM path too; sender name carries
                 // the student identity, body is the message verbatim (truncate in helper).
                 ShowChatToastIfNotActive(displayName, chat.Text);
+
+                // Phase 17 step 4 — slide-in card.  Suppress when the
+                // teacher is already viewing this DM conversation (their
+                // eyes are on the rail; double-notification would be noise).
+                if (ActiveConversation != conv)
+                    ShowChatNotification(displayName, chat.Text);
                 return;
             }
 
@@ -1985,6 +2000,36 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             }
             AppendStudentChat(chat.SenderName, prefix + chat.Text);
             ShowChatToastIfNotActive(chat.SenderName, prefix + chat.Text);
+
+            // Phase 17 step 4 — slide-in card for whole-class / room chats.
+            // Suppress when the teacher is already viewing the Everyone
+            // conversation (which is where these messages land), so a class
+            // discussion in progress doesn't spam the corner.
+            if (ActiveConversation != EveryoneConversation)
+                ShowChatNotification(chat.SenderName, prefix + chat.Text);
+        });
+    }
+
+    /// <summary>Phase 17 step 4 — push a Chat-kind LINE-style card onto the
+    /// notification overlay.  Truncates the body at 50 chars (LINE-style
+    /// preview length) with "…" suffix; sender falls back to localized
+    /// "Student" when the wire didn't carry a name (matches the bell-badge
+    /// fallback used in OnHandRaiseReceived for symmetry).  Suppression
+    /// decisions are made by the caller — this helper trusts the dispatch
+    /// arm to skip the call when the teacher is already viewing the chat
+    /// surface.</summary>
+    private static void ShowChatNotification(string senderName, string text)
+    {
+        const int PreviewMaxChars = 50;
+        var preview = text ?? "";
+        if (preview.Length > PreviewMaxChars)
+            preview = preview.Substring(0, PreviewMaxChars - 1) + "…";
+
+        App.Notifications?.Show(new ClassroomCtrl.Teacher.Services.NotificationItem
+        {
+            Type = ClassroomCtrl.Teacher.Services.NotificationType.Chat,
+            SenderName = string.IsNullOrEmpty(senderName) ? "Student" : senderName,
+            Message = preview,
         });
     }
 
