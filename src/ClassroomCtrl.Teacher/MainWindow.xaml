@@ -20,6 +20,15 @@
     <Window.DataContext>
         <vm:MainViewModel />
     </Window.DataContext>
+    <!-- Phase 17.1 step 2 — LINE-style taskbar badge.  Overlay is a 16×16
+         red-dot PNG generated programmatically by NotificationService
+         .CreateBadgeOverlay(count); set to null when UnreadCount == 0 which
+         clears the badge.  Description shows on hover and on screen-reader
+         pass-through ("3 unread notifications"). -->
+    <Window.TaskbarItemInfo>
+        <TaskbarItemInfo Overlay="{Binding TaskbarOverlayImage}"
+                         Description="{Binding TaskbarOverlayTooltip}"/>
+    </Window.TaskbarItemInfo>
     <Window.Resources>
         <conv:HexToBrushConverter x:Key="HexToBrush"/>
         <conv:VideoCodecLabelConverter x:Key="VideoCodecLabel"/>

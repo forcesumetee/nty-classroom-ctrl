@@ -86,6 +86,9 @@ internal static class LocalizationData
         // preview ever ends up empty).
         ["Notif_HandRaise_Body"] = "raised hand",
         ["Notif_Chat_Body"] = "sent a message",
+        // Phase 17.1 step 2 — TaskbarItemInfo.Overlay tooltip.  {0} = unread
+        // count; only rendered when count > 0.
+        ["Notif_UnreadTooltip"] = "{0} unread notifications",
         ["Menu_LockScreen"] = "Lock screen",
         ["Menu_UnlockScreen"] = "Unlock screen",
 
@@ -730,6 +733,7 @@ internal static class LocalizationData
         // Phase 17 step 5 — Thai notification-card bodies.
         ["Notif_HandRaise_Body"] = "ยกมือ",
         ["Notif_Chat_Body"] = "ส่งข้อความ",
+        ["Notif_UnreadTooltip"] = "ไม่ได้อ่าน {0} รายการ",
         ["Menu_LockScreen"] = "ล็อกหน้าจอ",
         ["Menu_UnlockScreen"] = "ปลดล็อกหน้าจอ",
 

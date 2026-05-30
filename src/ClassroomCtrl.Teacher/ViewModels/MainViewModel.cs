@@ -130,6 +130,23 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     /// flips today, including the 14-B StoppedDueToError handler).</summary>
     [ObservableProperty] private bool isBroadcastingCamera;
 
+    /// <summary>Phase 17.1 step 2 — bound by <c>Window.TaskbarItemInfo.Overlay</c>
+    /// to paint a red-dot badge on the Teacher's taskbar icon when one or
+    /// more notifications are unread.  Generated programmatically by
+    /// <see cref="NotificationService.CreateBadgeOverlay"/>; refreshed on every
+    /// <see cref="NotificationService.UnreadCount"/> transition (subscription
+    /// wired in the constructor).  Null = badge cleared.</summary>
+    [ObservableProperty] private System.Windows.Media.ImageSource? taskbarOverlayImage;
+
+    /// <summary>Phase 17.1 step 2 — tooltip shown over the taskbar badge.
+    /// Reads "3 unread notifications" / "ไม่ได้อ่าน 3 รายการ" in the active
+    /// locale; null when there are zero unread (Windows skips overlay tooltip
+    /// when the overlay image itself is null).</summary>
+    public string? TaskbarOverlayTooltip =>
+        App.Notifications == null || App.Notifications.UnreadCount == 0
+            ? null
+            : Loc.Format("Notif_UnreadTooltip", App.Notifications.UnreadCount);
+
     partial void OnConferenceSessionIdChanged(Guid value)
     {
         OnPropertyChanged(nameof(IsConferenceSessionActive));
@@ -845,6 +862,16 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         if (App.Camera != null)
         {
             App.Camera.StoppedDueToError += OnCameraStoppedDueToError;
+        }
+
+        // Phase 17.1 step 2 — paint the taskbar badge whenever the unread
+        // count changes.  App.Notifications is initialised before MainWindow
+        // is constructed (App.OnStartup), so it's non-null in the production
+        // path; the guard is for the WPF designer + future test rigs.
+        if (App.Notifications != null)
+        {
+            App.Notifications.PropertyChanged += OnNotificationsPropertyChanged;
+            RefreshTaskbarOverlay();
         }
 
         if (App.AdaptiveBitrate != null)
@@ -2031,6 +2058,33 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             SenderName = string.IsNullOrEmpty(senderName) ? "Student" : senderName,
             Message = preview,
         });
+    }
+
+    /// <summary>Phase 17.1 step 2 — repaint the TaskbarItemInfo.Overlay image
+    /// from the current unread count.  Called once at construction (after
+    /// subscribing to NotificationService.PropertyChanged) and on every
+    /// UnreadCount transition.  Generation is on the UI thread because
+    /// RenderTargetBitmap requires it; the OnNotificationsPropertyChanged
+    /// shim does the dispatch.</summary>
+    private void RefreshTaskbarOverlay()
+    {
+        var count = App.Notifications?.UnreadCount ?? 0;
+        TaskbarOverlayImage = ClassroomCtrl.Teacher.Services.NotificationService.CreateBadgeOverlay(count);
+        OnPropertyChanged(nameof(TaskbarOverlayTooltip));
+    }
+
+    /// <summary>Phase 17.1 step 2 — bridge NotificationService PropertyChanged
+    /// onto the WPF dispatcher.  The service fires on whatever thread called
+    /// Show / MarkAllRead (today always the UI thread because Show marshals
+    /// internally, but the contract is "any thread"); RenderTargetBitmap +
+    /// ObservableProperty setter both require the UI thread.</summary>
+    private void OnNotificationsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ClassroomCtrl.Teacher.Services.NotificationService.UnreadCount)) return;
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null) { RefreshTaskbarOverlay(); return; }
+        if (dispatcher.CheckAccess()) RefreshTaskbarOverlay();
+        else dispatcher.BeginInvoke(new System.Action(RefreshTaskbarOverlay));
     }
 
     // Phase 17.1 (2026-05-31) — removed ShowChatToastIfNotActive (Phase 10.14
