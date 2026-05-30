@@ -223,7 +223,18 @@
                                 BorderThickness="1"
                                 CornerRadius="10"
                                 Padding="8">
-                            <StackPanel Orientation="Horizontal">
+                            <!-- Phase 16-X (Bug D fix, 2026-05-31) — explicit
+                                 Segoe UI Emoji on the picker.  The outer
+                                 UserControl defaults to FontFamily="Segoe UI"
+                                 (line 9) which renders compound emojis like
+                                 ❤️ as tofu boxes on some Windows builds
+                                 because Segoe UI's font-fallback chain
+                                 doesn't always reach Segoe UI Emoji inside
+                                 a Popup's separate visual root.  Setting it
+                                 here cascades to every TextBlock in the
+                                 picker. -->
+                            <StackPanel Orientation="Horizontal"
+                                        TextElement.FontFamily="Segoe UI Emoji">
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
                                         BorderThickness="0"
@@ -232,7 +243,7 @@
                                         ToolTip="👍"
                                         Click="ReactionButton_Click"
                                         Tag="👍">
-                                    <TextBlock Text="👍" FontSize="22"/>
+                                    <TextBlock Text="👍" FontSize="22" FontFamily="Segoe UI Emoji"/>
                                 </Button>
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
@@ -242,7 +253,7 @@
                                         ToolTip="❤️"
                                         Click="ReactionButton_Click"
                                         Tag="❤️">
-                                    <TextBlock Text="❤️" FontSize="22"/>
+                                    <TextBlock Text="❤️" FontSize="22" FontFamily="Segoe UI Emoji"/>
                                 </Button>
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
@@ -252,7 +263,7 @@
                                         ToolTip="😂"
                                         Click="ReactionButton_Click"
                                         Tag="😂">
-                                    <TextBlock Text="😂" FontSize="22"/>
+                                    <TextBlock Text="😂" FontSize="22" FontFamily="Segoe UI Emoji"/>
                                 </Button>
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
@@ -262,7 +273,7 @@
                                         ToolTip="😮"
                                         Click="ReactionButton_Click"
                                         Tag="😮">
-                                    <TextBlock Text="😮" FontSize="22"/>
+                                    <TextBlock Text="😮" FontSize="22" FontFamily="Segoe UI Emoji"/>
                                 </Button>
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
@@ -272,7 +283,7 @@
                                         ToolTip="😢"
                                         Click="ReactionButton_Click"
                                         Tag="😢">
-                                    <TextBlock Text="😢" FontSize="22"/>
+                                    <TextBlock Text="😢" FontSize="22" FontFamily="Segoe UI Emoji"/>
                                 </Button>
                             </StackPanel>
                         </Border>

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
+using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Shared.Wpf.ViewModels;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -87,6 +89,16 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     /// IPC emit) lives in MainWindow via <see cref="OnToggleCamera"/>.</summary>
     public IRelayCommand ToggleCameraCommand { get; }
 
+    /// <summary>Phase 16-X (Bug D fix, 2026-05-31) — student-side reaction
+    /// send.  Toolbar's ⋮ More popup resolves SendReactionCommand by name
+    /// via reflection in ConferenceToolbar.ReactionButton_Click — without
+    /// this command the student's emoji clicks silently no-op'd.
+    /// Optimistically renders on the student's own self-tile + emits a
+    /// 0x0674 ReactionMessage envelope upstream; teacher relays to every
+    /// peer in the same Conference (including back to the sender, which
+    /// MainWindow filters via env.SenderId == _myEndpointId).</summary>
+    public IRelayCommand<string?> SendReactionCommand { get; }
+
     /// <summary>Phase 16-B step 7 — fired when the student clicks End / Leave.
     /// ConferenceGalleryWindow subscribes and closes itself.</summary>
     public event EventHandler? RequestClose;
@@ -138,5 +150,47 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
         // singleton broadcaster + device-selection dialog stay on the Agent
         // process even when the Conference window is closed/re-opened.
         ToggleCameraCommand = new RelayCommand(() => OnToggleCamera?.Invoke());
+
+        // Phase 16-X (Bug D fix) — student-side reaction emit.  Optimistic
+        // local render first (so the user sees the emoji float-up
+        // immediately without the wire round-trip), then upstream emit.
+        // The teacher's ControlServer.OnMessage Reaction arm re-broadcasts
+        // to every peer in the same Conference; the sender's
+        // MainWindow.OnIpcMessage Reaction arm filters its own echo via
+        // env.SenderId == _myEndpointId so it doesn't double-render.
+        SendReactionCommand = new RelayCommand<string?>(async emoji =>
+        {
+            if (string.IsNullOrEmpty(emoji)) return;
+
+            // Optimistic render — find the self-tile and animate.  The
+            // ConferenceTile XAML's CurrentReactionEmoji binding triggers
+            // the float-up Storyboard.  No clear timer here; the tile's
+            // own animation reset wires that in 15-E step 5.
+            var selfId = SelfEndpointId;
+            if (selfId != Guid.Empty)
+            {
+                var tile = ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == selfId);
+                if (tile != null) tile.CurrentReactionEmoji = emoji;
+            }
+
+            // Wire emit.  App.Ipc is initialized in App.OnStartup; only
+            // null if the IPC pipe to Student.Service never came up.
+            if (App.Ipc == null) return;
+            var msg = new ReactionMessage
+            {
+                Emoji = emoji,
+                ExpiresAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 3000,
+            };
+            try
+            {
+                var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+                var env = Envelope.Create(MessageType.Reaction, bytes, Guid.Empty);
+                await App.Ipc.SendAsync(env);
+            }
+            catch (Exception ex)
+            {
+                IpcClient.LogToFile($"[StudentConferenceShellViewModel] SendReaction failed: {ex.Message}");
+            }
+        });
     }
 }

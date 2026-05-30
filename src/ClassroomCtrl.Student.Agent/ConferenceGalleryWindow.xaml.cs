@@ -193,11 +193,21 @@ public partial class ConferenceGalleryWindow : Window
     }
 
     /// <summary>Phase 15-E step 4/5 — render the floating emoji over the
-    /// teacher tile.  Tier 1: routes to the teacher tile only; 16-C
-    /// will surface reactions per-sender to the matching tile.</summary>
-    public void ShowReaction(string emoji)
+    /// originating participant's tile.
+    ///
+    /// Phase 16-X (Bug D fix, 2026-05-31) — signature gained
+    /// <paramref name="senderId"/> so the reaction lands on the right tile
+    /// in the 16-C peer-cam era.  Pre-fix, every reaction (including peer
+    /// students') was rendered over the teacher tile because the routing
+    /// was hardcoded to <see cref="StudentConferenceShellViewModel.TeacherEndpointId"/>.
+    /// Falls back to the teacher tile when the sender's tile isn't in the
+    /// gallery yet (defensive — late Reaction envelopes can outrun the
+    /// peer-cam Start that would seed the tile).</summary>
+    public void ShowReaction(Guid senderId, string emoji)
     {
-        var tile = _vm.ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == _vm.TeacherEndpointId);
+        var gallery = _vm.ConferenceGallery;
+        var tile = gallery.Tiles.FirstOrDefault(t => t.EndpointId == senderId)
+                   ?? gallery.Tiles.FirstOrDefault(t => t.EndpointId == _vm.TeacherEndpointId);
         if (tile != null)
         {
             tile.CurrentReactionEmoji = emoji ?? "";

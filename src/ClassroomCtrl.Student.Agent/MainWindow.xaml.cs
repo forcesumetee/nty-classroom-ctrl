@@ -391,11 +391,20 @@ public partial class MainWindow : Window
             // Phase 15-E step 4 — incoming Reaction envelope (could be teacher
             // OR another student).  Decode + forward to the Conference window
             // if it's open; ignored when no session is active.
+            // Phase 16-X (Bug D fix, 2026-05-31) — pass env.SenderId so
+            // ShowReaction routes to the right tile in the 16-C peer-cam era
+            // + drop self-echoes (the teacher relay broadcasts our reaction
+            // back to everyone including the sender; the optimistic local
+            // render already happened in StudentConferenceShellViewModel.
+            // SendReactionCommand so this echo would double-fire the
+            // animation if we didn't filter it here).
             case MessageType.Reaction:
                 try
                 {
+                    if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
                     var rxn = MessagePack.MessagePackSerializer.Deserialize<ReactionMessage>(env.Payload);
-                    Dispatcher.Invoke(() => _confWindow?.ShowReaction(rxn.Emoji));
+                    var senderId = env.SenderId;
+                    Dispatcher.Invoke(() => _confWindow?.ShowReaction(senderId, rxn.Emoji));
                 }
                 catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] Reaction decode: {ex.Message}"); }
                 break;
