@@ -1953,7 +1953,6 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 {
                     // Unknown sender — fall back to Everyone so the message isn't dropped.
                     AppendStudentChat(chat.SenderName, chat.Text);
-                    ShowChatToastIfNotActive(chat.SenderName, chat.Text);
                     return;
                 }
                 var conv = Conversations.FirstOrDefault(c =>
@@ -1976,9 +1975,6 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                     MessageText = chat.Text,
                 });
                 if (ActiveConversation != conv) conv.UnreadCount++;
-                // Phase 10.14 (Item 9) — toast for the DM path too; sender name carries
-                // the student identity, body is the message verbatim (truncate in helper).
-                ShowChatToastIfNotActive(displayName, chat.Text);
 
                 // Phase 17 step 4 — slide-in card.  Suppress when the
                 // teacher is already viewing this DM conversation (their
@@ -1999,7 +1995,6 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 prefix = room != null ? $"[{room.RoomName}] " : "[Room] ";
             }
             AppendStudentChat(chat.SenderName, prefix + chat.Text);
-            ShowChatToastIfNotActive(chat.SenderName, prefix + chat.Text);
 
             // Phase 17 step 4 — slide-in card for whole-class / room chats.
             // Suppress when the teacher is already viewing the Everyone
@@ -2038,24 +2033,13 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         });
     }
 
-    /// <summary>Phase 10.14 (Item 9) — Windows toast when an incoming student chat arrives
-    /// while the Teacher window is hidden, minimized, or unfocused.  Title shows the
-    /// student name; body is the message body, truncated at 120 chars for legibility.
-    /// Guard mirrors the Student-side helper from 10.13.1/10.14 Item 5 so behavior is
-    /// symmetric across both apps.  Caller is expected to be on the UI thread (chat
-    /// receive is dispatched via Application.Current.Dispatcher above).</summary>
-    private static void ShowChatToastIfNotActive(string senderName, string text)
-    {
-        var window = System.Windows.Application.Current?.MainWindow;
-        if (window != null && window.IsVisible && window.IsActive
-            && window.WindowState != System.Windows.WindowState.Minimized) return;
-
-        var template = Loc.Get("Toast_ChatFromStudent");
-        var title = template.Replace("{0}", senderName ?? "");
-        var trimmed = text ?? "";
-        if (trimmed.Length > 120) trimmed = trimmed.Substring(0, 117) + "...";
-        App.Notifier?.ShowBalloon(title, trimmed);
-    }
+    // Phase 17.1 (2026-05-31) — removed ShowChatToastIfNotActive (Phase 10.14
+    // Item 9).  The H.NotifyIcon.Wpf tray-toast surface produced an OS-level
+    // Windows notification on top of the LINE-style in-app card from Phase 17,
+    // which the user rejected on the first 2-PC validation pass.  All chat
+    // notification UX now lives exclusively inside the Teacher window via
+    // NotificationOverlay + the TaskbarItemInfo.Overlay red-dot badge added in
+    // Phase 17.1 step 2.
 
     private void OnHandRaiseReceived(object? sender, ClassroomCtrl.Shared.Protocol.HandRaiseMessage hr)
     {

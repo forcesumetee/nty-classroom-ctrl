@@ -32,11 +32,6 @@
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.2" />
     <PackageReference Include="MaterialDesignThemes" Version="5.0.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
-    <!-- Phase 10.14 (Item 9) — same H.NotifyIcon.Wpf used in Student.Agent for its
-         tray icon.  Teacher now uses it solely as a notification surface for chat
-         arriving while the window is hidden/minimized/unfocused; not in solution
-         lock files as a new top-level dep — Agent already references this version. -->
-    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.0.131" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />

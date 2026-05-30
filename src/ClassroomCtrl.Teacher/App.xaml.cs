@@ -33,11 +33,6 @@ public partial class App : Application
     /// <summary>Phase 9.5: Webcam capture + JPEG broadcast.</summary>
     public static CameraBroadcastService? Camera { get; private set; }
 
-    /// <summary>Phase 10.14 (Item 9): minimal tray notifier — provides Windows-toast
-    /// surface for incoming student chat when Teacher window is hidden / minimized /
-    /// unfocused.  See <see cref="TrayNotifier"/>.</summary>
-    public static TrayNotifier? Notifier { get; private set; }
-
     /// <summary>Phase 17 (v1.x roadmap #5): LINE-style in-app notification stack.
     /// Surfaced by <c>NotificationOverlay</c> docked to MainWindow's bottom-right
     /// corner; HandRaise / Chat dispatch arms call <see cref="NotificationService.Show"/>
@@ -198,11 +193,12 @@ public partial class App : Application
         ClassroomCtrl.Shared.Branding.BrandingService.Changed += ApplyBrandingToResources;
         ApplyBrandingToResources();
 
-        // Phase 10.14 (Item 9) — tray notifier (notification-only).  Init after
-        // Branding.ApplyTheme so the pack:// URI for classroom_icon.ico resolves
-        // against a fully-loaded App.Resources tree.
-        Notifier = new TrayNotifier();
-        Notifier.Initialize();
+        // Phase 17.1 (2026-05-31) — removed the H.NotifyIcon.Wpf TrayNotifier
+        // init that previously created a system-tray Windows-toast surface here.
+        // Notifications now live exclusively in the LINE-style overlay docked to
+        // MainWindow's bottom-right (Phase 17) + the TaskbarItemInfo.Overlay
+        // red-dot badge (Phase 17.1 step 2) so the user never sees an OS-level
+        // toast, which they rejected on the first 2-PC validation pass.
 
         var main = new MainWindow();
         main.Show();
@@ -220,9 +216,6 @@ public partial class App : Application
         AudioBroadcaster?.Dispose();
         ScreenBroadcaster?.Dispose();
         Server?.Dispose();
-        // Phase 10.14 (Item 9) — clean up tray icon so it doesn't linger as a
-        // ghost icon in the notification area after process exit.
-        Notifier?.Dispose();
         base.OnExit(e);
     }
 
