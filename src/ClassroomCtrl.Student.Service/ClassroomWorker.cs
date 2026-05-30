@@ -618,6 +618,94 @@ public class ClassroomWorker : BackgroundService
                 await _ipc.ForwardToAgentAsync(env, ct);
                 break;
 
+            // ─────── Phase 15-E + 16-x : Conference Mode (Bug B fix, 2026-05-30) ───────
+            //
+            // Root cause + history.  ClassroomWorker.cs was last touched in
+            // Phase 13-D step 4 (commit e679113).  Phase 15-B step 6 added
+            // the Agent-side ConferenceStart/End dispatch arms and 15-E /
+            // 16-B+ / 16-C added more, but the SERVICE forwarder switch was
+            // never updated to match.  Without an explicit case here, every
+            // Conference / Reaction / HandLower envelope arriving from the
+            // teacher fell into the `default` arm and was silently logged-
+            // and-dropped (line ~621 LogDebug "Unhandled message type").
+            //
+            // Symptom on the live 2-PC test (2026-05-30): Service log shows
+            // "Teacher→Service: type=ConferenceStart" but the matching
+            // "Service→Agent (IPC): type=..." line never lands, so the
+            // student-side ConferenceGalleryWindow never opens.
+            //
+            // The bug has been latent since 15-B step 6 — earlier same-PC
+            // smoke tests didn't catch it because the Teacher → its own
+            // Agent route was never exercised in 2-PC mode until now.
+            //
+            // Filter shape: every dispatch arm below uses IsForMe.  Broadcast
+            // envelopes (TargetEndpointId=Guid.Empty, no group) pass through
+            // (IsForMe returns true for unaddressed); late-joiner targeted
+            // replays (e.g. ConferenceShareStart replay from Hello-ack in
+            // 16-B+ step 7) pass only to the right student.  Self-loopback
+            // for relayed-back peer envelopes (the originator receiving its
+            // own ConferenceCameraFrame echo) is filtered at the Agent layer
+            // via env.SenderId == _myEndpointId, so the Service can stay
+            // dumb and just forward everything that passes IsForMe.
+
+            // Phase 15-B: Conference session lifecycle (T→all broadcast,
+            // also targeted late-joiner replay for the ConferenceShare path
+            // in 16-B+ step 7).  Without these arms the student-side
+            // ConferenceGalleryWindow never opens — this is THE Bug B
+            // symptom on the live 2-PC test.
+            case MessageType.ConferenceStart:
+            case MessageType.ConferenceEnd:
+                if (!IsForMe(env)) return;
+                _logger.LogInformation("{Type} from teacher (target={Target})", env.Type, env.TargetEndpointId);
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
+            // Phase 15-E: HandLower (Recognize action) is teacher → student
+            // targeted; the corresponding HandRaise (0x0110) originates at
+            // the student and travels UPSTREAM through OnAgentMessage —
+            // no DOWNSTREAM routing needed for the raise direction.
+            case MessageType.HandLower:
+                if (!IsForMe(env)) return;
+                _logger.LogInformation("HandLower from teacher (target={Target})", env.TargetEndpointId);
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
+            // Phase 15-E: Reaction (broadcast — teacher-originated AND
+            // peer-relayed by the teacher's ControlServer.OnMessage arm).
+            // No filter beyond IsForMe; the Agent self-loopback filter
+            // drops the originator's own echo of their reaction.
+            case MessageType.Reaction:
+                if (!IsForMe(env)) return;
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
+            // Phase 16-C: Peer cam routing.  Frames are S→T→peers via the
+            // teacher's ControlServer relay; the originating student's own
+            // echo is filtered at the Agent layer via env.SenderId ==
+            // _myEndpointId.  Start/Stop are reliable; Frame is lossy via
+            // the existing _outbox channel (no Service-side change needed —
+            // the channel selection happens upstream at the broadcast call
+            // in ControlServer).
+            case MessageType.ConferenceCameraStart:
+            case MessageType.ConferenceCameraFrame:
+            case MessageType.ConferenceCameraStop:
+                if (!IsForMe(env)) return;
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
+            // Phase 16-B+: In-frame Conference share (T→all today; future
+            // tier may add student-initiated share, in which case the same
+            // relay loopback-filter logic applies as for peer cam above).
+            // Late-joiner Hello-ack replay (16-B+ step 7) sends a targeted
+            // ConferenceShareStart to the joining peer; IsForMe routes it
+            // to only that student.
+            case MessageType.ConferenceShareStart:
+            case MessageType.ConferenceShareFrame:
+            case MessageType.ConferenceShareStop:
+                if (!IsForMe(env)) return;
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
             default:
                 _logger.LogDebug("Unhandled message type {Type}", env.Type);
                 break;
