@@ -1262,8 +1262,15 @@ public partial class MainWindow : Window
     /// On Stop: tears down the broadcaster + flips IsCamLive on the
     /// self-tile back to false.
     ///
-    /// Always called on the UI thread.</summary>
-    private void ToggleConferenceCamera()
+    /// Phase 16-X (Bug C fix, 2026-05-31) — turned async.  Device
+    /// enumeration + capture init both run off the UI thread; the WPF
+    /// message pump stays responsive while AForge does its slow
+    /// DirectShow filter-graph dance.  Pre-fix, a wedged
+    /// VideoCapabilities query hung Student.Agent in "Not Responding"
+    /// until force-close.  Returns immediately; awaits + UI updates
+    /// happen on continuations marshalled by the captured
+    /// SynchronizationContext.</summary>
+    private async void ToggleConferenceCamera()
     {
         if (_confWindow == null) return;
         if (_studentCamera != null && _studentCamera.IsActive)
@@ -1276,7 +1283,19 @@ public partial class MainWindow : Window
             return;
         }
 
-        var devices = StudentCameraBroadcaster.EnumerateDevices();
+        // Phase 16-X — device enumeration also queries DirectShow + can
+        // block; move it off the UI thread alongside the capture init.
+        List<(string Moniker, string Name)> devices;
+        try
+        {
+            devices = await StudentCameraBroadcaster.EnumerateDevicesAsync();
+        }
+        catch (Exception ex)
+        {
+            IpcClient.LogToFile($"[MainWindow] EnumerateDevicesAsync threw: {ex.Message}");
+            devices = new List<(string, string)>();
+        }
+        if (_confWindow == null) return;   // user closed mid-await
         if (devices.Count == 0)
         {
             System.Windows.MessageBox.Show(
@@ -1311,10 +1330,31 @@ public partial class MainWindow : Window
 
         var sessionId = _confWindow.SessionId;
         var sourceName = System.Environment.MachineName;
-        if (!_studentCamera.Start(moniker, 320, 240, 10, sessionId, sourceName))
+
+        // Phase 16-X (Bug C fix) — StartAsync runs the AForge bring-up on a
+        // background thread with a 10-second timeout.  Throws nothing in
+        // the happy path; failure surfaces via false + LastError.  Wrap in
+        // try/catch defensively so an unexpected exception doesn't bubble
+        // up the async-void boundary and crash the process.
+        bool started;
+        string? thrownMessage = null;
+        try
         {
-            var err = _studentCamera.LastError;
-            _studentCamera.Dispose();
+            started = await _studentCamera.StartAsync(moniker, 320, 240, 10, sessionId, sourceName);
+        }
+        catch (Exception ex)
+        {
+            started = false;
+            thrownMessage = ex.Message;
+            IpcClient.LogToFile($"[MainWindow] StartAsync threw: {ex.GetType().Name}: {ex.Message}");
+        }
+        if (_confWindow == null) return;   // user closed mid-await
+        if (!started)
+        {
+            var err = !string.IsNullOrEmpty(thrownMessage)
+                ? thrownMessage!
+                : _studentCamera?.LastError ?? "(unknown)";
+            _studentCamera?.Dispose();
             _studentCamera = null;
             System.Windows.MessageBox.Show(
                 string.Format(Loc.Get("Conf_CamStartFailFmt", "Failed to start camera: {0}"), err),
@@ -1326,12 +1366,6 @@ public partial class MainWindow : Window
 
         _confWindow.SetSelfCamLive(true);
         EmitWebcamState();
-        // Wire the broadcaster's frame echo into the self-tile preview so the
-        // student sees their own cam locally without a wire round-trip.  The
-        // local hook subscribes by wrapping the AForge handler — simplest is
-        // to also surface a preview event from StudentCameraBroadcaster, but
-        // for minimum-change we re-decode every N-th frame here.  Future
-        // polish: add a FrameEncoded event to the broadcaster.
     }
 
     /// <summary>Lazily create the fullscreen viewer window.</summary>

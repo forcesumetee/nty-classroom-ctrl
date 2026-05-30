@@ -8,6 +8,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace ClassroomCtrl.Student.Agent;
 
@@ -22,11 +23,31 @@ namespace ClassroomCtrl.Student.Agent;
 /// Service layer with the student's endpoint id.
 ///
 /// Lifecycle:
-///   Start(deviceMoniker, sessionId, sourceName)  →  Stop()  →  Dispose()
+///   StartAsync(deviceMoniker, sessionId, sourceName) → Stop() → Dispose()
 /// Concurrent Start while active is a no-op.
+///
+/// Phase 16-X (Bug C fix, 2026-05-31) — AForge initialization is now performed
+/// on a background <see cref="Task.Run"/> with a 10-second timeout.  Accessing
+/// <see cref="VideoCaptureDevice.VideoCapabilities"/> performs a synchronous
+/// DirectShow filter-graph build that can block the calling thread for several
+/// seconds on some Windows / driver combinations.  Pre-fix, that hang ran
+/// directly on the WPF UI thread, causing Student.Agent to enter "Not
+/// Responding" until force-close.  Teacher's <c>CameraBroadcastService</c>
+/// carries the same latent risk; flagged for a follow-up polish round.
 /// </summary>
 public sealed class StudentCameraBroadcaster : IDisposable
 {
+    /// <summary>Phase 16-X — guard against a wedged DirectShow init.  10 s
+    /// covers slow USB cameras + first-time driver load; anything longer is
+    /// almost certainly a hung filter-graph build and the UI should surface
+    /// a localized error instead of hanging the user out to dry.</summary>
+    private static readonly TimeSpan InitTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>Phase 16-X — clean Stop on a busy capture thread occasionally
+    /// blocks past WaitForStop's internal join.  Give it 3 s before we give
+    /// up and let the device leak quietly; user-facing UI keeps moving.</summary>
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(3);
+
     private VideoCaptureDevice? _device;
     private int _busy;     // 0/1 lock to drop overlapping frames
     private long _frameSeq;
@@ -44,7 +65,7 @@ public sealed class StudentCameraBroadcaster : IDisposable
     public string SourceName { get; private set; } = "";
 
     /// <summary>Last error surfaced by the AForge layer.  Set in
-    /// <see cref="Start"/> on failure and in the runtime
+    /// <see cref="StartAsync"/> on failure and in the runtime
     /// <see cref="VideoCaptureDevice.VideoSourceError"/> handler when the
     /// cam fails mid-stream.</summary>
     public string LastError { get; private set; } = "";
@@ -59,6 +80,14 @@ public sealed class StudentCameraBroadcaster : IDisposable
     /// their own cam without a wire round-trip.</summary>
     public event Action<byte[]>? LocalFrameReady;
 
+    /// <summary>Phase 16-X (Bug C fix) — device enumeration also performs a
+    /// DirectShow query that can block; static so callers (the toolbar's
+    /// click handler in MainWindow) can await it before opening the
+    /// selector dialog.  Synchronous overload kept below for the
+    /// pre-existing call sites that already run on a background thread.</summary>
+    public static Task<List<(string Moniker, string Name)>> EnumerateDevicesAsync(CancellationToken ct = default)
+        => Task.Run(EnumerateDevices, ct);
+
     public static List<(string Moniker, string Name)> EnumerateDevices()
     {
         var list = new List<(string, string)>();
@@ -72,26 +101,73 @@ public sealed class StudentCameraBroadcaster : IDisposable
         return list;
     }
 
-    public bool Start(string moniker, int width, int height, int fps,
-                      Guid sessionId, string sourceName)
+    /// <summary>Phase 16-X — async cam init.  Heavy AForge work
+    /// (<see cref="VideoCaptureDevice.VideoCapabilities"/> filter-graph
+    /// enumeration + device <c>Start()</c>) runs on a background thread so
+    /// the caller's UI thread keeps pumping messages.  Returns false on
+    /// timeout / driver error; <see cref="LastError"/> carries the cause.
+    /// </summary>
+    public async Task<bool> StartAsync(string moniker, int width, int height, int fps,
+                                       Guid sessionId, string sourceName,
+                                       CancellationToken ct = default)
     {
         if (IsActive) return false;
         LastError = "";
         SessionId = sessionId;
         SourceName = sourceName ?? "";
 
+        IpcClient.LogToFile($"[StudentCameraBroadcaster] StartAsync begin (moniker={moniker}, target={width}x{height}@{fps})");
+
         try
         {
-            _device = new VideoCaptureDevice(moniker);
-            var cap = _device.VideoCapabilities
-                .OrderBy(c => Math.Abs(c.FrameSize.Width - width) + Math.Abs(c.FrameSize.Height - height))
-                .FirstOrDefault();
-            if (cap != null) _device.VideoResolution = cap;
+            // Run the slow AForge bring-up on a background thread.  The two
+            // synchronous hot spots (filter-graph build via VideoCapabilities
+            // + native StartRecording) both finish here before we touch any
+            // UI-thread state in the caller's continuation.
+            var initTask = Task.Run(() =>
+            {
+                IpcClient.LogToFile("[StudentCameraBroadcaster] AForge init: constructing VideoCaptureDevice");
+                var device = new VideoCaptureDevice(moniker);
+                IpcClient.LogToFile("[StudentCameraBroadcaster] AForge init: querying VideoCapabilities");
+                var cap = device.VideoCapabilities
+                    .OrderBy(c => Math.Abs(c.FrameSize.Width - width) + Math.Abs(c.FrameSize.Height - height))
+                    .FirstOrDefault();
+                if (cap != null)
+                {
+                    device.VideoResolution = cap;
+                    IpcClient.LogToFile($"[StudentCameraBroadcaster] AForge init: selected resolution {cap.FrameSize.Width}x{cap.FrameSize.Height}");
+                }
+                else
+                {
+                    IpcClient.LogToFile("[StudentCameraBroadcaster] AForge init: no matching VideoCapabilities — using device default");
+                }
+                return device;
+            }, ct);
+
+            var timeoutTask = Task.Delay(InitTimeout, ct);
+            var completed = await Task.WhenAny(initTask, timeoutTask).ConfigureAwait(false);
+            if (completed == timeoutTask)
+            {
+                LastError = $"Camera init timed out after {(int)InitTimeout.TotalSeconds} seconds";
+                IpcClient.LogToFile($"[StudentCameraBroadcaster] {LastError} — likely hung DirectShow filter-graph build");
+                // initTask keeps running on the threadpool; we abandon it
+                // rather than block.  The leaked VideoCaptureDevice (if it
+                // ever completes) is GC-collected.  Caller surfaces the
+                // timeout to the user via LastError.
+                return false;
+            }
+            _device = await initTask.ConfigureAwait(false);
+            IpcClient.LogToFile("[StudentCameraBroadcaster] AForge init: VideoCaptureDevice ready");
 
             _device.NewFrame += OnNewFrame;
             _device.VideoSourceError += OnVideoSourceError;
-            _device.Start();
+
+            // _device.Start spawns AForge's internal capture thread.  It's
+            // usually fast (≪ 1 s) but kept off the UI thread for the same
+            // belt-and-suspenders reason as the init above.
+            await Task.Run(() => _device.Start(), ct).ConfigureAwait(false);
             IsActive = true;
+            IpcClient.LogToFile("[StudentCameraBroadcaster] AForge init: capture thread started");
 
             // Emit ConferenceCameraStart up through IPC + TCP.  The Service
             // stamps Envelope.SenderId with the student's endpoint id; the
@@ -111,30 +187,73 @@ public sealed class StudentCameraBroadcaster : IDisposable
             IpcClient.LogToFile($"[StudentCameraBroadcaster] Started ({width}x{height}@{fps}, name='{SourceName}')");
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            LastError = "Camera init cancelled";
+            IpcClient.LogToFile("[StudentCameraBroadcaster] StartAsync cancelled");
+            CleanupAfterFailedStart();
+            return false;
+        }
         catch (Exception ex)
         {
             LastError = ex.Message;
-            IpcClient.LogToFile($"[StudentCameraBroadcaster] Start failed: {ex.Message}");
+            IpcClient.LogToFile($"[StudentCameraBroadcaster] StartAsync failed: {ex.GetType().Name}: {ex.Message}");
+            CleanupAfterFailedStart();
             return false;
         }
+    }
+
+    private void CleanupAfterFailedStart()
+    {
+        // Best-effort tear-down so a partial Start doesn't leave the device
+        // half-attached + event handlers still wired.  Swallow exceptions —
+        // we've already captured LastError; nothing useful to do here.
+        try
+        {
+            if (_device != null)
+            {
+                _device.NewFrame -= OnNewFrame;
+                _device.VideoSourceError -= OnVideoSourceError;
+                try { _device.SignalToStop(); } catch { }
+            }
+        }
+        catch { }
+        _device = null;
+        IsActive = false;
     }
 
     public void Stop()
     {
         if (!IsActive) return;
-        try
-        {
-            if (_device != null)
-            {
-                _device.SignalToStop();
-                _device.WaitForStop();
-                _device.NewFrame -= OnNewFrame;
-                _device.VideoSourceError -= OnVideoSourceError;
-                _device = null;
-            }
-        }
-        catch { }
+        IpcClient.LogToFile("[StudentCameraBroadcaster] Stop begin");
+        var deviceSnapshot = _device;
         IsActive = false;
+        _device = null;
+
+        if (deviceSnapshot != null)
+        {
+            // Phase 16-X — bound the AForge shutdown wait so a wedged capture
+            // thread doesn't block the caller's UI.  Fire-and-forget the
+            // teardown on the threadpool; the device leaks quietly if
+            // WaitForStop never returns.
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    deviceSnapshot.NewFrame -= OnNewFrame;
+                    deviceSnapshot.VideoSourceError -= OnVideoSourceError;
+                    deviceSnapshot.SignalToStop();
+                    if (!Task.Run(() => deviceSnapshot.WaitForStop()).Wait(StopTimeout))
+                    {
+                        IpcClient.LogToFile($"[StudentCameraBroadcaster] AForge WaitForStop > {(int)StopTimeout.TotalSeconds}s — abandoning device");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[StudentCameraBroadcaster] Stop teardown: {ex.Message}");
+                }
+            });
+        }
 
         try
         {
@@ -142,7 +261,7 @@ public sealed class StudentCameraBroadcaster : IDisposable
             var bytes = MessagePack.MessagePackSerializer.Serialize(stopMsg);
             var env = Envelope.Create(MessageType.ConferenceCameraStop, bytes, Guid.Empty);
             _ = App.Ipc?.SendAsync(env);
-            IpcClient.LogToFile($"[StudentCameraBroadcaster] Stopped (sent {_frameSeq} frames)");
+            IpcClient.LogToFile($"[StudentCameraBroadcaster] Stop sent (frames={_frameSeq})");
         }
         catch (Exception ex) { IpcClient.LogToFile($"[StudentCameraBroadcaster] Stop send: {ex.Message}"); }
 
