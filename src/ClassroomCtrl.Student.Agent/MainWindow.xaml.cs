@@ -423,6 +423,10 @@ public partial class MainWindow : Window
                         AddSystemNotification(
                             Loc.Get("Chat_TeacherRecognizedHand", "Teacher recognized your hand"),
                             "✋");
+                        // Phase 16-X (Bug H fix, 2026-06-01) — teacher's
+                        // Recognize action arrives here too; mirror onto
+                        // the Conference toolbar + self-tile.
+                        _confWindow?.SetSelfHandRaised(false);
                     }
                 });
                 break;
@@ -802,6 +806,12 @@ public partial class MainWindow : Window
                                 _confWindow?.SetSelfMicLive(micOn)));
                         MicStateChanged += micSync;
                         _confWindow.SetSelfMicLive(_micOn);
+                        // Phase 16-X (Bug H fix, 2026-06-01) — hand-raise
+                        // toolbar wire-up.  ToggleHandRaiseAsync is fire-and-
+                        // forget; the wire emit + state push happen inside.
+                        _confWindow.ShellViewModel.OnToggleHandRaise =
+                            () => _ = ToggleHandRaiseAsync();
+                        _confWindow.SetSelfHandRaised(_handRaised);
                         _confWindow.Closed += (_, _) =>
                         {
                             // Phase 16-C — auto-stop own cam if window closes mid-broadcast.
@@ -1606,8 +1616,18 @@ public partial class MainWindow : Window
     }
 
     private async void RaiseHand_Click(object sender, RoutedEventArgs e)
+        => await ToggleHandRaiseAsync();
+
+    /// <summary>Phase 16-X (Bug H fix, 2026-06-01) — extracted from the
+    /// classic floating-window RaiseHand_Click so the Conference toolbar
+    /// ✋ button can reuse the same path.  Toggles <c>_handRaised</c>,
+    /// emits the 0x0110 / 0x0111 wire envelope, fires the system-chat
+    /// notification, and pushes the new state into
+    /// <see cref="ConferenceGalleryWindow"/> so its toolbar pill +
+    /// self-tile badge update without a wire round-trip.</summary>
+    public async System.Threading.Tasks.Task ToggleHandRaiseAsync()
     {
-        IpcClient.LogToFile("[MainWindow] RaiseHand_Click fired");
+        IpcClient.LogToFile("[MainWindow] ToggleHandRaiseAsync fired");
 
         _handRaised = !_handRaised;
 
@@ -1628,6 +1648,11 @@ public partial class MainWindow : Window
         }
 
         AddSystemNotification(Loc.Get(_handRaised ? "Chat_YouRaisedHand" : "Chat_YouLoweredHand"), "✋");
+
+        // Phase 16-X (Bug H fix) — push state into the Conference window
+        // so toolbar pill + self-tile hand-badge stay in sync with the
+        // singleton _handRaised flag.
+        _confWindow?.SetSelfHandRaised(_handRaised);
     }
 
     private void ToggleMic_Click(object sender, RoutedEventArgs e) => ToggleMicrophone();

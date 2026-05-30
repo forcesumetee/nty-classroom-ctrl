@@ -171,13 +171,30 @@
                 <!-- ✋ Hand raise.  Phase 15-D ships as a sidebar-open shortcut
                      to the Participants tab so the teacher can review the
                      raised-hand queue.  Phase 15-E adds teacher-side
-                     Recognize semantics (per-row action). -->
-                <Button Command="{Binding ShowConferenceHandQueueCommand}"
+                     Recognize semantics (per-row action).
+                     Phase 16-X (Bug H fix, 2026-06-01) — Command renamed
+                     to a shared RaiseHandCommand so the same XAML works
+                     against both VMs:
+                       Teacher.MainViewModel.RaiseHandCommand → opens the
+                         queue sidebar (existing 15-D behavior).
+                       Student.StudentConferenceShellViewModel
+                         .RaiseHandCommand → toggles own hand raise +
+                         emits 0x0110 / 0x0111 envelope.
+                     Active-state DataTrigger gained a sibling on
+                     IsHandRaised so the amber pill highlights for either
+                     "teacher has notifications" OR "student has raised
+                     hand"; both Setters write the same colors so trigger
+                     order doesn't matter. -->
+                <Button Command="{Binding RaiseHandCommand}"
                         ToolTip="{DynamicResource Conf_Tooltip_Hand}">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding HasNotifications}" Value="True">
+                                    <Setter Property="Background" Value="#FBBF24"/>
+                                    <Setter Property="Foreground" Value="#1F2937"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsHandRaised}" Value="True">
                                     <Setter Property="Background" Value="#FBBF24"/>
                                     <Setter Property="Foreground" Value="#1F2937"/>
                                 </DataTrigger>

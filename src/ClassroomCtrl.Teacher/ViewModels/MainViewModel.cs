@@ -466,6 +466,14 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     // (no command — local UI state).
     public IRelayCommand ToggleConferenceSidebarCommand { get; }
     public IRelayCommand ShowConferenceHandQueueCommand { get; }
+
+    /// <summary>Phase 16-X (Bug H fix, 2026-06-01) — toolbar ✋ command shared
+    /// with Student.StudentConferenceShellViewModel.RaiseHandCommand.  Teacher
+    /// role semantics: the host doesn't "raise hand" — they see who else has,
+    /// so the command just opens the queue sidebar (delegates to the existing
+    /// 15-D ShowConferenceHandQueueCommand behavior).  Student role flips this
+    /// to a real raise / lower toggle.</summary>
+    public IRelayCommand RaiseHandCommand { get; }
     public IRelayCommand SelectConferenceChatTabCommand { get; }
     public IRelayCommand SelectConferenceParticipantsTabCommand { get; }
 
@@ -634,6 +642,11 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             ConferenceSidebarTabIndex = 1;
             IsConferenceSidebarVisible = true;
         });
+        // Phase 16-X (Bug H fix) — toolbar ✋ shared command.  Teacher
+        // semantics: same as ShowConferenceHandQueueCommand (open the
+        // queue sidebar).  Student VM's RaiseHandCommand toggles the
+        // student's own hand raise + emits the wire envelope.
+        RaiseHandCommand = ShowConferenceHandQueueCommand;
         SelectConferenceChatTabCommand = new RelayCommand(() =>
         {
             if (IsConferenceSidebarVisible) ConferenceSidebarTabIndex = 0;

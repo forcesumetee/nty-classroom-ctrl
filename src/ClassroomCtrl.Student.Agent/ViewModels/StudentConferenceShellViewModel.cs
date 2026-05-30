@@ -74,6 +74,19 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     /// regardless of whether the Conference window is open.</summary>
     public Action? OnToggleMic { get; set; }
 
+    // Phase 16-X (Bug H fix, 2026-06-01) — own-hand-raise state surfaced to
+    // the Conference toolbar.  Mirrors the existing _handRaised flag on
+    // MainWindow (Phase 9 Section B).  Toolbar ✋ binds IsHandRaised for
+    // the amber active-state pill; ConferenceGalleryWindow.ctor pushes
+    // every transition (including teacher's Recognize-driven HandLower)
+    // into this property.
+    [ObservableProperty] private bool isHandRaised;
+    /// <summary>Phase 16-X (Bug H fix) — wired by ConferenceGalleryWindow
+    /// ctor to invoke MainWindow's hand-raise toggle so the singleton
+    /// _handRaised state + 0x0110 / 0x0111 wire emit stay owned by the
+    /// MainWindow path.</summary>
+    public Action? OnToggleHandRaise { get; set; }
+
     // Sidebar overlay state — mirrors the Teacher.MainViewModel shape so
     // the same ConferenceSidebar XAML works against either DataContext.
     [ObservableProperty] private bool isConferenceSidebarVisible;
@@ -107,6 +120,13 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     /// (StudentAudioBroadcaster start/stop + IPC emit) lives in MainWindow
     /// via <see cref="OnToggleMic"/>.</summary>
     public IRelayCommand ToggleMicCommand { get; }
+
+    /// <summary>Phase 16-X (Bug H fix) — student's own hand-raise toggle.
+    /// Shared command name with Teacher.MainViewModel.RaiseHandCommand so
+    /// the same toolbar XAML works against either DataContext; semantics
+    /// differ — teacher's just opens the queue, student's actually raises
+    /// or lowers the hand + emits a 0x0110 / 0x0111 wire envelope.</summary>
+    public IRelayCommand RaiseHandCommand { get; }
 
     /// <summary>Phase 16-X (Bug D fix, 2026-05-31) — student-side reaction
     /// send.  Toolbar's ⋮ More popup resolves SendReactionCommand by name
@@ -176,6 +196,14 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
         // MicStateChanged subscription so the VM observable + self-tile
         // mic indicator stay in sync with every transition.
         ToggleMicCommand = new RelayCommand(() => OnToggleMic?.Invoke());
+
+        // Phase 16-X (Bug H fix) — own-hand toggle delegates to
+        // MainWindow.ToggleConferenceHandRaise (which wraps the existing
+        // Phase 9 RaiseHand_Click logic).  The shell VM's IsHandRaised
+        // observable is pushed by MainWindow on every transition (toolbar
+        // click, classic floating-window click, teacher Recognize) so the
+        // amber pill on the ✋ button + self-tile badge stay in sync.
+        RaiseHandCommand = new RelayCommand(() => OnToggleHandRaise?.Invoke());
 
         // Phase 16-X (Bug D fix) — student-side reaction emit.  Optimistic
         // local render first (so the user sees the emoji float-up

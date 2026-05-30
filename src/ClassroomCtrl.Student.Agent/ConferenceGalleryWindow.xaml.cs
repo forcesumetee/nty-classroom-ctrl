@@ -154,6 +154,23 @@ public partial class ConferenceGalleryWindow : Window
         tile.IsMicLive = live;
     }
 
+    /// <summary>Phase 16-X (Bug H fix, 2026-06-01) — self-tile hand-raise
+    /// mirror.  Called by MainWindow after every _handRaised transition
+    /// (toolbar click, classic floating-window click, or inbound
+    /// teacher Recognize / HandLower).  Updates the toolbar pill state
+    /// (IsHandRaised on VM) AND the self-tile badge (IsHandRaised on
+    /// tile) so the user sees their hand state consistently.</summary>
+    public void SetSelfHandRaised(bool raised)
+    {
+        _vm.IsHandRaised = raised;
+        var selfId = _vm.SelfEndpointId;
+        if (selfId == Guid.Empty) return;
+        var tile = EnsurePeerTile(selfId, _vm.SelfDisplayName, isSelf: true);
+        tile.IsHandRaised = raised;
+        tile.HandRaisedAt = raised ? DateTime.UtcNow : (DateTime?)null;
+        _vm.ConferenceGallery.RefreshRaisedHandQueue();
+    }
+
     /// <summary>Phase 16-C — self-tile preview frame.  Called by MainWindow's
     /// StudentCameraBroadcaster OnNewFrame echo so the student sees their
     /// own cam preview without a wire round-trip.</summary>
