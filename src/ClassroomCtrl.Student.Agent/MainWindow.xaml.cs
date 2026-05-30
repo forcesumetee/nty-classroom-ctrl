@@ -787,10 +787,29 @@ public partial class MainWindow : Window
                             _myEndpointId ?? System.Guid.Empty,
                             System.Environment.MachineName);
                         _confWindow.ShellViewModel.OnToggleCamera = ToggleConferenceCamera;
+                        // Phase 16-X (Bug F fix, 2026-06-01) — mic toggle on
+                        // the Conference toolbar 🎙 button routes to the
+                        // existing Phase 4 Part 3b ToggleMicrophone, owned
+                        // by this MainWindow.  MicStateChanged is the
+                        // canonical mic-transition broadcast event; subscribe
+                        // here to push every state into the shell VM +
+                        // self-tile mic indicator.  Seed with the current
+                        // state in case mic was already on when the
+                        // Conference window opened (rare but possible).
+                        _confWindow.ShellViewModel.OnToggleMic = ToggleMicrophone;
+                        EventHandler<bool> micSync = (_, micOn) =>
+                            Dispatcher.BeginInvoke(new Action(() =>
+                                _confWindow?.SetSelfMicLive(micOn)));
+                        MicStateChanged += micSync;
+                        _confWindow.SetSelfMicLive(_micOn);
                         _confWindow.Closed += (_, _) =>
                         {
                             // Phase 16-C — auto-stop own cam if window closes mid-broadcast.
                             try { _studentCamera?.Stop(); } catch { }
+                            // Phase 16-X (Bug F) — drop the MicStateChanged
+                            // hook so it doesn't push state into a disposed
+                            // VM on the next mic toggle.
+                            MicStateChanged -= micSync;
                             _confWindow = null;
                         };
                         _confWindow.Show();

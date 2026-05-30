@@ -61,6 +61,19 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     /// lifecycle is owned by the singleton on the Agent process.</summary>
     public Action? OnToggleCamera { get; set; }
 
+    // Phase 16-X (Bug F fix, 2026-06-01) — own-mic toggle state surfaced to
+    // the Conference toolbar.  Mirrors the existing _micOn flag on
+    // MainWindow (Phase 4 Part 3b StudentAudioBroadcaster path).  The
+    // toolbar's 🎙 button binds IsMicOn for the active-state highlight;
+    // ConferenceGalleryWindow.ctor subscribes MainWindow.MicStateChanged
+    // to push every state transition into this property.
+    [ObservableProperty] private bool isMicOn;
+    /// <summary>Phase 16-X (Bug F fix) — wired by ConferenceGalleryWindow
+    /// ctor to invoke MainWindow.ToggleMicrophone() so the singleton
+    /// StudentAudioBroadcaster lifecycle stays on the Agent process
+    /// regardless of whether the Conference window is open.</summary>
+    public Action? OnToggleMic { get; set; }
+
     // Sidebar overlay state — mirrors the Teacher.MainViewModel shape so
     // the same ConferenceSidebar XAML works against either DataContext.
     [ObservableProperty] private bool isConferenceSidebarVisible;
@@ -88,6 +101,12 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     /// button binds this; the actual lifecycle (device pick, AForge start,
     /// IPC emit) lives in MainWindow via <see cref="OnToggleCamera"/>.</summary>
     public IRelayCommand ToggleCameraCommand { get; }
+
+    /// <summary>Phase 16-X (Bug F fix) — student's own mic toggle.  The
+    /// toolbar's 🎙 button binds this; the actual lifecycle
+    /// (StudentAudioBroadcaster start/stop + IPC emit) lives in MainWindow
+    /// via <see cref="OnToggleMic"/>.</summary>
+    public IRelayCommand ToggleMicCommand { get; }
 
     /// <summary>Phase 16-X (Bug D fix, 2026-05-31) — student-side reaction
     /// send.  Toolbar's ⋮ More popup resolves SendReactionCommand by name
@@ -150,6 +169,13 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
         // singleton broadcaster + device-selection dialog stay on the Agent
         // process even when the Conference window is closed/re-opened.
         ToggleCameraCommand = new RelayCommand(() => OnToggleCamera?.Invoke());
+
+        // Phase 16-X (Bug F fix) — own-mic toggle delegates to MainWindow's
+        // existing ToggleMicrophone (Phase 4 Part 3b StudentAudioBroadcaster
+        // path).  ConferenceGalleryWindow wires both OnToggleMic + the
+        // MicStateChanged subscription so the VM observable + self-tile
+        // mic indicator stay in sync with every transition.
+        ToggleMicCommand = new RelayCommand(() => OnToggleMic?.Invoke());
 
         // Phase 16-X (Bug D fix) — student-side reaction emit.  Optimistic
         // local render first (so the user sees the emoji float-up

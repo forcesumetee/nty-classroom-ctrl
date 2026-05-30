@@ -140,6 +140,20 @@ public partial class ConferenceGalleryWindow : Window
         }
     }
 
+    /// <summary>Phase 16-X (Bug F fix, 2026-06-01) — self-tile mic-live mirror.
+    /// Subscribed in MainWindow.ConferenceStart via MainWindow.MicStateChanged
+    /// so every Phase 4 Part 3b StudentAudioBroadcaster transition lands on
+    /// the toolbar 🎙 button + the self-tile mic indicator without a wire
+    /// round-trip.</summary>
+    public void SetSelfMicLive(bool live)
+    {
+        _vm.IsMicOn = live;
+        var selfId = _vm.SelfEndpointId;
+        if (selfId == Guid.Empty) return;
+        var tile = EnsurePeerTile(selfId, _vm.SelfDisplayName, isSelf: true);
+        tile.IsMicLive = live;
+    }
+
     /// <summary>Phase 16-C — self-tile preview frame.  Called by MainWindow's
     /// StudentCameraBroadcaster OnNewFrame echo so the student sees their
     /// own cam preview without a wire round-trip.</summary>
