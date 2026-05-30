@@ -1069,5 +1069,20 @@
                 </ScrollViewer>
             </DockPanel>
         </Border>
+
+        <!-- Phase 17 step 2 — LINE-style notification overlay.  Last child
+             of the root Grid so it renders on top of every other layer;
+             spans all rows + columns so the bottom-right corner of the
+             window is its docking surface regardless of which sidebar /
+             rail is currently visible.  Background is x:Null on the
+             UserControl + ItemsControl so the empty area is click-through;
+             only the cards themselves catch input.  DataContext is set in
+             MainWindow.xaml.cs to App.Notifications after that singleton
+             is initialised in App.OnStartup. -->
+        <views:NotificationOverlay x:Name="NotificationsOverlay"
+                                   Grid.Row="0" Grid.RowSpan="3"
+                                   Grid.Column="0" Grid.ColumnSpan="3"
+                                   Panel.ZIndex="1000"
+                                   IsHitTestVisible="True"/>
     </Grid>
 </Window>

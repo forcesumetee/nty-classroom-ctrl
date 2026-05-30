@@ -15,7 +15,17 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
-        Loaded += (_, _) => HookViewModel(DataContext as ViewModels.MainViewModel);
+        Loaded += (_, _) =>
+        {
+            HookViewModel(DataContext as ViewModels.MainViewModel);
+            // Phase 17 step 2 — bind the notification overlay's ItemsControl
+            // to App.Notifications.ActiveItems.  App.OnStartup constructs the
+            // singleton before MainWindow loads, so the reference is non-null
+            // by the time this fires; the null-coalesce is belt-and-braces in
+            // case a future startup-order change defers Notifications init.
+            if (NotificationsOverlay != null && App.Notifications != null)
+                NotificationsOverlay.DataContext = App.Notifications;
+        };
         Closed += (_, _) => { _toolbar?.Close(); _toolbar = null; };
     }
 

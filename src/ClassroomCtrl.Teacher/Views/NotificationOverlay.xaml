@@ -1,0 +1,106 @@
+<UserControl x:Class="ClassroomCtrl.Teacher.Views.NotificationOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Background="{x:Null}"
+             IsHitTestVisible="True"
+             d:DesignWidth="320" d:DesignHeight="240">
+    <!-- Phase 17 step 2 — LINE-style notification stack docked to the
+         bottom-right of MainWindow.  Each card slides in from the right edge
+         over 200 ms (Border.Loaded EventTrigger), stacks newest-at-bottom,
+         caps at 3 (oldest dropped by NotificationService.Show), and auto-
+         dismisses after 5 s (per-card DispatcherTimer in the service).
+         Click anywhere on a card → code-behind calls Dismiss(item.Id).
+
+         Background is null so the empty area is fully click-through; only
+         the cards themselves catch input.  IsHitTestVisible stays True so
+         the cards can still receive MouseLeftButtonDown. -->
+    <ItemsControl ItemsSource="{Binding ActiveItems}"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Bottom"
+                  Margin="0,0,16,16"
+                  Background="{x:Null}">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <StackPanel/>
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate>
+                <!-- Card.  Tag carries the NotificationItem Id so the
+                     code-behind click handler can dismiss by id without
+                     holding a back-reference to the item.  Cursor + the
+                     non-null Background guarantee the click target catches
+                     input even though the parent UserControl is
+                     click-through. -->
+                <Border Background="{DynamicResource Surface.Card}"
+                        BorderBrush="{DynamicResource Border.Soft}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="12,8"
+                        Margin="0,4,0,0"
+                        Width="280"
+                        Cursor="Hand"
+                        MouseLeftButtonDown="OnNotificationClick"
+                        Tag="{Binding Id}">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
+                    </Border.Effect>
+                    <Border.RenderTransform>
+                        <TranslateTransform X="0"/>
+                    </Border.RenderTransform>
+                    <Border.Triggers>
+                        <!-- Slide-in: 300 px from the right → 0 over 200 ms.
+                             Fires once on the card's first layout pass; new
+                             cards inherit the trigger via the DataTemplate. -->
+                        <EventTrigger RoutedEvent="Border.Loaded">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation
+                                        Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                        From="300" To="0"
+                                        Duration="0:0:0.2"/>
+                                    <DoubleAnimation
+                                        Storyboard.TargetProperty="(UIElement.Opacity)"
+                                        From="0" To="1"
+                                        Duration="0:0:0.2"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </Border.Triggers>
+                    <StackPanel Orientation="Horizontal">
+                        <!-- Avatar slot — emoji glyph (✋ / 💬 / ℹ️) from
+                             NotificationItem.Icon.  Multi-font fallback chain
+                             mirrors the Conference toolbar reaction picker
+                             so Win11 Thai-locale 22H2+ renders the glyph
+                             instead of falling back to monochrome shapes. -->
+                        <Border Width="32" Height="32" CornerRadius="999"
+                                Background="{DynamicResource Accent.PrimarySubtle}"
+                                Margin="0,0,10,0"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Icon}"
+                                       FontSize="18"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding SenderName}"
+                                       FontWeight="SemiBold"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource Text.Primary}"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Message}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource Text.Secondary}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="220"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>
