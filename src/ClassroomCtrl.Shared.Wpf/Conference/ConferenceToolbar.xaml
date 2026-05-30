@@ -218,23 +218,45 @@
                            Placement="Top"
                            StaysOpen="False"
                            AllowsTransparency="True">
+                        <!-- Phase 16-X (Bug D Part 1 retry, 2026-05-31).
+                             Three layers of defence against the Popup-root
+                             emoji-fallback bug on Win11 Thai-locale 22H2+:
+
+                             (a) Border.Resources implicit TextBlock style —
+                                 fills FontFamily even if a deeper TextBlock
+                                 forgets to set it.  Belt against an
+                                 inheritance break across PopupRoot.
+
+                             (b) Per-Run FontFamily with a multi-font
+                                 fallback chain — Segoe UI Emoji is the
+                                 primary, Segoe UI Symbol is a Windows-7+
+                                 secondary, Segoe UI is the system default
+                                 that at least has SOME emoji glyphs.  WPF
+                                 walks the list when the first font lacks
+                                 the glyph.
+
+                             (c) UTF-16 surrogate-pair char refs (&#xD83D;
+                                 &#xDC4D; etc.) instead of literal emoji
+                                 bytes — sidesteps any XAML-parse path that
+                                 might mis-shape the original UTF-8 emoji
+                                 bytes into single high-surrogate code
+                                 units (which the Win11 Thai locale text
+                                 shaper renders as random Latin glyphs:
+                                 "( € ₹ ( (" was the user's repro).
+                        -->
                         <Border Background="{DynamicResource Surface.Card}"
                                 BorderBrush="{DynamicResource Border.Soft}"
                                 BorderThickness="1"
                                 CornerRadius="10"
                                 Padding="8">
-                            <!-- Phase 16-X (Bug D fix, 2026-05-31) — explicit
-                                 Segoe UI Emoji on the picker.  The outer
-                                 UserControl defaults to FontFamily="Segoe UI"
-                                 (line 9) which renders compound emojis like
-                                 ❤️ as tofu boxes on some Windows builds
-                                 because Segoe UI's font-fallback chain
-                                 doesn't always reach Segoe UI Emoji inside
-                                 a Popup's separate visual root.  Setting it
-                                 here cascades to every TextBlock in the
-                                 picker. -->
-                            <StackPanel Orientation="Horizontal"
-                                        TextElement.FontFamily="Segoe UI Emoji">
+                            <Border.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontFamily"
+                                            Value="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                                </Style>
+                            </Border.Resources>
+                            <StackPanel x:Name="ReactionRow" Orientation="Horizontal"
+                                        TextElement.FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
                                         BorderThickness="0"
@@ -243,7 +265,11 @@
                                         ToolTip="👍"
                                         Click="ReactionButton_Click"
                                         Tag="👍">
-                                    <TextBlock Text="👍" FontSize="22" FontFamily="Segoe UI Emoji"/>
+                                    <TextBlock FontSize="22"
+                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                             Text="&#x1F44D;"/>
+                                    </TextBlock>
                                 </Button>
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
@@ -253,7 +279,17 @@
                                         ToolTip="❤️"
                                         Click="ReactionButton_Click"
                                         Tag="❤️">
-                                    <TextBlock Text="❤️" FontSize="22" FontFamily="Segoe UI Emoji"/>
+                                    <!-- U+2764 + U+FE0F variation-selector-16
+                                         forces emoji-presentation for the
+                                         HEAVY BLACK HEART base character;
+                                         without VS16 it can render as a
+                                         monochrome dingbat in some font
+                                         fallbacks. -->
+                                    <TextBlock FontSize="22"
+                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                             Text="&#x2764;&#xFE0F;"/>
+                                    </TextBlock>
                                 </Button>
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
@@ -263,7 +299,11 @@
                                         ToolTip="😂"
                                         Click="ReactionButton_Click"
                                         Tag="😂">
-                                    <TextBlock Text="😂" FontSize="22" FontFamily="Segoe UI Emoji"/>
+                                    <TextBlock FontSize="22"
+                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                             Text="&#x1F602;"/>
+                                    </TextBlock>
                                 </Button>
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
@@ -273,7 +313,11 @@
                                         ToolTip="😮"
                                         Click="ReactionButton_Click"
                                         Tag="😮">
-                                    <TextBlock Text="😮" FontSize="22" FontFamily="Segoe UI Emoji"/>
+                                    <TextBlock FontSize="22"
+                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                             Text="&#x1F62E;"/>
+                                    </TextBlock>
                                 </Button>
                                 <Button Width="40" Height="40" Margin="2,0"
                                         Background="Transparent"
@@ -283,7 +327,11 @@
                                         ToolTip="😢"
                                         Click="ReactionButton_Click"
                                         Tag="😢">
-                                    <TextBlock Text="😢" FontSize="22" FontFamily="Segoe UI Emoji"/>
+                                    <TextBlock FontSize="22"
+                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                             Text="&#x1F622;"/>
+                                    </TextBlock>
                                 </Button>
                             </StackPanel>
                         </Border>
