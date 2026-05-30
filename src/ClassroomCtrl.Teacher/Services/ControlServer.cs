@@ -160,6 +160,28 @@ public class ControlServer : IDisposable
         return _tcp.BroadcastAsync(Envelope.Create(MessageType.ChatBroadcast, bytes, _teacherId), ct);
     }
 
+    /// <summary>Phase 16-X (Bug G fix, 2026-06-01) — broadcast a chat composed
+    /// inside the Conference sidebar.  Same wire shape as
+    /// <see cref="BroadcastChatAsync"/> + IsConferenceContext=true so
+    /// receivers route to their Conference chat pane only.  Older
+    /// receivers ignore the new key and would fall back to the
+    /// Classroom rail; for the current customer (Teacher+Student on
+    /// matched binaries) every receiver knows the field after this
+    /// commit.</summary>
+    public Task BroadcastConferenceChatAsync(string text, string senderName, CancellationToken ct)
+    {
+        var msg = new ChatMessage
+        {
+            SenderId = _teacherId,
+            SenderName = string.IsNullOrWhiteSpace(senderName) ? "Teacher" : senderName,
+            Text = text,
+            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            IsConferenceContext = true,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.ChatBroadcast, bytes, _teacherId), ct);
+    }
+
     /// <summary>Send a direct message to ONE student (Phase 3 — Direct Messages 1:1).</summary>
     public Task SendDirectMessageAsync(Guid endpointId, string text, CancellationToken ct)
     {

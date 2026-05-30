@@ -1,10 +1,13 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using ClassroomCtrl.Shared.Models;
 using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Shared.Wpf.ViewModels;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ProtoChatMessage = ClassroomCtrl.Shared.Protocol.ChatMessage;
+using ModelChatMessage = ClassroomCtrl.Shared.Models.ChatMessage;
 
 namespace ClassroomCtrl.Student.Agent.ViewModels;
 
@@ -38,6 +41,33 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     public string SelfDisplayName { get; set; } = Environment.MachineName;
 
     public ConferenceGalleryViewModel ConferenceGallery { get; } = new();
+
+    /// <summary>Phase 16-X (Bug G fix, 2026-06-01) — dedicated chat surface
+    /// for the Conference sidebar.  Separate from the classic floating-
+    /// window chat path so Conference chat (IsConferenceContext=true on
+    /// the wire) doesn't double-display.  ConferenceSidebar XAML binds
+    /// DraftInput / Messages / SendChatCommand against this conversation;
+    /// MainWindow appends incoming Conference-context chats here via
+    /// AppendConferenceChat.</summary>
+    public Conversation ConferenceConversation { get; } = new Conversation
+    {
+        Id = "conference",
+        DisplayName = "Conference",
+        Kind = ConversationKind.Everyone,
+    };
+
+    /// <summary>Phase 16-X (Bug G fix) — append a received chat to the
+    /// Conference conversation.  Called by MainWindow on inbound
+    /// ChatBroadcast with IsConferenceContext=true.</summary>
+    public void AppendConferenceChat(string senderName, string text)
+    {
+        ConferenceConversation.Messages.Add(new ModelChatMessage
+        {
+            SenderName = string.IsNullOrEmpty(senderName) ? "Participant" : senderName,
+            Kind = ChatMessageKind.Teacher,
+            MessageText = text,
+        });
+    }
 
     /// <summary>Phase 16-D — Conference role.  Student is a Participant today;
     /// drives Visibility gating on the toolbar / sidebar / tile admin
@@ -127,6 +157,13 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     /// differ — teacher's just opens the queue, student's actually raises
     /// or lowers the hand + emits a 0x0110 / 0x0111 wire envelope.</summary>
     public IRelayCommand RaiseHandCommand { get; }
+
+    /// <summary>Phase 16-X (Bug G fix) — Conference sidebar chat send.
+    /// Shared command name with Teacher.MainViewModel.SendConferenceChatCommand
+    /// so the ConferenceSidebar XAML binds the same name on either side.
+    /// Stamps IsConferenceContext=true on the wire so receivers route only
+    /// to their Conference chat panel (not Classroom rail).</summary>
+    public IRelayCommand SendConferenceChatCommand { get; }
 
     /// <summary>Phase 16-X (Bug D fix, 2026-05-31) — student-side reaction
     /// send.  Toolbar's ⋮ More popup resolves SendReactionCommand by name
@@ -244,6 +281,48 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
             catch (Exception ex)
             {
                 IpcClient.LogToFile($"[StudentConferenceShellViewModel] SendReaction failed: {ex.Message}");
+            }
+        });
+
+        // Phase 16-X (Bug G fix) — Conference chat send.  Reads DraftInput
+        // from ConferenceConversation, locally appends a Me-bubble, then
+        // emits a ChatBroadcast envelope upstream with IsConferenceContext
+        // = true.  Service's OnAgentMessage is a pure forwarder (no switch)
+        // so no Service-side change required; Teacher routes to its own
+        // ConferenceConversation via the IsConferenceContext filter in
+        // OnChatReceived.
+        SendConferenceChatCommand = new RelayCommand(async () =>
+        {
+            var text = (ConferenceConversation.DraftInput ?? "").Trim();
+            if (string.IsNullOrEmpty(text)) return;
+            ConferenceConversation.DraftInput = "";
+
+            // Optimistic local Me-bubble — broadcast doesn't echo to sender.
+            ConferenceConversation.Messages.Add(new ModelChatMessage
+            {
+                SenderName = "Me",
+                Kind = ChatMessageKind.Student,
+                MessageText = text,
+            });
+
+            if (App.Ipc == null) return;
+            var msg = new ProtoChatMessage
+            {
+                SenderId = SelfEndpointId,
+                SenderName = string.IsNullOrWhiteSpace(SelfDisplayName) ? "Student" : SelfDisplayName,
+                Text = text,
+                TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                IsConferenceContext = true,
+            };
+            try
+            {
+                var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+                var env = Envelope.Create(MessageType.ChatBroadcast, bytes, Guid.Empty);
+                await App.Ipc.SendAsync(env);
+            }
+            catch (Exception ex)
+            {
+                IpcClient.LogToFile($"[StudentConferenceShellViewModel] SendConferenceChat failed: {ex.Message}");
             }
         });
     }

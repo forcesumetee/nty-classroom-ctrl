@@ -272,6 +272,22 @@ public partial class MainWindow : Window
                     var chat = MessagePack.MessagePackSerializer.Deserialize<ChatMessage>(env.Payload);
                     Dispatcher.Invoke(() =>
                     {
+                        // Phase 16-X (Bug G fix, 2026-06-01) — Conference-
+                        // context chats land in the Conference sidebar's
+                        // chat tab ONLY (not the classic floating-window
+                        // ChatList) so the two surfaces don't double-
+                        // display.  Self-loopback (own ChatBroadcast
+                        // echoed by teacher relay) is dropped by sender-id
+                        // match against _myEndpointId — the optimistic
+                        // Me-bubble in SendConferenceChatCommand already
+                        // showed the message.
+                        if (chat.IsConferenceContext)
+                        {
+                            if (_myEndpointId.HasValue && chat.SenderId == _myEndpointId.Value) return;
+                            _confWindow?.ShellViewModel.AppendConferenceChat(chat.SenderName, chat.Text);
+                            ShowChatToastIfHidden(MessageType.ChatBroadcast, chat.Text);
+                            return;
+                        }
                         ChatList.Items.Add($"[{chat.SenderName}] {chat.Text}");
                         ShowChatToastIfHidden(MessageType.ChatBroadcast, chat.Text);
                     });

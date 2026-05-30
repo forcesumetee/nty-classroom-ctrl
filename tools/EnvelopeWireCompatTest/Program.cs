@@ -408,6 +408,31 @@ int errors = 0;
     else { Pass("T22: ConferenceCameraStopMessage round-trip preserved (1 key)"); }
 }
 
+// ──────── Test 23 (Phase 16-X Bug G fix): ChatMessage.IsConferenceContext round-trip ────────
+//          Forward-compat: older receivers that only know Keys 0..5 must
+//          still parse cleanly when the new Key 6 is set; the field round-
+//          trips correctly when both sender and receiver know about it.
+{
+    var msg = new ChatMessage
+    {
+        SenderId = Guid.NewGuid(),
+        SenderName = "Conf Teacher",
+        RecipientId = null,
+        RoomId = null,
+        Text = "Hello from the Conference sidebar",
+        TimestampUtcMs = 1_700_000_000_000L,
+        IsConferenceContext = true,
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ChatMessage>(bytes);
+    if (back.SenderId != msg.SenderId) { errors += Fail("T23: SenderId mismatch"); }
+    else if (back.SenderName != msg.SenderName) { errors += Fail($"T23: SenderName mismatch (got '{back.SenderName}')"); }
+    else if (back.Text != msg.Text) { errors += Fail("T23: Text mismatch"); }
+    else if (back.TimestampUtcMs != msg.TimestampUtcMs) { errors += Fail("T23: TimestampUtcMs mismatch"); }
+    else if (back.IsConferenceContext != msg.IsConferenceContext) { errors += Fail("T23: IsConferenceContext mismatch — expected true"); }
+    else { Pass("T23: ChatMessage round-trip preserves IsConferenceContext (7 keys)"); }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");

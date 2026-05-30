@@ -43,6 +43,20 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         Kind = ConversationKind.Everyone,
     };
 
+    /// <summary>Phase 16-X (Bug G fix, 2026-06-01) — dedicated conversation
+    /// for chat composed/received inside the Conference sidebar.  Separate
+    /// from <see cref="EveryoneConversation"/> so a Conference chat doesn't
+    /// leak into the Classroom rail (and vice versa).  Routing on receive:
+    /// chat.IsConferenceContext=true lands here; everything else uses the
+    /// existing Classroom rail path in OnChatReceived.  ConferenceSidebar
+    /// XAML binds its chat tab to this conversation directly.</summary>
+    public Conversation ConferenceConversation { get; } = new Conversation
+    {
+        Id = "conference",
+        DisplayName = "Conference",
+        Kind = ConversationKind.Everyone,
+    };
+
     [ObservableProperty] private Conversation? activeConversation;
 
     // Phase 3 Section G/H — main content area view router.  StudentGrid is the default;
@@ -406,6 +420,14 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     public IRelayCommand ApplyPolicyCommand { get; }
     public IRelayCommand OpenLanguageCommand { get; }
     public IRelayCommand SendChatCommand { get; }
+
+    /// <summary>Phase 16-X (Bug G fix) — chat send from the Conference
+    /// sidebar.  Wire emit goes through
+    /// <see cref="Services.ControlServer.BroadcastConferenceChatAsync"/>
+    /// which stamps IsConferenceContext=true; locally appends to
+    /// <see cref="ConferenceConversation"/> only so the Classroom rail
+    /// (bound to <see cref="ActiveConversation"/>) stays clean.</summary>
+    public IRelayCommand SendConferenceChatCommand { get; }
     public IRelayCommand<StudentViewModel?> LockOneCommand { get; }
     public IRelayCommand<StudentViewModel?> UnlockOneCommand { get; }
     public IRelayCommand<StudentViewModel?> ApplyPolicyToStudentCommand { get; }
@@ -579,6 +601,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         ApplyPolicyCommand = new RelayCommand(OpenApplyPolicy);
         OpenLanguageCommand = new RelayCommand(OpenLanguage);
         SendChatCommand = new RelayCommand(SendChat);
+        SendConferenceChatCommand = new RelayCommand(SendConferenceChat);
         LockOneCommand = new RelayCommand<StudentViewModel?>(s => LockOne(s, true));
         UnlockOneCommand = new RelayCommand<StudentViewModel?>(s => LockOne(s, false));
         ApplyPolicyToStudentCommand = new RelayCommand<StudentViewModel?>(OpenApplyPolicyForStudent);
@@ -1893,6 +1916,22 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     {
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
+            // Phase 16-X (Bug G fix, 2026-06-01) — Conference-context chats
+            // land in ConferenceConversation only.  Earliest filter point so
+            // the existing DM / Room / Everyone branches stay simple.  A
+            // pre-16-X sender doesn't set the flag, so legacy broadcasts
+            // fall through to the existing path unchanged.
+            if (chat.IsConferenceContext)
+            {
+                ConferenceConversation.Messages.Add(new ChatMessage
+                {
+                    SenderName = string.IsNullOrEmpty(chat.SenderName) ? "Participant" : chat.SenderName,
+                    Kind = ChatMessageKind.Student,
+                    MessageText = chat.Text,
+                });
+                return;
+            }
+
             // Phase 3 Section E — direct messages from a student route to that student's
             // DM tab (auto-created if missing).  Broadcast / breakout-room chat continues
             // to land in the Everyone conversation with the existing [Room] prefix.
@@ -2847,6 +2886,42 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     }
 
     // Phase 8 Section D — OpenAdminPasswordSettings() removed.
+
+    /// <summary>Phase 16-X (Bug G fix, 2026-06-01) — chat send from the
+    /// Conference sidebar.  Mirrors the Everyone-tab path in SendChat below
+    /// but uses BroadcastConferenceChatAsync (stamps IsConferenceContext=
+    /// true on the wire) and appends LOCALLY to ConferenceConversation
+    /// only — Classroom rail (bound to ActiveConversation) stays clean.</summary>
+    private async void SendConferenceChat()
+    {
+        var conv = ConferenceConversation;
+        var text = (conv.DraftInput ?? "").Trim();
+        if (string.IsNullOrEmpty(text)) return;
+        conv.DraftInput = "";
+
+        if (App.Server == null) return;
+
+        // Append outgoing bubble locally so the user sees their own message
+        // immediately without waiting for any echo (broadcast doesn't echo
+        // back to teacher anyway).
+        conv.Messages.Add(new ChatMessage
+        {
+            SenderName = Loc.Get("Chat_MePrefix"),
+            Kind = ChatMessageKind.Teacher,
+            MessageText = text,
+        });
+
+        var senderName = Loc.Get("Conf_TeacherDisplayName", "Teacher");
+        try
+        {
+            await App.Server.BroadcastConferenceChatAsync(text, senderName,
+                System.Threading.CancellationToken.None);
+        }
+        catch (System.Exception ex)
+        {
+            AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
+        }
+    }
 
     private async void SendChat()
     {

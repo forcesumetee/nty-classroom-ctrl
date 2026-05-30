@@ -21,6 +21,14 @@ public class ChatMessage
     [Key(3)] public Guid? RoomId { get; set; }
     [Key(4)] public string Text { get; set; } = "";
     [Key(5)] public long TimestampUtcMs { get; set; }
+    /// <summary>Phase 16-X (Bug G fix, 2026-06-01) — true when the sender
+    /// composed this message inside the Conference sidebar's chat tab.
+    /// Receivers route Conference-context chats to their Conference chat
+    /// pane only (not the Classroom rail) so the two surfaces don't
+    /// double-display.  Backward compatible: older deserializers
+    /// (Key(0..5) only) silently ignore unknown keys per MessagePack
+    /// explicit-key contract, defaulting the field to false on read.</summary>
+    [Key(6)] public bool IsConferenceContext { get; set; }
 }
 
 [MessagePackObject]

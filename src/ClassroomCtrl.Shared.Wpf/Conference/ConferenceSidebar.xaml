@@ -139,12 +139,24 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
+                            <!-- Phase 16-X (Bug G fix, 2026-06-01) — chat tab
+                                 binds to ConferenceConversation, NOT the
+                                 classroom-rail ActiveConversation, so a
+                                 message composed here stays inside the
+                                 Conference surface.  Send command flips to
+                                 SendConferenceChatCommand which stamps
+                                 IsConferenceContext=true on the wire so
+                                 receivers route only to their Conference
+                                 chat pane (not Classroom rail).  Both
+                                 Teacher.MainViewModel and Student.
+                                 StudentConferenceShellViewModel expose
+                                 the same property + command names. -->
                             <TextBox Grid.Column="0"
                                      Style="{DynamicResource TextBox.Default}"
-                                     Text="{Binding ActiveConversation.DraftInput, UpdateSourceTrigger=PropertyChanged}"/>
+                                     Text="{Binding ConferenceConversation.DraftInput, UpdateSourceTrigger=PropertyChanged}"/>
                             <Button Grid.Column="1"
                                     Style="{DynamicResource Button.Primary}"
-                                    Command="{Binding SendChatCommand}"
+                                    Command="{Binding SendConferenceChatCommand}"
                                     Margin="8,0,0,0" Width="40" Height="40" Padding="0"
                                     ToolTip="{DynamicResource Btn_Send}">
                                 <TextBlock Text="➤" FontSize="14" Foreground="White"/>
@@ -155,7 +167,7 @@
                     <!-- Bubble list. -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding ActiveConversation.Messages}"
+                        <ItemsControl ItemsSource="{Binding ConferenceConversation.Messages}"
                                       Margin="10,8">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:ChatMessage}">
