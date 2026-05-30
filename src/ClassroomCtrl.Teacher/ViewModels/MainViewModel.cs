@@ -476,6 +476,14 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     // badge + queue entry so the sidebar updates without round-tripping.
     public IRelayCommand<ConferenceTileViewModel?> RecognizeHandCommand { get; }
 
+    /// <summary>Phase 16-D — host-only mute on a specific participant.  Reuses
+    /// the 13-D MicMuteRequest wire (0x0641) — no new wire codes for the
+    /// host-mute action, just a fresh UI command bound to the Sidebar's
+    /// per-row "Mute" admin button.  Visibility on the button itself binds
+    /// to Role.CanMuteOthers so students never see it.  Parameter is the
+    /// target StudentViewModel from the participants list.</summary>
+    public IRelayCommand<StudentViewModel?> MuteParticipantCommand { get; }
+
     /// <summary>Phase 15-E step 4 — Reaction toolbar picker.  Takes the
     /// emoji string and broadcasts a ReactionMessage; the teacher's own
     /// self-tile animates locally + ControlServer fans out to all
@@ -654,6 +662,24 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 try { await App.Server.SendHandLowerAsync(tile.EndpointId, System.Threading.CancellationToken.None); }
                 catch (Exception ex) { AppendSystemChat(string.Format(Loc.Get("Err_GenericFmt", "Error: {0}"), ex.Message)); }
             }
+        });
+
+        // Phase 16-D step 10 — host-only Mute on a specific participant.
+        // Reuses the 13-D MicMuteRequest wire (0x0641) so no new wire
+        // codes; just a fresh UI command bound to the Sidebar's per-row
+        // "Mute" admin button.  Sidebar's Visibility on that button
+        // already gates by Role.CanMuteOthers so this command can't be
+        // invoked from a ParticipantRole shell.
+        MuteParticipantCommand = new RelayCommand<StudentViewModel?>(async s =>
+        {
+            if (s == null || App.Server == null) return;
+            var reason = Loc.Get("Conf_HostMutedReason", "Muted by the host");
+            try
+            {
+                await App.Server.SendMicMuteRequestAsync(s.EndpointId, muted: true,
+                    reason, System.Threading.CancellationToken.None);
+            }
+            catch (Exception ex) { AppendSystemChat(string.Format(Loc.Get("Err_GenericFmt", "Error: {0}"), ex.Message)); }
         });
 
         // Phase 15-E step 4 — Reaction send.  Optimistically render the

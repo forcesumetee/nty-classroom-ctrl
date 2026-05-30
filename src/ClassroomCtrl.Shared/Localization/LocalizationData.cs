@@ -234,6 +234,9 @@ internal static class LocalizationData
         ["Conf_ChatShareStopped"] = "[Conference] You stopped sharing your screen.",
         // Phase 16-C step 4 — peer cam UI strings.
         ["Err_CameraStopped"] = "Camera stopped unexpectedly",
+        // Phase 16-D step 10 — host-only admin actions in the Participants tab.
+        ["Conf_Mute"] = "Mute",
+        ["Conf_HostMutedReason"] = "Muted by the host",
         // Phase 15-D — Meet-style bottom toolbar + sidebar + share banner +
         // mode-exclusivity toasts.
         ["Conf_Tooltip_Chat"] = "Chat",
@@ -868,6 +871,9 @@ internal static class LocalizationData
         ["Conf_ChatShareStopped"] = "[Conference] คุณหยุดแชร์หน้าจอแล้ว",
         // Phase 16-C step 4 — peer cam UI strings.
         ["Err_CameraStopped"] = "กล้องหยุดทำงานโดยไม่คาดคิด",
+        // Phase 16-D step 10 — host-only admin actions in the Participants tab.
+        ["Conf_Mute"] = "ปิดไมค์",
+        ["Conf_HostMutedReason"] = "ถูกปิดไมค์โดยครู",
         // Phase 15-D — Meet-style toolbar + sidebar + share banner + toasts.
         ["Conf_Tooltip_Chat"] = "แชท",
         ["Conf_Tooltip_Hand"] = "นักเรียนยกมือ",

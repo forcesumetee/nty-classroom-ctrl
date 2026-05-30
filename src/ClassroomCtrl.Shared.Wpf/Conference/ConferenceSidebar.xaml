@@ -227,6 +227,11 @@
                                                     CornerRadius="8"
                                                     Padding="10,8" Margin="0,0,0,4">
                                                 <DockPanel>
+                                                    <!-- Phase 16-D step 10 — Recognize is a host-only
+                                                         action; participants see the queue but cannot
+                                                         dismiss hands.  Visibility binds to the host
+                                                         shell VM's Role.CanRecognizeHand via the same
+                                                         AncestorType=UserControl walk the Command uses. -->
                                                     <Button DockPanel.Dock="Right"
                                                             Content="{DynamicResource Conf_Recognize}"
                                                             FontSize="11" FontWeight="SemiBold"
@@ -234,6 +239,9 @@
                                                             BorderThickness="0" Padding="10,4"
                                                             Cursor="Hand"
                                                             Focusable="False" FocusVisualStyle="{x:Null}"
+                                                            Visibility="{Binding DataContext.Role.CanRecognizeHand,
+                                                                         RelativeSource={RelativeSource AncestorType=UserControl},
+                                                                         Converter={StaticResource BoolToVisibility}}"
                                                             Command="{Binding DataContext.RecognizeHandCommand,
                                                                       RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"/>
@@ -324,6 +332,28 @@
                                                     </TextBlock.Style>
                                                 </TextBlock>
                                             </StackPanel>
+
+                                            <!-- Phase 16-D step 10 — host-only Mute admin button.
+                                                 Sits between the state-indicator cluster and the name
+                                                 column so the click target doesn't shift when admin
+                                                 actions are absent (participant view).  Visibility
+                                                 binds to Role.CanMuteOthers via the AncestorType
+                                                 walk that other host-bindings use. -->
+                                            <Button DockPanel.Dock="Right"
+                                                    Content="{DynamicResource Conf_Mute}"
+                                                    FontSize="11" FontWeight="SemiBold"
+                                                    Background="#DC2626" Foreground="White"
+                                                    BorderThickness="0" Padding="8,3"
+                                                    Margin="6,0,0,0"
+                                                    Cursor="Hand"
+                                                    Focusable="False" FocusVisualStyle="{x:Null}"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{Binding DataContext.Role.CanMuteOthers,
+                                                                 RelativeSource={RelativeSource AncestorType=UserControl},
+                                                                 Converter={StaticResource BoolToVisibility}}"
+                                                    Command="{Binding DataContext.MuteParticipantCommand,
+                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"/>
 
                                             <!-- Name + machine. -->
                                             <StackPanel VerticalAlignment="Center">
