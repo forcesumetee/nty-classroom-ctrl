@@ -38,6 +38,13 @@ public partial class App : Application
     /// unfocused.  See <see cref="TrayNotifier"/>.</summary>
     public static TrayNotifier? Notifier { get; private set; }
 
+    /// <summary>Phase 17 (v1.x roadmap #5): LINE-style in-app notification stack.
+    /// Surfaced by <c>NotificationOverlay</c> docked to MainWindow's bottom-right
+    /// corner; HandRaise / Chat dispatch arms call <see cref="NotificationService.Show"/>
+    /// to push slide-in cards.  Independent from <see cref="Notifier"/> which
+    /// targets out-of-process Windows toasts when the Teacher window is hidden.</summary>
+    public static NotificationService? Notifications { get; private set; }
+
     /// <summary>Phase 4 Part 4: Global video codec selection. Read by encoders on Start.
     /// Phase 11-B inc4.1: default reverted H.264 → MJPEG for ship.  SW H.264 (OpenH264) is
     /// CPU-bound at &lt; 10 FPS on the customer hardware class, so H.264-default would hand
@@ -149,6 +156,12 @@ public partial class App : Application
         var beaconLogger = loggerFactory.CreateLogger<TeacherBeaconService>();
         Beacon = new TeacherBeaconService(beaconLogger);
         Beacon.Start();
+
+        // Phase 17 (v1.x roadmap #5) — LINE-style in-app notification stack.
+        // Singleton + UI-thread-marshalled internally; safe to call from any
+        // dispatch arm.  NotificationOverlay (placed in MainWindow.xaml) binds
+        // its ItemsControl to Notifications.ActiveItems.
+        Notifications = new NotificationService();
 
         // Phase 14: Audit log
         Audit = new AuditLogService();
