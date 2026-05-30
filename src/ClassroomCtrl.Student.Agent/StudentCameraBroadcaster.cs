@@ -88,17 +88,56 @@ public sealed class StudentCameraBroadcaster : IDisposable
     public static Task<List<(string Moniker, string Name)>> EnumerateDevicesAsync(CancellationToken ct = default)
         => Task.Run(EnumerateDevices, ct);
 
+    /// <summary>Phase 16-X (Bug E fix, 2026-05-31) — DirectShow moniker prefix
+    /// for physical (PnP) capture devices.  Virtual cameras
+    /// (LSVCam / OBS Virtual Cam / Snap Cam / Manycam etc.) register under
+    /// <c>@device:sw:</c> and almost always fail AForge bring-up with
+    /// 0x8007045A ERROR_DLL_INIT_FAILED because their drivers expect a
+    /// host app (LiveSwitch / OBS / Snap) to be running.  Skipping them
+    /// at enumeration time means the broadcaster picks the real hardware
+    /// camera even when the user has half a dozen ghosts installed.</summary>
+    private const string PnpMonikerPrefix = "@device:pnp:";
+
     public static List<(string Moniker, string Name)> EnumerateDevices()
     {
-        var list = new List<(string, string)>();
+        // All discovered devices (hardware + virtual) for the diagnostic
+        // log line below; the returned list is hardware-only.
+        var allEnumerated = new List<(string Moniker, string Name, bool IsHardware)>();
+        var hardwareOnly = new List<(string, string)>();
         try
         {
             var infos = new FilterInfoCollection(FilterCategory.VideoInputDevice);
             foreach (FilterInfo info in infos)
-                list.Add((info.MonikerString, info.Name));
+            {
+                var moniker = info.MonikerString ?? "";
+                var isHardware = moniker.StartsWith(PnpMonikerPrefix, StringComparison.Ordinal);
+                allEnumerated.Add((moniker, info.Name, isHardware));
+                if (isHardware) hardwareOnly.Add((moniker, info.Name));
+            }
         }
-        catch { /* enumeration may fail on bare-metal init; return empty list */ }
-        return list;
+        catch (Exception ex)
+        {
+            IpcClient.LogToFile($"[StudentCameraBroadcaster] EnumerateDevices threw: {ex.Message}");
+            return hardwareOnly;
+        }
+
+        // Observability: log every device we saw with the pnp/sw classification
+        // so a future "wrong camera selected" report is one log-line away.
+        if (allEnumerated.Count == 0)
+        {
+            IpcClient.LogToFile("[StudentCameraBroadcaster] Enumerated devices: (none)");
+        }
+        else
+        {
+            var sb = new System.Text.StringBuilder("[StudentCameraBroadcaster] Enumerated devices:");
+            foreach (var (_, name, isHw) in allEnumerated)
+            {
+                sb.Append("\n  - ").Append(name).Append(isHw ? " (pnp)" : " (sw, skipped)");
+            }
+            IpcClient.LogToFile(sb.ToString());
+        }
+
+        return hardwareOnly;
     }
 
     /// <summary>Phase 16-X — async cam init.  Heavy AForge work
