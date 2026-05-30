@@ -2021,9 +2021,14 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     private static void ShowChatNotification(string senderName, string text)
     {
         const int PreviewMaxChars = 50;
-        var preview = text ?? "";
+        var preview = (text ?? "").Trim();
         if (preview.Length > PreviewMaxChars)
             preview = preview.Substring(0, PreviewMaxChars - 1) + "…";
+        // Phase 17 step 5 polish — whitespace-only / empty chat still gets a
+        // legible card body (localized "sent a message" / "ส่งข้อความ").
+        // Prevents a blank-bottom card if a student fat-fingers Enter.
+        if (preview.Length == 0)
+            preview = Loc.Get("Notif_Chat_Body", "sent a message");
 
         App.Notifications?.Show(new ClassroomCtrl.Teacher.Services.NotificationItem
         {

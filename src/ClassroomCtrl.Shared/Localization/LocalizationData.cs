@@ -79,6 +79,13 @@ internal static class LocalizationData
         ["Help_TeachAssess"] = "Send quizzes and exams to students, manage class rosters, and mark attendance — student PCs lock into a secure exam window when you send a quiz.",
         ["Help_System"] = "Power commands (restart/shutdown all PCs), customize app branding (colors, logo), change language, and set the admin password for student PCs.",
         ["Lbl_HandRaised"] = "HAND RAISED",
+        // Phase 17 step 5 — LINE-style in-app notification card bodies.
+        // HandRaise uses a localized "raised hand" verb; Chat uses the
+        // truncated message preview itself as the body (Chat_Body kept as a
+        // future hook for a generic "sent a message" fallback when the
+        // preview ever ends up empty).
+        ["Notif_HandRaise_Body"] = "raised hand",
+        ["Notif_Chat_Body"] = "sent a message",
         ["Menu_LockScreen"] = "Lock screen",
         ["Menu_UnlockScreen"] = "Unlock screen",
 
@@ -720,6 +727,9 @@ internal static class LocalizationData
         ["Help_TeachAssess"] = "ส่งข้อสอบให้นักเรียน จัดการชั้นเรียน เช็คชื่อ — เครื่องนักเรียนจะถูกล็อกเข้าโหมดสอบเมื่อส่งข้อสอบ",
         ["Help_System"] = "คำสั่งระบบ (รีสตาร์ท/ปิดทุกเครื่อง) ปรับแต่ง branding (สี โลโก้) เปลี่ยนภาษา ตั้งรหัส admin",
         ["Lbl_HandRaised"] = "ยกมือ",
+        // Phase 17 step 5 — Thai notification-card bodies.
+        ["Notif_HandRaise_Body"] = "ยกมือ",
+        ["Notif_Chat_Body"] = "ส่งข้อความ",
         ["Menu_LockScreen"] = "ล็อกหน้าจอ",
         ["Menu_UnlockScreen"] = "ปลดล็อกหน้าจอ",
 
