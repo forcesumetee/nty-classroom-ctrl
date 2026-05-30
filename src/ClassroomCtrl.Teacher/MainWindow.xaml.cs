@@ -26,6 +26,14 @@ public partial class MainWindow : Window
             if (NotificationsOverlay != null && App.Notifications != null)
                 NotificationsOverlay.DataContext = App.Notifications;
         };
+        // Phase 17.1 step 3 — auto-clear the taskbar badge the moment the
+        // teacher focuses the window.  Activated fires on:
+        //   - first focus after launch
+        //   - regain focus after Alt-Tab / clicking the taskbar button
+        //   - regain focus after the window comes back from minimized
+        // Any of these means the teacher is now looking at the corner overlay,
+        // so the LINE-style "unread badge" semantics say zero it out.
+        Activated += (_, _) => App.Notifications?.MarkAllRead();
         Closed += (_, _) => { _toolbar?.Close(); _toolbar = null; };
     }
 

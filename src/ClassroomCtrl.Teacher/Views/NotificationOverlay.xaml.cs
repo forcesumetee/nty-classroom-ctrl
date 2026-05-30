@@ -29,6 +29,12 @@ public partial class NotificationOverlay : UserControl
         if (sender is FrameworkElement fe && fe.Tag is Guid id)
         {
             App.Notifications?.Dismiss(id);
+            // Phase 17.1 step 3 — clicking any card counts as "I've seen the
+            // stack" (LINE / Slack semantics: acknowledge one → clear the
+            // app-icon badge for the whole bunch).  The remaining cards stay
+            // visible on the corner overlay until their own auto-dismiss
+            // timer ticks; the badge just zeroes regardless.
+            App.Notifications?.MarkAllRead();
             // Mark handled so the click doesn't bubble up and steal focus
             // from whatever the teacher is currently looking at.
             e.Handled = true;
