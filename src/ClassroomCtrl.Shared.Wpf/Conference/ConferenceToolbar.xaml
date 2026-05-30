@@ -125,12 +125,23 @@
                     <TextBlock Text="📷" FontSize="20"/>
                 </Button>
 
-                <!-- 🖥 Screen share toggle.  Active style when share is live. -->
+                <!-- 🖥 Screen share toggle.  Active style when share is live.
+                     Phase 16-D step 9 — Visibility binds to Role.CanShareScreen
+                     so participants (Zoom default: host gates share) don't see
+                     the button at all.  Host always sees it; ParticipantRole
+                     hides it.  Future per-session policy that lets a host
+                     enable participant share lands by flipping the
+                     CanShareScreen flag at the role instance level, not by
+                     changing this XAML. -->
                 <Button Command="{Binding ShareScreenCommand}"
                         ToolTip="{Binding ShareScreenButtonText}">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
+                                <DataTrigger Binding="{Binding Role.CanShareScreen}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding IsScreenSharing}" Value="True">
                                     <Setter Property="Background" Value="#10B981"/>
                                     <Setter Property="Foreground" Value="White"/>
@@ -268,11 +279,26 @@
                     </Popup>
                 </Grid>
 
-                <!-- 📞 End Conference.  Reuses existing EndConferenceCommand
-                     from Phase 15-B step 5. -->
-                <Button Command="{Binding EndConferenceCommand}"
-                        ToolTip="{DynamicResource Conf_EndConference}"
-                        Style="{StaticResource ConfToolbarButtonDanger}">
+                <!-- 📞 End Conference / Leave.  Reuses existing
+                     EndConferenceCommand from Phase 15-B step 5; semantics
+                     differ by role: host ends for everyone (sends 0x0671
+                     ConferenceEnd) while participant just closes their
+                     window.
+                     Phase 16-D step 9 — Tooltip flips between Conf_EndConference
+                     and Conf_Leave based on Role.CanEndForAll so the button
+                     label reads correctly in either DataContext.  Both keys
+                     already exist in LocalizationData.cs for EN + TH. -->
+                <Button Command="{Binding EndConferenceCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButtonDanger}">
+                            <Setter Property="ToolTip" Value="{DynamicResource Conf_Leave}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Role.CanEndForAll}" Value="True">
+                                    <Setter Property="ToolTip" Value="{DynamicResource Conf_EndConference}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
                     <TextBlock Text="📞" FontSize="20"/>
                 </Button>
             </StackPanel>
