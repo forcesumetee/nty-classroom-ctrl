@@ -754,6 +754,13 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             // CameraBroadcastService routes through this event instead.  Single
             // handler reuse — decode + push to self-tile is identical.
             App.Server.TeacherConferenceCameraFrameSent += OnTeacherCameraFrameSent;
+            // Phase 16-C — peer cam reception.  Teacher subscribes to its own
+            // ControlServer dispatch events so a student's cam frames land on
+            // the matching tile in the teacher's gallery (not just relayed to
+            // other peers).  All three handlers marshal to UI dispatcher.
+            App.Server.ConferenceCameraStartReceived += OnConferenceCameraStartReceived;
+            App.Server.ConferenceCameraFrameReceived += OnConferenceCameraFrameReceived;
+            App.Server.ConferenceCameraStopReceived  += OnConferenceCameraStopReceived;
             // Phase 13-B (Tier 1) — sync local Rooms collection from canonical
             // server state on every mutation.  GroupManagerView + the Step-7
             // badges + status chip all read off Rooms.
@@ -2592,6 +2599,81 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 }
             }
         });
+    }
+
+    /// <summary>Phase 16-C — peer cam Start arriving from a student.  Ensures
+    /// the matching gallery tile exists (RebuildConferenceGallery already
+    /// added student tiles on join; this just picks up any display-name
+    /// refresh carried in the Start envelope).  Marshals to UI dispatcher.</summary>
+    private void OnConferenceCameraStartReceived(object? sender,
+        (System.Guid SourceId, ClassroomCtrl.Shared.Protocol.ConferenceCameraStartMessage Msg) e)
+    {
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new System.Action(() =>
+        {
+            if (!IsConferenceSessionActive || ConferenceGallery == null) return;
+            var tile = ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == e.SourceId);
+            if (tile == null)
+            {
+                // Tile not yet in gallery — unusual since student must be
+                // connected to send the envelope, but defensively add it so a
+                // late RebuildConferenceGallery race doesn't drop the frame.
+                tile = new ConferenceTileViewModel(e.SourceId,
+                    string.IsNullOrWhiteSpace(e.Msg.SourceName) ? "Participant" : e.Msg.SourceName,
+                    isSelf: false);
+                ConferenceGallery.Tiles.Add(tile);
+            }
+            else if (!string.IsNullOrWhiteSpace(e.Msg.SourceName) && tile.DisplayName != e.Msg.SourceName)
+            {
+                tile.DisplayName = e.Msg.SourceName;
+            }
+        }));
+    }
+
+    /// <summary>Phase 16-C — peer cam Frame arriving from a student.  Decode
+    /// JPEG, route to the matching gallery tile by sender id, flip
+    /// IsCamLive=true.  Marshals to UI dispatcher; transient decode failures
+    /// leave the prior frame in place (the next frame lands seconds later).</summary>
+    private void OnConferenceCameraFrameReceived(object? sender,
+        (System.Guid SourceId, ClassroomCtrl.Shared.Protocol.ConferenceCameraFrameMessage Msg) e)
+    {
+        if (!IsConferenceSessionActive || ConferenceGallery == null) return;
+        var jpeg = e.Msg.JpegData;
+        var sourceId = e.SourceId;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new System.Action(() =>
+        {
+            var tile = ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == sourceId);
+            if (tile == null) return;
+            try
+            {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                using var ms = new System.IO.MemoryStream(jpeg);
+                bmp.BeginInit();
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                bmp.Freeze();
+                tile.JpegFrame = bmp;
+                tile.IsCamLive = true;
+            }
+            catch { /* transient decode: next frame lands seconds later */ }
+        }));
+    }
+
+    /// <summary>Phase 16-C — peer cam Stop arriving from a student (or
+    /// implicit Stop fired by the ControlServer PeerDisconnected handler).
+    /// Clears IsCamLive + JpegFrame so the cam-off placeholder swaps in;
+    /// preserves the tile + display name so the participant stays in the
+    /// gallery until they actually leave the Conference.</summary>
+    private void OnConferenceCameraStopReceived(object? sender, System.Guid sourceId)
+    {
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new System.Action(() =>
+        {
+            if (!IsConferenceSessionActive || ConferenceGallery == null) return;
+            var tile = ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == sourceId);
+            if (tile == null) return;
+            tile.IsCamLive = false;
+            tile.JpegFrame = null;
+        }));
     }
 
     /// <summary>Phase 15-C — surface the teacher's broadcast cam JPEG into
