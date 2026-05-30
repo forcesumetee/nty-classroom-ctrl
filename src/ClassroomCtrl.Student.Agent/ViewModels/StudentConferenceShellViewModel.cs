@@ -25,11 +25,31 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     public Guid SessionId { get; }
     public Guid TeacherEndpointId { get; }
 
+    /// <summary>Phase 16-C — student's own endpoint id, populated by MainWindow
+    /// once Hello-ack lands.  Used as the self-tile EndpointId for camera
+    /// preview rendering and as the self-loopback filter key.</summary>
+    public Guid SelfEndpointId { get; set; }
+
+    /// <summary>Phase 16-C — display name carried in the Start envelope.
+    /// Today defaults to the local machine name; future polish round will
+    /// pull the per-class roster name.</summary>
+    public string SelfDisplayName { get; set; } = Environment.MachineName;
+
     public ConferenceGalleryViewModel ConferenceGallery { get; } = new();
 
     // Placeholder Students collection so the sidebar's Participants tab
     // binds cleanly.  Phase 16-C populates this with peer state.
     public ObservableCollection<object> Students { get; } = new();
+
+    // Phase 16-C — own-cam toggle state surfaced to the Conference toolbar.
+    // IsBroadcastingCamera mirrors the StudentCameraBroadcaster.IsActive flag
+    // so the toolbar's 📷 button lights up (DataTrigger in 16-B+ XAML) when
+    // the student is broadcasting.
+    [ObservableProperty] private bool isBroadcastingCamera;
+    /// <summary>Phase 16-C — wired by ConferenceGalleryWindow ctor to invoke
+    /// MainWindow.ToggleConferenceCamera() so the StudentCameraBroadcaster
+    /// lifecycle is owned by the singleton on the Agent process.</summary>
+    public Action? OnToggleCamera { get; set; }
 
     // Sidebar overlay state — mirrors the Teacher.MainViewModel shape so
     // the same ConferenceSidebar XAML works against either DataContext.
@@ -53,6 +73,11 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     public IRelayCommand SelectConferenceParticipantsTabCommand { get; }
     public IRelayCommand ShowConferenceHandQueueCommand { get; }
     public IRelayCommand EndConferenceCommand { get; }
+
+    /// <summary>Phase 16-C — student's own cam toggle.  The toolbar's 📷
+    /// button binds this; the actual lifecycle (device pick, AForge start,
+    /// IPC emit) lives in MainWindow via <see cref="OnToggleCamera"/>.</summary>
+    public IRelayCommand ToggleCameraCommand { get; }
 
     /// <summary>Phase 16-B step 7 — fired when the student clicks End / Leave.
     /// ConferenceGalleryWindow subscribes and closes itself.</summary>
@@ -100,5 +125,10 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
         // Student "End" semantically means Leave for now (16-D adds the role
         // model that flips the label + verb).  Just close our window.
         EndConferenceCommand = new RelayCommand(() => RequestClose?.Invoke(this, EventArgs.Empty));
+
+        // Phase 16-C — own-cam toggle routes through MainWindow so the
+        // singleton broadcaster + device-selection dialog stay on the Agent
+        // process even when the Conference window is closed/re-opened.
+        ToggleCameraCommand = new RelayCommand(() => OnToggleCamera?.Invoke());
     }
 }

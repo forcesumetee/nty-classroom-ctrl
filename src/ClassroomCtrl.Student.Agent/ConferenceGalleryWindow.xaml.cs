@@ -25,11 +25,23 @@ public partial class ConferenceGalleryWindow : Window
 
     private readonly StudentConferenceShellViewModel _vm;
 
-    public ConferenceGalleryWindow(Guid sessionId, Guid teacherEndpointId, string hostName)
+    /// <summary>Phase 16-C — exposes the shell VM so MainWindow can wire the
+    /// own-cam toggle action + read IsBroadcastingCamera back when the
+    /// StudentCameraBroadcaster lifecycle changes externally.</summary>
+    public StudentConferenceShellViewModel ShellViewModel => _vm;
+
+    public ConferenceGalleryWindow(Guid sessionId, Guid teacherEndpointId, string hostName,
+                                   Guid selfEndpointId, string selfDisplayName)
     {
         InitializeComponent();
         SessionId = sessionId;
-        _vm = new StudentConferenceShellViewModel(sessionId, teacherEndpointId, hostName);
+        _vm = new StudentConferenceShellViewModel(sessionId, teacherEndpointId, hostName)
+        {
+            SelfEndpointId = selfEndpointId,
+            SelfDisplayName = string.IsNullOrWhiteSpace(selfDisplayName)
+                ? Environment.MachineName
+                : selfDisplayName,
+        };
         _vm.RequestClose += (_, _) => Close();
         DataContext = _vm;
 
@@ -43,6 +55,112 @@ public partial class ConferenceGalleryWindow : Window
         {
             HostLineText.Text = Loc.Get("Conf_HostLineUnknown", "Conference in progress");
         }
+    }
+
+    /// <summary>Phase 16-C — seed / pick up a peer cam tile so the gallery has a
+    /// slot to receive frames into.  Called from MainWindow on
+    /// ConferenceCameraStart dispatch + from the self-tile setup at Start
+    /// time.  Idempotent on re-Start.</summary>
+    public ConferenceTileViewModel EnsurePeerTile(Guid sourceId, string displayName, bool isSelf)
+    {
+        var existing = _vm.ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == sourceId);
+        if (existing != null)
+        {
+            // Refresh display name in case the late-joiner replay carried a
+            // newer name; leave isSelf alone (immutable on the tile).
+            if (!string.IsNullOrWhiteSpace(displayName)) existing.DisplayName = displayName;
+            return existing;
+        }
+        var tile = new ConferenceTileViewModel(sourceId,
+            string.IsNullOrWhiteSpace(displayName) ? "Participant" : displayName, isSelf);
+        _vm.ConferenceGallery.Tiles.Add(tile);
+        return tile;
+    }
+
+    /// <summary>Phase 16-C — peer cam Start hook.  Adds a tile if the sender
+    /// is new (e.g. a student we hadn't seen yet) and seeds it with display
+    /// name from the envelope so cam-off placeholder shows their initial.</summary>
+    public void OnPeerCameraStart(Guid sourceId, string sourceName)
+    {
+        EnsurePeerTile(sourceId, sourceName, isSelf: false);
+    }
+
+    /// <summary>Phase 16-C — peer cam Frame hook.  Decode JPEG, route to the
+    /// matching tile by sender id, flip <c>IsCamLive=true</c>.  Synthesizes
+    /// the tile if a late frame slips ahead of the Start envelope (transient
+    /// race / re-ordered relay).</summary>
+    public void OnPeerCameraFrame(Guid sourceId, byte[] jpeg)
+    {
+        try
+        {
+            var bmp = new BitmapImage();
+            using var ms = new MemoryStream(jpeg);
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            bmp.Freeze();
+
+            var tile = EnsurePeerTile(sourceId, "", isSelf: false);
+            tile.JpegFrame = bmp;
+            tile.IsCamLive = true;
+        }
+        catch
+        {
+            // Decode failure: leave the placeholder up, swallow.
+        }
+    }
+
+    /// <summary>Phase 16-C — peer cam Stop hook.  Clears IsCamLive so the
+    /// cam-off placeholder swaps in; preserves the tile + display name so
+    /// the participant stays in the gallery.</summary>
+    public void OnPeerCameraStop(Guid sourceId)
+    {
+        var tile = _vm.ConferenceGallery.Tiles.FirstOrDefault(t => t.EndpointId == sourceId);
+        if (tile != null)
+        {
+            tile.IsCamLive = false;
+            tile.JpegFrame = null;
+        }
+    }
+
+    /// <summary>Phase 16-C — self-tile cam-live state mirror.  Called by
+    /// MainWindow when the local StudentCameraBroadcaster start/stop event
+    /// fires so the toolbar's 📷 button + self-tile preview stay in sync.</summary>
+    public void SetSelfCamLive(bool live)
+    {
+        _vm.IsBroadcastingCamera = live;
+        var selfId = _vm.SelfEndpointId;
+        if (selfId == Guid.Empty) return;
+        var tile = EnsurePeerTile(selfId, _vm.SelfDisplayName, isSelf: true);
+        if (!live)
+        {
+            tile.IsCamLive = false;
+            tile.JpegFrame = null;
+        }
+    }
+
+    /// <summary>Phase 16-C — self-tile preview frame.  Called by MainWindow's
+    /// StudentCameraBroadcaster OnNewFrame echo so the student sees their
+    /// own cam preview without a wire round-trip.</summary>
+    public void SetSelfPreviewFrame(byte[] jpeg)
+    {
+        try
+        {
+            var bmp = new BitmapImage();
+            using var ms = new MemoryStream(jpeg);
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            bmp.Freeze();
+            var selfId = _vm.SelfEndpointId;
+            if (selfId == Guid.Empty) return;
+            var tile = EnsurePeerTile(selfId, _vm.SelfDisplayName, isSelf: true);
+            tile.JpegFrame = bmp;
+            tile.IsCamLive = true;
+        }
+        catch { /* transient decode: keep last frame */ }
     }
 
     /// <summary>Phase 16-B step 7 — called from <c>MainWindow.xaml.cs</c>

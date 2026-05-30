@@ -232,6 +232,8 @@ internal static class LocalizationData
         // Phase 16-B+ step 11 — Conference-share system chat messages.
         ["Conf_ChatShareStarted"] = "[Conference] You started sharing your screen.",
         ["Conf_ChatShareStopped"] = "[Conference] You stopped sharing your screen.",
+        // Phase 16-C step 4 — peer cam UI strings.
+        ["Err_CameraStopped"] = "Camera stopped unexpectedly",
         // Phase 15-D — Meet-style bottom toolbar + sidebar + share banner +
         // mode-exclusivity toasts.
         ["Conf_Tooltip_Chat"] = "Chat",
@@ -864,6 +866,8 @@ internal static class LocalizationData
         // Phase 16-B+ step 11 — Conference-share system chat messages.
         ["Conf_ChatShareStarted"] = "[Conference] คุณเริ่มแชร์หน้าจอแล้ว",
         ["Conf_ChatShareStopped"] = "[Conference] คุณหยุดแชร์หน้าจอแล้ว",
+        // Phase 16-C step 4 — peer cam UI strings.
+        ["Err_CameraStopped"] = "กล้องหยุดทำงานโดยไม่คาดคิด",
         // Phase 15-D — Meet-style toolbar + sidebar + share banner + toasts.
         ["Conf_Tooltip_Chat"] = "แชท",
         ["Conf_Tooltip_Hand"] = "นักเรียนยกมือ",

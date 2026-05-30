@@ -80,6 +80,13 @@ public partial class MainWindow : Window
     // accurate.  Singleton per Agent process; disposed on window close.
     private WebcamDeviceWatcher? _webcamWatcher;
 
+    // Phase 16-C (Tier 2) — student-side peer cam capture for Conference Mode.
+    // Singleton per Agent process; started when the student clicks the 📷
+    // toolbar inside the Conference window, stopped on toggle off or window
+    // close.  Frames emit 0x0681 ConferenceCameraFrame via App.Ipc;
+    // teacher relays to all in-Conference peers != sender.
+    private StudentCameraBroadcaster? _studentCamera;
+
     // Phase 9 Section B / Phase 9.1 Section B+C — Bell + Notifications.
     // The bell tracks unread NOTIFICATIONS (system events), not chat — chat
     // and system events are now separated: chat lives in the body ChatList,
@@ -762,10 +769,21 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         if (_confWindow != null) return;   // idempotent on repeat envelopes
-                        // Phase 16-B step 7 — ctor now takes teacher EndpointId
+                        // Phase 16-B step 7 — ctor takes teacher EndpointId
                         // so the gallery seeds with a tile matching the sender.
-                        _confWindow = new ConferenceGalleryWindow(cs.SessionId, teacherId, cs.HostName);
-                        _confWindow.Closed += (_, _) => _confWindow = null;
+                        // Phase 16-C — also pass own endpoint id + display name
+                        // so the self-tile + cam toolbar can wire correctly.
+                        _confWindow = new ConferenceGalleryWindow(
+                            cs.SessionId, teacherId, cs.HostName,
+                            _myEndpointId ?? System.Guid.Empty,
+                            System.Environment.MachineName);
+                        _confWindow.ShellViewModel.OnToggleCamera = ToggleConferenceCamera;
+                        _confWindow.Closed += (_, _) =>
+                        {
+                            // Phase 16-C — auto-stop own cam if window closes mid-broadcast.
+                            try { _studentCamera?.Stop(); } catch { }
+                            _confWindow = null;
+                        };
                         _confWindow.Show();
                     });
                 }
@@ -829,6 +847,55 @@ public partial class MainWindow : Window
                 catch (Exception ex)
                 {
                     IpcClient.LogToFile($"[MainWindow] ConferenceShareStop handler: {ex.Message}");
+                }
+                break;
+
+            // ─────── Phase 16-C : Peer cam routing ───────
+            // Star topology: every participant emits Start/Frame/Stop with
+            // own EndpointId in env.SenderId; teacher relays to all peers
+            // != sender.  Self-loopback filter (env.SenderId == _myEndpointId)
+            // drops the originator's own echo so a student doesn't see two
+            // copies of their own cam (preview comes from
+            // _studentCamera's local SetSelfPreviewFrame hook, not the wire).
+
+            case MessageType.ConferenceCameraStart:
+                try
+                {
+                    var ccs = MessagePack.MessagePackSerializer.Deserialize<ConferenceCameraStartMessage>(env.Payload);
+                    var sourceId = env.SenderId;
+                    if (_myEndpointId.HasValue && sourceId == _myEndpointId.Value) break;
+                    IpcClient.LogToFile($"[MainWindow] ConferenceCameraStart source={sourceId} ({ccs.SourceName}, {ccs.Width}x{ccs.Height}@{ccs.Fps})");
+                    Dispatcher.Invoke(() => _confWindow?.OnPeerCameraStart(sourceId, ccs.SourceName));
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] ConferenceCameraStart decode: {ex.Message}");
+                }
+                break;
+
+            case MessageType.ConferenceCameraFrame:
+                try
+                {
+                    var ccf = MessagePack.MessagePackSerializer.Deserialize<ConferenceCameraFrameMessage>(env.Payload);
+                    if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
+                    Dispatcher.Invoke(() => _confWindow?.OnPeerCameraFrame(env.SenderId, ccf.JpegData));
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] ConferenceCameraFrame decode: {ex.Message}");
+                }
+                break;
+
+            case MessageType.ConferenceCameraStop:
+                try
+                {
+                    if (_myEndpointId.HasValue && env.SenderId == _myEndpointId.Value) break;
+                    IpcClient.LogToFile($"[MainWindow] ConferenceCameraStop source={env.SenderId}");
+                    Dispatcher.Invoke(() => _confWindow?.OnPeerCameraStop(env.SenderId));
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] ConferenceCameraStop handler: {ex.Message}");
                 }
                 break;
 
@@ -1180,6 +1247,91 @@ public partial class MainWindow : Window
         {
             IpcClient.LogToFile($"[MainWindow] WebcamStateUpdate emit: {ex.Message}");
         }
+    }
+
+    /// <summary>Phase 16-C — toggle the student's own webcam inside Conference
+    /// Mode.  Routed from the shell VM's ToggleCameraCommand (toolbar 📷
+    /// button); the broadcaster lifecycle lives here so the singleton stays
+    /// on the Agent process even if the Conference window is closed +
+    /// re-opened mid-session.
+    ///
+    /// On Start: ensures broadcaster exists, picks the first available
+    /// device (16-C Tier 2 default; selector dialog deferred to a later
+    /// polish round), and seeds the self-tile preview frame in the gallery
+    /// VM so the student sees their own cam without a wire round-trip.
+    /// On Stop: tears down the broadcaster + flips IsCamLive on the
+    /// self-tile back to false.
+    ///
+    /// Always called on the UI thread.</summary>
+    private void ToggleConferenceCamera()
+    {
+        if (_confWindow == null) return;
+        if (_studentCamera != null && _studentCamera.IsActive)
+        {
+            _studentCamera.Stop();
+            _studentCamera.Dispose();
+            _studentCamera = null;
+            _confWindow.SetSelfCamLive(false);
+            EmitWebcamState();
+            return;
+        }
+
+        var devices = StudentCameraBroadcaster.EnumerateDevices();
+        if (devices.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                Loc.Get("Conf_NoWebcam", "No webcam detected on this PC"),
+                Loc.Get("Btn_Camera", "Camera"),
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        // Tier 2 default — pick the first enumerated device.  A device-
+        // selector dialog (parity with Teacher CameraSelectorDialog) is a
+        // 16-E polish-round candidate.
+        var (moniker, _) = devices[0];
+        _studentCamera ??= new StudentCameraBroadcaster();
+        _studentCamera.StoppedDueToError += () =>
+        {
+            Dispatcher.BeginInvoke(new System.Action(() =>
+            {
+                _confWindow?.SetSelfCamLive(false);
+                AddSystemNotification(Loc.Get("Err_CameraStopped",
+                    "Camera stopped unexpectedly"), "⚠️");
+            }));
+        };
+        // Phase 16-C — local preview echo.  Broadcaster fires every encode;
+        // we marshal to UI thread + push the JPEG to the self-tile so the
+        // student sees their own cam locally without a wire round-trip.
+        _studentCamera.LocalFrameReady += jpeg =>
+        {
+            Dispatcher.BeginInvoke(new System.Action(() => _confWindow?.SetSelfPreviewFrame(jpeg)));
+        };
+
+        var sessionId = _confWindow.SessionId;
+        var sourceName = System.Environment.MachineName;
+        if (!_studentCamera.Start(moniker, 320, 240, 10, sessionId, sourceName))
+        {
+            var err = _studentCamera.LastError;
+            _studentCamera.Dispose();
+            _studentCamera = null;
+            System.Windows.MessageBox.Show(
+                string.Format(Loc.Get("Conf_CamStartFailFmt", "Failed to start camera: {0}"), err),
+                Loc.Get("Btn_Camera", "Camera"),
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        _confWindow.SetSelfCamLive(true);
+        EmitWebcamState();
+        // Wire the broadcaster's frame echo into the self-tile preview so the
+        // student sees their own cam locally without a wire round-trip.  The
+        // local hook subscribes by wrapping the AForge handler — simplest is
+        // to also surface a preview event from StudentCameraBroadcaster, but
+        // for minimum-change we re-decode every N-th frame here.  Future
+        // polish: add a FrameEncoded event to the broadcaster.
     }
 
     /// <summary>Lazily create the fullscreen viewer window.</summary>

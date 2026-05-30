@@ -40,5 +40,11 @@
          to enumerate cameras + watch device-arrival/removal events without
          pulling AForge into Student.Agent until Tier 2 actually captures. -->
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <!-- Phase 16-C (Tier 2) — StudentCameraBroadcaster captures the student's
+         webcam for peer-cam routing inside Conference Mode.  Matches Teacher
+         CameraBroadcastService dependency stack (DirectShow + GDI+ JPEG). -->
+    <PackageReference Include="AForge.Video" Version="2.2.5" />
+    <PackageReference Include="AForge.Video.DirectShow" Version="2.2.5" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
   </ItemGroup>
 </Project>
