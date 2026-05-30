@@ -2036,6 +2036,23 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             else
                 AddNotification(Loc.Get("Chat_SystemPrefix"),
                     Loc.Format("Chat_HandLoweredBy", hr.StudentName));
+
+            // Phase 17 step 3 — LINE-style in-app slide-in card.  Raise events
+            // only (lowering shouldn't pulse the corner overlay); message is a
+            // localized "raised hand" body so the card reads "Sumetee: ยกมือ"
+            // in Thai and "Sumetee: raised hand" in English.  Fires regardless
+            // of mode (Classroom rail / Conference gallery both surface the
+            // same HandRaise wire per 16-A foundation discovery #4).
+            if (hr.IsRaised)
+            {
+                App.Notifications?.Show(new ClassroomCtrl.Teacher.Services.NotificationItem
+                {
+                    Type = ClassroomCtrl.Teacher.Services.NotificationType.HandRaise,
+                    SenderName = string.IsNullOrEmpty(hr.StudentName) ? "Student" : hr.StudentName,
+                    Message = Loc.Get("Notif_HandRaise_Body", "raised hand"),
+                });
+            }
+
             // Phase 2 Section C — RaisedHandsStudents (legacy) still backs other UIs.
             RaiseNotificationsChanged();
         });
