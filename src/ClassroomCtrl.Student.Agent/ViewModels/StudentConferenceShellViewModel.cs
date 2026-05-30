@@ -37,6 +37,14 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
 
     public ConferenceGalleryViewModel ConferenceGallery { get; } = new();
 
+    /// <summary>Phase 16-D — Conference role.  Student is a Participant today;
+    /// drives Visibility gating on the toolbar / sidebar / tile admin
+    /// actions via the standard <c>Role.CanX</c> binding chain so the same
+    /// Shared.Wpf XAML hides host-only controls when the DataContext is a
+    /// student shell.</summary>
+    public ClassroomCtrl.Shared.Wpf.Roles.IConferenceRole Role { get; } =
+        new ClassroomCtrl.Shared.Wpf.Roles.ParticipantRole();
+
     // Placeholder Students collection so the sidebar's Participants tab
     // binds cleanly.  Phase 16-C populates this with peer state.
     public ObservableCollection<object> Students { get; } = new();

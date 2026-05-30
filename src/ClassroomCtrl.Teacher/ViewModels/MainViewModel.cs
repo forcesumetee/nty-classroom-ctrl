@@ -82,6 +82,15 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     /// embedded ConferenceGalleryView (live-session state).</summary>
     public ConferenceGalleryViewModel ConferenceGallery { get; } = new();
 
+    /// <summary>Phase 16-D — Conference role.  Teacher is the Host today;
+    /// drives Visibility gating on the toolbar / sidebar / tile admin
+    /// actions via the standard <c>Role.CanX</c> binding chain.  Singleton
+    /// per VM lifetime — the host identity doesn't change mid-session in
+    /// this tier (a future CoHost handoff lands fresh code, not a mutation
+    /// here).</summary>
+    public ClassroomCtrl.Shared.Wpf.Roles.IConferenceRole Role { get; } =
+        new ClassroomCtrl.Shared.Wpf.Roles.HostRole();
+
     // Phase 15-D step 1 — slide-in sidebar state for the Meet-style shell.
     // The sidebar hosts two tabs (Chat | Participants) that toggle via
     // ConferenceSidebarTabIndex; visibility itself rides
