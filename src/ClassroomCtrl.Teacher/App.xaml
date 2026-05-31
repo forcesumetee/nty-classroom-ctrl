@@ -25,6 +25,11 @@
                 <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/Buttons.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/Inputs.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared;component/Themes/DataDisplay.xaml"/>
+                <!-- Phase 22 — Conference Mode dark-theme design tokens.
+                     Same dictionary the Student.Agent merges; Conf*-prefixed
+                     keys live in Shared.Wpf so both apps render identical
+                     palette without a per-app copy. -->
+                <ResourceDictionary Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Themes/ConferenceDarkTheme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
