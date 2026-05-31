@@ -127,7 +127,14 @@ public sealed class ParticipantRole : IConferenceRole
     public bool CanSendReaction         => true;
     public bool CanRaiseOwnHand         => true;
     public bool CanLeaveConference      => true;
-    public bool CanShareScreen          => false;
+    // Phase 20 (v1.1) — participants CAN initiate a share request now.
+    // The toolbar 🖥 button no longer hides on Participant; instead it
+    // toggles through the request → approved → sharing state machine
+    // (StudentConferenceShellViewModel.ShareState) backed by wire codes
+    // 0x0686 / 0x0687.  Teacher still gates approval, so the customer's
+    // "host controls share" expectation holds — what changed is the
+    // affordance for the student to ASK.
+    public bool CanShareScreen          => true;
     public bool CanMuteOthers           => false;
     public bool CanEndForAll            => false;
     public bool CanForceParticipantCam  => false;

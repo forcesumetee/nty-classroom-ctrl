@@ -6,7 +6,11 @@
              mc:Ignorable="d"
              Background="{x:Null}"
              IsHitTestVisible="True"
+             xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters;assembly=ClassroomCtrl.Shared.Wpf"
              d:DesignWidth="320" d:DesignHeight="240">
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+    </UserControl.Resources>
     <!-- Phase 17 step 2 — LINE-style notification stack docked to the
          bottom-right of MainWindow.  Each card slides in from the right edge
          over 200 ms (Border.Loaded EventTrigger), stacks newest-at-bottom,
@@ -70,33 +74,70 @@
                             </BeginStoryboard>
                         </EventTrigger>
                     </Border.Triggers>
-                    <StackPanel Orientation="Horizontal">
-                        <!-- Avatar slot — emoji glyph (✋ / 💬 / ℹ️) from
-                             NotificationItem.Icon.  Multi-font fallback chain
-                             mirrors the Conference toolbar reaction picker
-                             so Win11 Thai-locale 22H2+ renders the glyph
-                             instead of falling back to monochrome shapes. -->
-                        <Border Width="32" Height="32" CornerRadius="999"
-                                Background="{DynamicResource Accent.PrimarySubtle}"
-                                Margin="0,0,10,0"
-                                VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Icon}"
-                                       FontSize="18"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
-                        </Border>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{Binding SenderName}"
-                                       FontWeight="SemiBold"
-                                       FontSize="13"
-                                       Foreground="{DynamicResource Text.Primary}"
-                                       TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{Binding Message}"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource Text.Secondary}"
-                                       TextTrimming="CharacterEllipsis"
-                                       MaxWidth="220"/>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <!-- Avatar slot — emoji glyph (✋ / 💬 / 🖥 / ℹ️) from
+                                 NotificationItem.Icon.  Multi-font fallback chain
+                                 mirrors the Conference toolbar reaction picker
+                                 so Win11 Thai-locale 22H2+ renders the glyph
+                                 instead of falling back to monochrome shapes. -->
+                            <Border Width="32" Height="32" CornerRadius="999"
+                                    Background="{DynamicResource Accent.PrimarySubtle}"
+                                    Margin="0,0,10,0"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Icon}"
+                                           FontSize="18"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                            </Border>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SenderName}"
+                                           FontWeight="SemiBold"
+                                           FontSize="13"
+                                           Foreground="{DynamicResource Text.Primary}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Message}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource Text.Secondary}"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="220"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Phase 20 (v1.1) — Approve / Deny action row.
+                             Visible iff HasActionRow=true (only set on
+                             NotificationType.ShareRequest cards).  Tags carry
+                             the requester's EndpointId (NotificationItem
+                             .ActionTargetId) so the click handlers can
+                             route through MainViewModel without a second
+                             dictionary lookup.  The buttons stop event
+                             propagation so clicking them doesn't trigger
+                             the parent card's MouseLeftButtonDown → Dismiss
+                             handler before the Approve / Deny logic runs. -->
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Margin="0,8,0,0"
+                                    Visibility="{Binding HasActionRow, Converter={StaticResource BoolToVisibility}}">
+                            <Button Content="✕"
+                                    Click="DenyShare_Click"
+                                    Tag="{Binding ActionTargetId}"
+                                    Background="{DynamicResource Surface.Elevated}"
+                                    Foreground="{DynamicResource Text.Primary}"
+                                    BorderBrush="{DynamicResource Border.Default}"
+                                    BorderThickness="1"
+                                    Padding="10,4" Margin="0,0,6,0"
+                                    FontSize="12"
+                                    Cursor="Hand"/>
+                            <Button Content="✓"
+                                    Click="ApproveShare_Click"
+                                    Tag="{Binding ActionTargetId}"
+                                    Background="#10B981"
+                                    Foreground="White"
+                                    BorderThickness="0"
+                                    Padding="10,4"
+                                    FontSize="12"
+                                    Cursor="Hand"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

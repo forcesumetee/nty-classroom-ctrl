@@ -40,4 +40,53 @@ public partial class NotificationOverlay : UserControl
             e.Handled = true;
         }
     }
+
+    /// <summary>Phase 20 (v1.1) — Approve a ShareRequest card.  Reads the
+    /// requester EndpointId from Button.Tag (NotificationItem.ActionTargetId
+    /// bound in XAML), routes to MainViewModel.ApproveShareRequestAsync
+    /// via the DataContext walk.  Routed-event Handled stops the click
+    /// from bubbling to the parent card's MouseLeftButtonDown which would
+    /// otherwise dismiss-and-mark-read before the verdict goes out.</summary>
+    private async void ApproveShare_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not FrameworkElement fe || fe.Tag is not Guid studentId) return;
+        var mw = System.Windows.Application.Current?.MainWindow;
+        if (mw?.DataContext is ViewModels.MainViewModel vm)
+        {
+            await vm.ApproveShareRequestAsync(studentId);
+        }
+        // Dismiss the card so the teacher doesn't see a stale Approve/Deny
+        // affordance on a request they already answered.
+        DismissCardFromButton(fe);
+    }
+
+    private async void DenyShare_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not FrameworkElement fe || fe.Tag is not Guid studentId) return;
+        var mw = System.Windows.Application.Current?.MainWindow;
+        if (mw?.DataContext is ViewModels.MainViewModel vm)
+        {
+            await vm.DenyShareRequestAsync(studentId);
+        }
+        DismissCardFromButton(fe);
+    }
+
+    /// <summary>Walk up the visual tree from an Approve / Deny button to the
+    /// parent card Border (which has its NotificationItem.Id stored in
+    /// Tag), then forward to NotificationService.Dismiss.</summary>
+    private static void DismissCardFromButton(System.Windows.DependencyObject start)
+    {
+        var node = start;
+        while (node != null)
+        {
+            if (node is System.Windows.Controls.Border b && b.Tag is Guid cardId)
+            {
+                App.Notifications?.Dismiss(cardId);
+                return;
+            }
+            node = System.Windows.Media.VisualTreeHelper.GetParent(node);
+        }
+    }
 }

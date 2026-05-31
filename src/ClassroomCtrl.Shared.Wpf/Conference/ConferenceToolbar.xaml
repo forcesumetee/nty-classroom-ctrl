@@ -125,16 +125,22 @@
                     <TextBlock Text="📷" FontSize="20"/>
                 </Button>
 
-                <!-- 🖥 Screen share toggle.  Active style when share is live.
-                     Phase 16-D step 9 — Visibility binds to Role.CanShareScreen
-                     so participants (Zoom default: host gates share) don't see
-                     the button at all.  Host always sees it; ParticipantRole
-                     hides it.  Future per-session policy that lets a host
-                     enable participant share lands by flipping the
-                     CanShareScreen flag at the role instance level, not by
-                     changing this XAML. -->
+                <!-- 🖥 Screen share toggle.
+                     Phase 16-D step 9 — Visibility gated by Role.CanShareScreen.
+                     Phase 20 (v1.1) — ParticipantRole.CanShareScreen flipped
+                     from false → true so students see the button; behavior
+                     differs by host VM:
+                       Teacher: ShareScreenCommand starts/stops the 16-B+
+                         Conference share path directly.
+                       Student: ShareScreenCommand drives a request-flow
+                         state machine (ShareState) — Idle → Requesting →
+                         Approved → Sharing — backed by wire codes
+                         0x0686 (request) + 0x0687 (response).  The amber
+                         active-state pill fires on either IsScreenSharing
+                         (Teacher) OR a non-Idle ShareState != Idle / != Denied
+                         (Student is past the request gate). -->
                 <Button Command="{Binding ShareScreenCommand}"
-                        ToolTip="{Binding ShareScreenButtonText}">
+                        ToolTip="{Binding ShareScreenButtonText, FallbackValue={x:Null}}">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -143,6 +149,21 @@
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsScreenSharing}" Value="True">
+                                    <Setter Property="Background" Value="#10B981"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </DataTrigger>
+                                <!-- Phase 20 amber active-state for Student
+                                     state machine (mirror semantics of the
+                                     ✋ raised-hand pill). -->
+                                <DataTrigger Binding="{Binding ShareState}" Value="Requesting">
+                                    <Setter Property="Background" Value="#FBBF24"/>
+                                    <Setter Property="Foreground" Value="#1F2937"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ShareState}" Value="Approved">
+                                    <Setter Property="Background" Value="#10B981"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ShareState}" Value="Sharing">
                                     <Setter Property="Background" Value="#10B981"/>
                                     <Setter Property="Foreground" Value="White"/>
                                 </DataTrigger>

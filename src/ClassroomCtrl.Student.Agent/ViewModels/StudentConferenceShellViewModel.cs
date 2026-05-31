@@ -145,6 +145,135 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
         _draftAttachmentBytes = null;
     }
 
+    // ─────── Phase 20 (v1.1) — student-share permission state machine ───────
+    //
+    // Idle       → 🖥 button reads "Request to share" (default)
+    // Requesting → 🖥 button reads "Requesting…" disabled-looking (toggle no-op)
+    // Approved   → 🖥 button reads "Start sharing"
+    // Sharing    → 🖥 button reads "Stop sharing"
+    // Denied     → 🖥 button reads "Request to share" (same affordance as Idle;
+    //              transient state surfaced via a system-toast hook later)
+    //
+    // Wire flow:
+    //   Student → Teacher: ConferenceShareRequest (0x0686)
+    //   Teacher → Student: ConferenceShareResponse (0x0687)
+    //       Approved=true,  RevokeRequestId=null → state = Approved
+    //       Approved=false, RevokeRequestId=null → state = Denied (Idle alias)
+    //       Approved=false, RevokeRequestId=non-null → state = Idle  (revoke
+    //                                                                 mid-share)
+    //
+    // Scope note: this commit ships the FLOW + STATE MACHINE + UI affordances.
+    // Actual screen capture on Student side (the analog of Teacher's Phase
+    // 16-B+ ScreenBroadcaster Conference path) is v1.2 scope; clicking
+    // "Start sharing" transitions to Sharing + drops a system-chat line
+    // documenting the gap.  Wire codes 0x0683-0x0685 are designed
+    // bidirectionally so the v1.2 add is purely a Student-side
+    // ScreenBroadcaster + emission wire-up, no protocol churn.
+    public enum ShareRequestState { Idle, Requesting, Approved, Sharing, Denied }
+
+    [ObservableProperty] private ShareRequestState shareState = ShareRequestState.Idle;
+
+    /// <summary>Phase 20 (v1.1) — same property name as Teacher.MainViewModel
+    /// .ShareScreenButtonText so the shared ConferenceToolbar XAML binds
+    /// against either DataContext.  Returns the state-driven label on
+    /// Student (Request / Requesting / Start / Stop / Request).</summary>
+    public string ShareScreenButtonText => ShareState switch
+    {
+        ShareRequestState.Idle       => ClassroomCtrl.Shared.Localization.Loc.Get("Share_RequestButton", "Request to share"),
+        ShareRequestState.Requesting => ClassroomCtrl.Shared.Localization.Loc.Get("Share_Requesting", "Requesting…"),
+        ShareRequestState.Approved   => ClassroomCtrl.Shared.Localization.Loc.Get("Share_StartShareButton", "Start sharing"),
+        ShareRequestState.Sharing    => ClassroomCtrl.Shared.Localization.Loc.Get("Share_StopShareButton", "Stop sharing"),
+        ShareRequestState.Denied     => ClassroomCtrl.Shared.Localization.Loc.Get("Share_RequestButton", "Request to share"),
+        _ => "",
+    };
+
+    partial void OnShareStateChanged(ShareRequestState value)
+    {
+        OnPropertyChanged(nameof(ShareScreenButtonText));
+    }
+
+    /// <summary>Phase 20 (v1.1) — toolbar 🖥 click handler.  Single command
+    /// covers all four user-driven state transitions; the no-op while
+    /// Requesting prevents a double-request race against a slow teacher.</summary>
+    public IRelayCommand ShareScreenCommand { get; }
+
+    private async System.Threading.Tasks.Task ToggleShareRequestAsync()
+    {
+        switch (ShareState)
+        {
+            case ShareRequestState.Idle:
+            case ShareRequestState.Denied:
+                // Send request upstream.
+                if (App.Ipc == null) return;
+                ShareState = ShareRequestState.Requesting;
+                var req = new ClassroomCtrl.Shared.Protocol.ConferenceShareRequestMessage
+                {
+                    RequesterEndpointId = SelfEndpointId,
+                    RequesterName = string.IsNullOrWhiteSpace(SelfDisplayName) ? "Student" : SelfDisplayName,
+                };
+                try
+                {
+                    var bytes = MessagePack.MessagePackSerializer.Serialize(req);
+                    // Teacher is the only recipient; envelope sender id =
+                    // self so the Service / Teacher relay can attribute.
+                    var env = Envelope.CreateTargeted(
+                        MessageType.ConferenceShareRequest, bytes,
+                        SelfEndpointId, TeacherEndpointId);
+                    await App.Ipc.SendAsync(env);
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[StudentConferenceShellViewModel] ShareRequest send failed: {ex.Message}");
+                    // Revert state so the user can retry.
+                    ShareState = ShareRequestState.Idle;
+                }
+                break;
+
+            case ShareRequestState.Requesting:
+                // No-op: prevent double-send.  A timeout-based reset is a
+                // v1.2 polish candidate (today the teacher decision is
+                // expected within seconds).
+                break;
+
+            case ShareRequestState.Approved:
+                // Phase 20 (v1.1) — flow-only.  The actual screen capture
+                // (a Student-side ScreenBroadcaster emitting 0x0683-0x0685
+                // mirroring Teacher's 16-B+ path) is v1.2 scope.  Today we
+                // just transition the state so the UI affordances match
+                // what the user sees.  A system note explains the gap.
+                ShareState = ShareRequestState.Sharing;
+                IpcClient.LogToFile("[StudentConferenceShellViewModel] ShareState=Sharing (v1.1: flow-only — wire frames not yet emitted by student-side capture)");
+                break;
+
+            case ShareRequestState.Sharing:
+                // Local stop — revert to Approved so the student can
+                // resume without re-requesting.  When v1.2 lands, this
+                // call site will stop the future Student.Agent
+                // ScreenBroadcaster instance before the state flip.
+                ShareState = ShareRequestState.Approved;
+                IpcClient.LogToFile("[StudentConferenceShellViewModel] ShareState=Approved (stopped local share)");
+                break;
+        }
+    }
+
+    /// <summary>Phase 20 (v1.1) — incoming Teacher response.  Called by
+    /// MainWindow's dispatch arm with the decoded payload.  Single method
+    /// covers all 3 response variants (Approve / Deny / Revoke) so the
+    /// state-machine semantics live in one place.</summary>
+    public void OnShareResponseReceived(ClassroomCtrl.Shared.Protocol.ConferenceShareResponseMessage response)
+    {
+        if (response.RevokeRequestId.HasValue)
+        {
+            // Teacher revoked an active permission.  If we were mid-share,
+            // the future v1.2 ScreenBroadcaster.Stop call lands here too.
+            ShareState = ShareRequestState.Idle;
+            IpcClient.LogToFile($"[StudentConferenceShellViewModel] ShareResponse=Revoke (id={response.RevokeRequestId})");
+            return;
+        }
+        ShareState = response.Approved ? ShareRequestState.Approved : ShareRequestState.Denied;
+        IpcClient.LogToFile($"[StudentConferenceShellViewModel] ShareResponse={(response.Approved ? "Approve" : "Deny")}");
+    }
+
     /// <summary>Phase 16-D — Conference role.  Student is a Participant today;
     /// drives Visibility gating on the toolbar / sidebar / tile admin
     /// actions via the standard <c>Role.CanX</c> binding chain so the same
@@ -297,6 +426,11 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
         // Student "End" semantically means Leave for now (16-D adds the role
         // model that flips the label + verb).  Just close our window.
         EndConferenceCommand = new RelayCommand(() => RequestClose?.Invoke(this, EventArgs.Empty));
+
+        // Phase 20 (v1.1) — share-screen toolbar binding.  Async fire-and-
+        // forget; ToggleShareRequestAsync handles its own state transitions
+        // + error logging so the RelayCommand callback stays trivial.
+        ShareScreenCommand = new RelayCommand(() => _ = ToggleShareRequestAsync());
 
         // Phase 16-C — own-cam toggle routes through MainWindow so the
         // singleton broadcaster + device-selection dialog stay on the Agent

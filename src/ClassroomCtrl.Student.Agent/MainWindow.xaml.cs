@@ -973,6 +973,24 @@ public partial class MainWindow : Window
                 }
                 break;
 
+            case MessageType.ConferenceShareResponse:
+                // Phase 20 (v1.1) — teacher's verdict on this student's
+                // share request.  Decode + forward to the shell VM's
+                // state machine.  Conference window may already be closed
+                // (e.g. student left between request + response) — skip
+                // silently in that case; the wire response is informational.
+                try
+                {
+                    var resp = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareResponseMessage>(env.Payload);
+                    IpcClient.LogToFile($"[MainWindow] ConferenceShareResponse approved={resp.Approved} revoke={resp.RevokeRequestId}");
+                    Dispatcher.Invoke(() => _confWindow?.ShellViewModel.OnShareResponseReceived(resp));
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[MainWindow] ConferenceShareResponse decode: {ex.Message}");
+                }
+                break;
+
             // ─────── Phase 9.6: Net Movie ───────
 
             case MessageType.MoviePlay:
