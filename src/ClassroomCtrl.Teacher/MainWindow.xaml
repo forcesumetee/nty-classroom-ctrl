@@ -42,6 +42,22 @@
         <conv:ViewKindToVisibilityConverter x:Key="ViewKindToVisibility"/>
     </Window.Resources>
 
+    <!-- Phase 23 — multi-select keyboard shortcuts.
+         Ctrl+A: select every tile in the classroom grid.  TextBox + other
+         editable controls handle Ctrl+A internally (KeyDown.Handled = true
+         in their default template) so focus inside the search box still
+         "select all text" — the shortcut only escalates here when the
+         active focus chain doesn't claim it.
+         Esc: clear current selection.  ContextMenu / Popup take precedence
+         (they install their own Esc handler that closes the popup before
+         the routed event bubbles up). -->
+    <Window.InputBindings>
+        <KeyBinding Key="A" Modifiers="Control"
+                    Command="{Binding SelectAllCommand}"/>
+        <KeyBinding Key="Escape"
+                    Command="{Binding ClearSelectionCommand}"/>
+    </Window.InputBindings>
+
     <!-- Phase UI-Rewrite Phase 1: 3-column shell.
          Row 0 = header (56),  Row 1 = optional demo banner,  Row 2 = sidebar / main / rail.
          Sidebar (240) keeps every command from Phase-13 except codec/bitrate UI (moved to a future
