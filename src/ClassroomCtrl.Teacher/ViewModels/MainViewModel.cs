@@ -515,9 +515,11 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     public IRelayCommand DeactivateRosterCommand { get; }
     [ObservableProperty] private bool hasActiveRoster;
 
-    // Phase 3.5: Sound effects toggle
-    public IRelayCommand ToggleSoundsCommand { get; }
-    [ObservableProperty] private string soundsButtonText = "";
+    // Phase 22.1-D — Phase 3.5 "Sounds: ON" sidebar toggle removed.
+    // SoundService.IsEnabled stays at its default (true) so ding effects
+    // continue to fire on ChatReceived / HandRaise / StudentJoined via
+    // App.xaml.cs subscriptions; the toggle was redundant with the
+    // adjacent "Share Computer Audio" affordance and confused users.
 
     // Phase 9.5: Camera Broadcast
     public IRelayCommand ToggleCameraCommand { get; }
@@ -679,9 +681,6 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         OpenClassRosterCommand = new RelayCommand(OpenClassRoster);
         MarkAttendanceCommand = new RelayCommand(MarkAttendance);
         DeactivateRosterCommand = new RelayCommand(DeactivateRoster);
-
-        ToggleSoundsCommand = new RelayCommand(ToggleSounds);
-        UpdateSoundsButtonText();
 
         ToggleCameraCommand = new RelayCommand(ToggleCamera);
         UpdateCameraButtonText();
@@ -1120,7 +1119,6 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         SystemAudioButtonText = Loc.Get(IsSystemAudioOn ? "Btn_StopShareSystemAudio" : "Btn_ShareSystemAudio");
         if (App.AdaptiveBitrate != null) RefreshBitrateLabel(App.AdaptiveBitrate.CurrentBitrateBps);
         UpdateRecordingTexts();
-        UpdateSoundsButtonText();
         // Phase 4 Section A — camera button text was set once at startup via
         // UpdateCameraButtonText() but never refreshed on language switch, so it stuck
         // in the boot-time language (often Thai).  Drive it through the same pump.
@@ -2486,20 +2484,12 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         w.Show();
     }
 
-    // ─────── Phase 3.5: Sound effects ───────
-
-    private void ToggleSounds()
-    {
-        SoundService.SetEnabled(!SoundService.IsEnabled);
-        UpdateSoundsButtonText();
-    }
-
-    private void UpdateSoundsButtonText()
-    {
-        SoundsButtonText = SoundService.IsEnabled
-            ? Loc.Get("Btn_SoundsOn")
-            : Loc.Get("Btn_SoundsOff");
-    }
+    // Phase 22.1-D — Phase 3.5 ToggleSounds + UpdateSoundsButtonText
+    // removed.  SoundService.IsEnabled stays at its default value;
+    // the App.xaml.cs event subscriptions (ChatReceived, HandRaise,
+    // StudentJoined → SoundService.Play) still play the corresponding
+    // dings.  Btn_SoundsOn / Btn_SoundsOff locale keys are unused now
+    // and can be pruned in a future locale-housekeeping pass.
 
     // ─────── Phase 9.5 / Phase 14-B (Tier 1): Camera Broadcast ───────
 

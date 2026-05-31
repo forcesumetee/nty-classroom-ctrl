@@ -497,10 +497,13 @@
                                        Margin="0"/>
                         </DockPanel>
                         <StackPanel Margin="12,0">
-                            <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding ToggleSoundsCommand}">
-                                <TextBlock Text="{Binding SoundsButtonText}"
-                                           VerticalAlignment="Center" HorizontalAlignment="Left"/>
-                            </Button>
+                            <!-- Phase 22.1-D — "Sounds: ON" toggle removed.
+                                 It was redundant with "Share Computer Audio"
+                                 (users confused the two; the Sounds toggle
+                                 only gated UI ding effects, not the audio
+                                 broadcast).  SoundService stays — App.xaml.cs
+                                 still plays ding on ChatReceived / HandRaise /
+                                 StudentJoined; default IsEnabled=true. -->
                             <Button Style="{DynamicResource Button.SidebarItem}" Command="{Binding ToggleMicCommand}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="🎙" FontSize="14" Width="22" Margin="0,0,8,0" VerticalAlignment="Center"/>
