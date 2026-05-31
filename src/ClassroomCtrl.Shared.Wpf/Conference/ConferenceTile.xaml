@@ -35,7 +35,16 @@
     <Border x:Name="OuterBorder"
             CornerRadius="{StaticResource ConfTileCornerRadius}"
             ClipToBounds="True"
-            Margin="8" MinHeight="160" MinWidth="200">
+            Margin="8"
+            MinHeight="160" MinWidth="200"
+            MaxHeight="360" MaxWidth="640"><!-- Phase 22.3-A: aspect cap.
+            Without MaxWidth, UniformGrid with 2 cols + a wide window
+            stretched tiles to ~700x200 banners (cell height was driven
+            by the 360 px content but width was unbounded).  640x360
+            is a clean 16:9 cap and keeps the gallery feeling like a
+            classroom (small tiles tiled across) rather than a billboard
+            row.  The MinHeight/MinWidth floor from 22.1-A still kicks
+            in on very narrow / cramped layouts. -->
         <Border.Style>
             <Style TargetType="Border">
                 <Setter Property="Background" Value="{StaticResource ConfTileBgBrush}"/>
