@@ -39,8 +39,16 @@
                      non-null Background guarantee the click target catches
                      input even though the parent UserControl is
                      click-through. -->
-                <Border Background="{DynamicResource Surface.Card}"
-                        BorderBrush="{DynamicResource Border.Soft}"
+                <!-- Phase 22 — dark notification card.  Background flipped
+                     from the Classroom Surface.Card light-theme entry to
+                     ConfTileBgBrush so the card reads as dark-on-dark when
+                     stacked over the Conference gallery (and the Classroom
+                     surface still gives it adequate contrast on the
+                     Classroom view since the card sits over the gallery
+                     content, not the page background).  All click /
+                     dismiss bindings preserved. -->
+                <Border Background="{StaticResource ConfTileBgBrush}"
+                        BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="12,8"
@@ -82,11 +90,12 @@
                                  so Win11 Thai-locale 22H2+ renders the glyph
                                  instead of falling back to monochrome shapes. -->
                             <Border Width="32" Height="32" CornerRadius="999"
-                                    Background="{DynamicResource Accent.PrimarySubtle}"
+                                    Background="{StaticResource ConfHostBadgeBgBrush}"
                                     Margin="0,0,10,0"
                                     VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Icon}"
                                            FontSize="18"
+                                           Foreground="{StaticResource ConfTextPrimaryBrush}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
                                            FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
@@ -95,11 +104,11 @@
                                 <TextBlock Text="{Binding SenderName}"
                                            FontWeight="SemiBold"
                                            FontSize="13"
-                                           Foreground="{DynamicResource Text.Primary}"
+                                           Foreground="{StaticResource ConfTextPrimaryBrush}"
                                            TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Text="{Binding Message}"
                                            FontSize="12"
-                                           Foreground="{DynamicResource Text.Secondary}"
+                                           Foreground="{StaticResource ConfTextSecondaryBrush}"
                                            TextTrimming="CharacterEllipsis"
                                            MaxWidth="220"/>
                             </StackPanel>
@@ -122,9 +131,9 @@
                             <Button Content="✕"
                                     Click="DenyShare_Click"
                                     Tag="{Binding ActionTargetId}"
-                                    Background="{DynamicResource Surface.Elevated}"
-                                    Foreground="{DynamicResource Text.Primary}"
-                                    BorderBrush="{DynamicResource Border.Default}"
+                                    Background="Transparent"
+                                    Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                    BorderBrush="{StaticResource ConfBorderHoverBrush}"
                                     BorderThickness="1"
                                     Padding="10,4" Margin="0,0,6,0"
                                     FontSize="12"
@@ -132,7 +141,7 @@
                             <Button Content="✓"
                                     Click="ApproveShare_Click"
                                     Tag="{Binding ActionTargetId}"
-                                    Background="#10B981"
+                                    Background="{StaticResource ConfAccentGreenBrush}"
                                     Foreground="White"
                                     BorderThickness="0"
                                     Padding="10,4"
