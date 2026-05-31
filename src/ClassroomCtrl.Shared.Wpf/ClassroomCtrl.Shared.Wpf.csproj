@@ -12,4 +12,17 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
   </ItemGroup>
+  <!-- Phase 22.3-C — color reaction emoji PNGs.  Rendered via
+       tools/GenReactionPngs.ps1 using GDI+ shape primitives (NOT
+       Segoe UI Emoji as a font glyph) so the user's Win11 + Thai-
+       locale WPF font-resolution bug can't make them monochrome.
+       Build action = Resource so they bake into the assembly and
+       resolve via pack:// URIs from any consumer (Teacher / Student.Agent). -->
+  <ItemGroup>
+    <Resource Include="Resources\Reactions\thumbs_up.png" />
+    <Resource Include="Resources\Reactions\heart.png" />
+    <Resource Include="Resources\Reactions\laugh.png" />
+    <Resource Include="Resources\Reactions\surprise.png" />
+    <Resource Include="Resources\Reactions\sad.png" />
+  </ItemGroup>
 </Project>

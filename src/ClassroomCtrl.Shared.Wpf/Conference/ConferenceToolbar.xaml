@@ -230,9 +230,20 @@
                                 <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
                             </Style>
                         </Border.Resources>
+                        <!-- Phase 22.3-C — emoji glyphs swapped for PNG
+                             images.  TextBlock-with-emoji-font was rendering
+                             monochrome on the user's Win11 + Thai-locale env
+                             after every text-engine defense (Bug D, 22.1-C,
+                             22.2-D).  PNGs are drawn from GDI+ shape
+                             primitives (NOT a font glyph) so the WPF
+                             text-shaping path is bypassed entirely.
+                             Tag values preserve the wire payload — clicking
+                             a button still sends the literal emoji glyph in
+                             ReactionMessage.Emoji, so other clients +
+                             downstream consumers (recording, history) keep
+                             working without any wire change. -->
                         <StackPanel x:Name="ReactionRow" Orientation="Horizontal"
-                                    HorizontalAlignment="Center"
-                                    TextElement.FontFamily="Segoe UI Emoji">
+                                    HorizontalAlignment="Center">
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
@@ -241,11 +252,9 @@
                                     ToolTip="👍"
                                     Click="ReactionButton_Click"
                                     Tag="👍">
-                                <TextBlock FontSize="22"
-                                           FontFamily="Segoe UI Emoji">
-                                    <Run FontFamily="Segoe UI Emoji"
-                                         Text="&#x1F44D;"/>
-                                </TextBlock>
+                                <Image Width="32" Height="32"
+                                       Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/thumbs_up.png"
+                                       Stretch="Uniform"/>
                             </Button>
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
@@ -255,11 +264,9 @@
                                     ToolTip="❤️"
                                     Click="ReactionButton_Click"
                                     Tag="❤️">
-                                <TextBlock FontSize="22"
-                                           FontFamily="Segoe UI Emoji">
-                                    <Run FontFamily="Segoe UI Emoji"
-                                         Text="&#x2764;&#xFE0F;"/>
-                                </TextBlock>
+                                <Image Width="32" Height="32"
+                                       Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/heart.png"
+                                       Stretch="Uniform"/>
                             </Button>
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
@@ -269,11 +276,9 @@
                                     ToolTip="😂"
                                     Click="ReactionButton_Click"
                                     Tag="😂">
-                                <TextBlock FontSize="22"
-                                           FontFamily="Segoe UI Emoji">
-                                    <Run FontFamily="Segoe UI Emoji"
-                                         Text="&#x1F602;"/>
-                                </TextBlock>
+                                <Image Width="32" Height="32"
+                                       Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/laugh.png"
+                                       Stretch="Uniform"/>
                             </Button>
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
@@ -283,11 +288,9 @@
                                     ToolTip="😮"
                                     Click="ReactionButton_Click"
                                     Tag="😮">
-                                <TextBlock FontSize="22"
-                                           FontFamily="Segoe UI Emoji">
-                                    <Run FontFamily="Segoe UI Emoji"
-                                         Text="&#x1F62E;"/>
-                                </TextBlock>
+                                <Image Width="32" Height="32"
+                                       Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/surprise.png"
+                                       Stretch="Uniform"/>
                             </Button>
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
@@ -297,11 +300,9 @@
                                     ToolTip="😢"
                                     Click="ReactionButton_Click"
                                     Tag="😢">
-                                <TextBlock FontSize="22"
-                                           FontFamily="Segoe UI Emoji">
-                                    <Run FontFamily="Segoe UI Emoji"
-                                         Text="&#x1F622;"/>
-                                </TextBlock>
+                                <Image Width="32" Height="32"
+                                       Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/sad.png"
+                                       Stretch="Uniform"/>
                             </Button>
                         </StackPanel>
                     </Border>

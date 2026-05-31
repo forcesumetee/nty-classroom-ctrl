@@ -11,6 +11,11 @@
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
+        <!-- Phase 22.3-C — map the wire-payload emoji string into a
+             color PNG so the float-up reaction is rendered as an
+             image (consistent with the picker, bypasses the Win11
+             Thai-locale font shaping issue). -->
+        <conv:EmojiToReactionImageConverter x:Key="EmojiToReactionImage"/>
     </UserControl.Resources>
     <!-- Phase 22 — Zoom-style dark tile.
          Outer Border: dark slate background, rounded.  IsSpeaking flips
@@ -216,19 +221,27 @@
                  the float-up Storyboard when CurrentReactionEmoji
                  becomes non-empty (Phase 15-E step 5).  RenderTransform
                  + Opacity 0 default match the existing animation
-                 expectations — DO NOT rename these elements. -->
-            <TextBlock x:Name="ReactionFloater"
-                       Text="{Binding CurrentReactionEmoji}"
-                       FontSize="56"
-                       FontFamily="Segoe UI Emoji"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       IsHitTestVisible="False"
-                       Opacity="0">
-                <TextBlock.RenderTransform>
+                 expectations — DO NOT rename ReactionFloater /
+                 ReactionFloaterTransform; they're driven by the
+                 code-behind StartReactionFloat() method.
+                 Phase 22.3-C — TextBlock swapped for Image so the
+                 floating reaction uses the same color PNG as the
+                 picker.  CurrentReactionEmoji (the wire-payload
+                 emoji string) flows through EmojiToReactionImage
+                 converter; unknown / empty input → Image.Source =
+                 null → renders nothing, matching idle state. -->
+            <Image x:Name="ReactionFloater"
+                   Source="{Binding CurrentReactionEmoji, Converter={StaticResource EmojiToReactionImage}}"
+                   Width="64" Height="64"
+                   Stretch="Uniform"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   IsHitTestVisible="False"
+                   Opacity="0">
+                <Image.RenderTransform>
                     <TranslateTransform x:Name="ReactionFloaterTransform" Y="0"/>
-                </TextBlock.RenderTransform>
-            </TextBlock>
+                </Image.RenderTransform>
+            </Image>
         </Grid>
     </Border>
 </UserControl>
