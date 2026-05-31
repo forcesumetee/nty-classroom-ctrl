@@ -194,21 +194,46 @@
                        Placement="Top"
                        StaysOpen="False"
                        AllowsTransparency="True">
+                    <!-- Phase 22.1-C — emoji clipping defenses on top of
+                         the existing 16-X Bug D 3-layer pattern.
+                         Layer (d) MinWidth=260 on the Border so the
+                             popup can't shrink narrower than 5×(40+4)+16
+                             padding = ~236 px; the extra 24 px gives the
+                             rightmost emoji breathing room when the
+                             popup's measure rounds down (PopupRoot uses
+                             a layered window whose layout is sometimes
+                             pixel-rounded one px shy of content).
+                         Layer (e) TextOptions hints forcing the WPF Ideal
+                             text-formatting + ClearType rendering modes
+                             so emojis don't fall back to GDI glyph
+                             rendering on the layered Popup window.  GDI
+                             fallback on Win11 Thai-locale shapes the
+                             U+1F44D high-surrogate alone (the low
+                             surrogate is dropped), producing the cropped
+                             "(" the user observed. -->
                     <Border Background="{StaticResource ConfTitleBarBgBrush}"
                             BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                             BorderThickness="1"
                             CornerRadius="10"
-                            Padding="8">
+                            Padding="8"
+                            MinWidth="260"
+                            TextOptions.TextFormattingMode="Ideal"
+                            TextOptions.TextRenderingMode="ClearType">
                         <Border.Resources>
                             <Style TargetType="TextBlock">
                                 <Setter Property="FontFamily"
                                         Value="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
                                 <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+                                <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
                             </Style>
                         </Border.Resources>
                         <StackPanel x:Name="ReactionRow" Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
                                     TextElement.FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
-                            <Button Width="40" Height="40" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
@@ -222,7 +247,7 @@
                                          Text="&#x1F44D;"/>
                                 </TextBlock>
                             </Button>
-                            <Button Width="40" Height="40" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
@@ -236,7 +261,7 @@
                                          Text="&#x2764;&#xFE0F;"/>
                                 </TextBlock>
                             </Button>
-                            <Button Width="40" Height="40" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
@@ -250,7 +275,7 @@
                                          Text="&#x1F602;"/>
                                 </TextBlock>
                             </Button>
-                            <Button Width="40" Height="40" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
@@ -264,7 +289,7 @@
                                          Text="&#x1F62E;"/>
                                 </TextBlock>
                             </Button>
-                            <Button Width="40" Height="40" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
