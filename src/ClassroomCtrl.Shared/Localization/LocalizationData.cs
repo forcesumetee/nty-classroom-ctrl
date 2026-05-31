@@ -711,6 +711,29 @@ internal static class LocalizationData
         ["Toast_TeacherIPSaved_Title"] = "Teacher IP saved",
         ["Toast_TeacherIPSaved_Body"] = "Reconnecting — this may take a few seconds",
 
+        // Phase 23 — Multi-Select + Bulk Actions (Classroom Mode).
+        ["Lbl_SelectionStudentsSelected"] = "students selected",
+        ["Lbl_SelectionClearTooltip"] = "Clear selection (Esc)",
+        ["Lbl_BulkTargetFmt"] = "{0} selected students",
+        ["Dlg_BulkApplyPolicyTitleFmt"] = "Apply Policy to {0} students",
+        ["Bulk_Lock"] = "🔒 Lock",
+        ["Bulk_Unlock"] = "🔓 Unlock",
+        ["Bulk_ApplyPolicy"] = "🖥 Policy",
+        ["Bulk_Mute"] = "🔇 Mute",
+        ["Bulk_Unmute"] = "🔊 Unmute",
+        ["Bulk_SendFile"] = "📋 Send File",
+        ["Bulk_Logoff"] = "🚪 Logoff",
+        ["Chat_BulkLockedFmt"] = "[System] Locked {0} screens",
+        ["Chat_BulkUnlockedFmt"] = "[System] Unlocked {0} screens",
+        ["Chat_BulkPolicyAppliedFmt"] = "[System] Policy applied to {0} students — {1}",
+        ["Chat_BulkPolicyRevertedFmt"] = "[System] Policy reverted for {0} students",
+        ["Chat_BulkMicMutedFmt"] = "[System] Muted mic for {0} students",
+        ["Chat_BulkMicUnmutedFmt"] = "[System] Unmuted mic for {0} students",
+        ["Chat_BulkFileSentFmt"] = "[System] Sent {0} to {1} students",
+        ["Confirm_BulkLogoffFmt"] = "Logoff {0} students? This cannot be undone.",
+        ["Confirm_BulkRestartFmt"] = "Restart {0} students?",
+        ["Confirm_BulkShutdownFmt"] = "Shutdown {0} students?",
+
     };
 
     private static Dictionary<string, string> Th() => new()
@@ -1356,6 +1379,29 @@ internal static class LocalizationData
         // Phase 10.16 — tray Settings save toast.
         ["Toast_TeacherIPSaved_Title"] = "บันทึก Teacher IP แล้ว",
         ["Toast_TeacherIPSaved_Body"] = "กำลังเชื่อมต่อใหม่ อาจใช้เวลาสักครู่",
+
+        // Phase 23 — Multi-Select + Bulk Actions (Classroom Mode).
+        ["Lbl_SelectionStudentsSelected"] = "เครื่องที่เลือก",
+        ["Lbl_SelectionClearTooltip"] = "ยกเลิกการเลือก (Esc)",
+        ["Lbl_BulkTargetFmt"] = "นักเรียนที่เลือก {0} เครื่อง",
+        ["Dlg_BulkApplyPolicyTitleFmt"] = "ใช้นโยบายกับนักเรียน {0} เครื่อง",
+        ["Bulk_Lock"] = "🔒 ล็อก",
+        ["Bulk_Unlock"] = "🔓 ปลดล็อก",
+        ["Bulk_ApplyPolicy"] = "🖥 นโยบาย",
+        ["Bulk_Mute"] = "🔇 ปิดไมค์",
+        ["Bulk_Unmute"] = "🔊 เปิดไมค์",
+        ["Bulk_SendFile"] = "📋 ส่งไฟล์",
+        ["Bulk_Logoff"] = "🚪 ออกจากระบบ",
+        ["Chat_BulkLockedFmt"] = "[ระบบ] ล็อกหน้าจอแล้ว {0} เครื่อง",
+        ["Chat_BulkUnlockedFmt"] = "[ระบบ] ปลดล็อกหน้าจอแล้ว {0} เครื่อง",
+        ["Chat_BulkPolicyAppliedFmt"] = "[ระบบ] ใช้นโยบายกับนักเรียน {0} เครื่อง — {1}",
+        ["Chat_BulkPolicyRevertedFmt"] = "[ระบบ] ยกเลิกนโยบายสำหรับนักเรียน {0} เครื่อง",
+        ["Chat_BulkMicMutedFmt"] = "[ระบบ] ปิดไมค์นักเรียน {0} เครื่อง",
+        ["Chat_BulkMicUnmutedFmt"] = "[ระบบ] เปิดไมค์นักเรียน {0} เครื่อง",
+        ["Chat_BulkFileSentFmt"] = "[ระบบ] ส่ง {0} ให้นักเรียน {1} เครื่อง",
+        ["Confirm_BulkLogoffFmt"] = "ออกจากระบบนักเรียน {0} เครื่อง? การกระทำนี้ยกเลิกไม่ได้",
+        ["Confirm_BulkRestartFmt"] = "รีสตาร์ทนักเรียน {0} เครื่อง?",
+        ["Confirm_BulkShutdownFmt"] = "ปิดเครื่องนักเรียน {0} เครื่อง?",
 
     };
 
