@@ -433,6 +433,51 @@ int errors = 0;
     else { Pass("T23: ChatMessage round-trip preserves IsConferenceContext (7 keys)"); }
 }
 
+// ──────── Test 24 (Phase 19 v1.1): ChatMessage.Attachment round-trip ────────
+//          Forward-compat: older receivers (Keys 0..6) silently ignore Key(7);
+//          this test verifies the round-trip when both sides know about it.
+//          Payload uses a non-trivial byte array (8 KiB) to ensure MessagePack's
+//          bin-format encoder doesn't truncate or reorder the data.
+{
+    var attachData = new byte[8 * 1024];
+    for (int i = 0; i < attachData.Length; i++) attachData[i] = (byte)(i & 0xFF);
+
+    var msg = new ChatMessage
+    {
+        SenderId = Guid.NewGuid(),
+        SenderName = "Teacher Sirin",
+        Text = "Please review the attached worksheet",
+        TimestampUtcMs = 1_700_000_000_000L,
+        IsConferenceContext = true,
+        Attachment = new FileAttachment
+        {
+            Id = Guid.NewGuid(),
+            FileName = "worksheet.pdf",
+            FileSize = attachData.Length,
+            FileType = ".pdf",
+            Data = attachData,
+        },
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ChatMessage>(bytes);
+    if (back.Attachment == null) { errors += Fail("T24: Attachment round-trip returned null"); }
+    else if (back.Attachment.Id != msg.Attachment.Id) { errors += Fail("T24: Attachment.Id mismatch"); }
+    else if (back.Attachment.FileName != msg.Attachment.FileName) { errors += Fail($"T24: FileName mismatch (got '{back.Attachment.FileName}')"); }
+    else if (back.Attachment.FileSize != msg.Attachment.FileSize) { errors += Fail("T24: FileSize mismatch"); }
+    else if (back.Attachment.FileType != msg.Attachment.FileType) { errors += Fail("T24: FileType mismatch"); }
+    else if (back.Attachment.Data.Length != attachData.Length) { errors += Fail($"T24: Data length mismatch ({back.Attachment.Data.Length} vs {attachData.Length})"); }
+    else
+    {
+        // Spot-check a handful of payload bytes for integrity.
+        bool ok = back.Attachment.Data[0] == 0x00 && back.Attachment.Data[255] == 0xFF
+                  && back.Attachment.Data[256] == 0x00 && back.Attachment.Data[attachData.Length - 1] == attachData[attachData.Length - 1];
+        if (!ok) errors += Fail("T24: Attachment.Data byte-pattern corruption");
+        else if (back.Text != msg.Text) errors += Fail("T24: Text field clobbered by attachment");
+        else if (!back.IsConferenceContext) errors += Fail("T24: IsConferenceContext lost alongside Attachment");
+        else Pass("T24: ChatMessage round-trip preserves [Key(7)] Attachment (8 KiB payload + 8 sibling keys)");
+    }
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");

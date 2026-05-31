@@ -29,6 +29,43 @@ public class ChatMessage
     /// (Key(0..5) only) silently ignore unknown keys per MessagePack
     /// explicit-key contract, defaulting the field to false on read.</summary>
     [Key(6)] public bool IsConferenceContext { get; set; }
+
+    /// <summary>Phase 19 (v1.1, 2026-05-31) — inline file attachment.  Null
+    /// for plain text chats (~99% of the wire traffic).  When non-null,
+    /// receivers persist the bytes via AttachmentManager and render a
+    /// download/open card in the chat bubble.  10 MB payload cap enforced
+    /// at the picker so the envelope stays reasonable; per-Phase-19 design
+    /// note inline-bytes were chosen over reusing the FileAnnounce /
+    /// FileChunk / FileComplete NetMovie pipeline to avoid the
+    /// shared-dir contention with the teacher's Net Movie feature.
+    /// Forward compatible: older receivers (Key 0..6) silently ignore.</summary>
+    [Key(7)] public FileAttachment? Attachment { get; set; }
+}
+
+/// <summary>
+/// Phase 19 (v1.1) — chat-embedded file attachment.  Carried inline inside
+/// <see cref="ChatMessage.Attachment"/>; AttachmentManager persists the
+/// bytes on receive and surfaces Download / Open actions in the chat
+/// bubble.
+///
+/// Size + type validation happens at the sender (10 MB cap +
+/// extension blocklist for .exe/.bat/.scr/.com/.cmd/.vbs/.ps1); the
+/// receiver trusts the sender's checks because the wire is trusted-LAN
+/// only (Classroom Mode threat model — no internet-facing relay).  A
+/// belt-and-suspenders recheck on receive is a v1.2 hardening candidate
+/// if customer policy ever demands it.
+/// </summary>
+[MessagePackObject]
+public class FileAttachment
+{
+    [Key(0)] public Guid Id { get; set; }
+    [Key(1)] public string FileName { get; set; } = "";
+    [Key(2)] public long FileSize { get; set; }
+    /// <summary>Lowercase file extension including the dot (e.g. ".pdf").
+    /// Drives the icon glyph + the receiver-side "open with default app"
+    /// shell invocation; not validated as MIME — just a hint.</summary>
+    [Key(3)] public string FileType { get; set; } = "";
+    [Key(4)] public byte[] Data { get; set; } = Array.Empty<byte>();
 }
 
 [MessagePackObject]
