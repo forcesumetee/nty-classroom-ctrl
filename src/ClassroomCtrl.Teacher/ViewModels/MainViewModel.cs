@@ -30,6 +30,16 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     public ObservableCollection<StudentViewModel> Students { get; } = new();
     public ObservableCollection<RoomViewModel> Rooms { get; } = new();
 
+    // Phase 23 — Classroom multi-select state.  Tile.IsSelected is the
+    // source of truth for the visual highlight; _selectedTileIds mirrors it
+    // so range/clear ops and the bulk-action commands can iterate the
+    // selection without scanning the whole Students collection every time.
+    // _lastSelectedTileId anchors Shift+click range selection.
+    private readonly HashSet<Guid> _selectedTileIds = new();
+    private Guid? _lastSelectedTileId;
+    public int SelectedCount => _selectedTileIds.Count;
+    public bool HasSelection => _selectedTileIds.Count > 0;
+
     // Phase 3 Section E — conversation tabs replace the single flat ChatMessages list.
     // EveryoneConversation always exists and can't be closed.  DM conversations are
     // spawned on demand via OpenDMConversation / inbound DMs.  ActiveConversation drives
@@ -2000,6 +2010,14 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             _studentSharePermissions.Remove(peerId);
             _pendingShareRequests.Remove(peerId);
             if (_activeSharerId == peerId) _activeSharerId = null;
+
+            // Phase 23 — purge departed student from the bulk-selection set
+            // so HasSelection/SelectedCount stay honest after a disconnect.
+            if (_selectedTileIds.Remove(peerId))
+            {
+                if (_lastSelectedTileId == peerId) _lastSelectedTileId = null;
+                RaiseSelectionChanged();
+            }
         });
     }
 
@@ -3603,6 +3621,141 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         ActiveConversation = conv;
         conv.UnreadCount = 0;
     }
+
+    // ─────── Phase 23: Multi-select selection mechanics ───────
+
+    /// <summary>Phase 23 — single entry point for the StudentCard tile-click
+    /// handler.  Resolves Ctrl / Shift modifiers into the right selection
+    /// op: Shift+click extends from the last-anchored tile, Ctrl+click
+    /// toggles just this one, plain click clears + selects one.  Always
+    /// updates the parent's anchor + raises the toolbar-visibility
+    /// notifications so the floating action bar slides in/out.</summary>
+    public void SelectTile(Guid id, bool ctrlHeld, bool shiftHeld)
+    {
+        if (id == Guid.Empty) return;
+        var target = Students.FirstOrDefault(x => x.EndpointId == id);
+        if (target == null) return;
+
+        if (shiftHeld && _lastSelectedTileId.HasValue && _lastSelectedTileId.Value != id)
+        {
+            SelectRange(_lastSelectedTileId.Value, id);
+            // Anchor stays put on Shift+click so successive Shift+clicks
+            // pivot from the same origin (matches Explorer / Sheets).
+        }
+        else if (ctrlHeld)
+        {
+            ToggleTileSelection(id);
+            _lastSelectedTileId = id;
+        }
+        else
+        {
+            ClearSelectionInternal();
+            AddToSelection(target);
+            _lastSelectedTileId = id;
+        }
+
+        RaiseSelectionChanged();
+    }
+
+    /// <summary>Toggle a single tile's selection without touching the others
+    /// — Ctrl+click path.</summary>
+    private void ToggleTileSelection(Guid id)
+    {
+        var target = Students.FirstOrDefault(x => x.EndpointId == id);
+        if (target == null) return;
+
+        if (_selectedTileIds.Contains(id))
+        {
+            _selectedTileIds.Remove(id);
+            target.IsSelected = false;
+        }
+        else
+        {
+            _selectedTileIds.Add(id);
+            target.IsSelected = true;
+        }
+    }
+
+    private void AddToSelection(StudentViewModel s)
+    {
+        if (_selectedTileIds.Add(s.EndpointId)) s.IsSelected = true;
+    }
+
+    /// <summary>Range select from <paramref name="anchorId"/> to
+    /// <paramref name="targetId"/> using the current Students order
+    /// (matches what the user sees in the WrapPanel).  The whole range —
+    /// previous selection inclusive of anchor — is reset to "selected"
+    /// (Sheets / Explorer convention: prior multi-select outside the
+    /// range is dropped).</summary>
+    private void SelectRange(Guid anchorId, Guid targetId)
+    {
+        int anchorIdx = -1, targetIdx = -1;
+        for (int i = 0; i < Students.Count; i++)
+        {
+            if (Students[i].EndpointId == anchorId) anchorIdx = i;
+            if (Students[i].EndpointId == targetId) targetIdx = i;
+        }
+        if (anchorIdx < 0 || targetIdx < 0) return;
+
+        int lo = System.Math.Min(anchorIdx, targetIdx);
+        int hi = System.Math.Max(anchorIdx, targetIdx);
+
+        ClearSelectionInternal();
+        for (int i = lo; i <= hi; i++)
+        {
+            AddToSelection(Students[i]);
+        }
+    }
+
+    /// <summary>Select every tile currently in the Students collection.
+    /// Bound to Ctrl+A.</summary>
+    [RelayCommand]
+    private void SelectAll()
+    {
+        foreach (var s in Students) AddToSelection(s);
+        _lastSelectedTileId = Students.Count > 0 ? Students[0].EndpointId : (Guid?)null;
+        RaiseSelectionChanged();
+    }
+
+    /// <summary>Drop all selection.  Bound to Esc and the toolbar's ⊗
+    /// button.</summary>
+    [RelayCommand]
+    private void ClearSelection()
+    {
+        if (_selectedTileIds.Count == 0) return;
+        ClearSelectionInternal();
+        _lastSelectedTileId = null;
+        RaiseSelectionChanged();
+    }
+
+    private void ClearSelectionInternal()
+    {
+        if (_selectedTileIds.Count == 0) return;
+        // Snapshot ids so we can clear flags without mutating the
+        // collection we're iterating.
+        var ids = _selectedTileIds.ToArray();
+        _selectedTileIds.Clear();
+        foreach (var id in ids)
+        {
+            var s = Students.FirstOrDefault(x => x.EndpointId == id);
+            if (s != null) s.IsSelected = false;
+        }
+    }
+
+    private void RaiseSelectionChanged()
+    {
+        OnPropertyChanged(nameof(SelectedCount));
+        OnPropertyChanged(nameof(HasSelection));
+    }
+
+    /// <summary>Snapshot of the currently-selected StudentViewModels in
+    /// Students-collection order.  Bulk-action commands iterate this so
+    /// they don't mutate <c>_selectedTileIds</c> mid-loop (a removed
+    /// student during StudentLeft would otherwise break the foreach).</summary>
+    private List<StudentViewModel> GetSelectedSnapshot()
+    {
+        return Students.Where(s => _selectedTileIds.Contains(s.EndpointId)).ToList();
+    }
 }
 
 public partial class StudentViewModel : ObservableObject
@@ -3722,6 +3875,14 @@ public partial class StudentViewModel : ObservableObject
                            : value >= 70 ? "#F59E0B"   // amber
                                          : "#EF4444"; // red
     }
+
+    // Phase 23 — Classroom-mode multi-select state.  Drives the tile's blue
+    // highlight ring + checkmark badge (DataTrigger on StudentCard.xaml) and
+    // the parent MainViewModel.SelectedCount aggregate used by the floating
+    // bulk action toolbar.  Mutated only through MainViewModel.SelectTile /
+    // ClearSelection / SelectAll so the parent's _selectedTileIds HashSet
+    // stays in lockstep.
+    [ObservableProperty] private bool isSelected;
 }
 
 public partial class RoomViewModel : ObservableObject
