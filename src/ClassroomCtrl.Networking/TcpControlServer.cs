@@ -348,10 +348,12 @@ internal class PeerConnection : IDisposable
     /// <summary>Phase 10.21 — exposed so BroadcastReliableAsync can log per-peer failures.</summary>
     public Guid Id => _id;
 
-    // Fix 8 — count of frames dropped due to queue overflow.  Logged in a
-    // throttled way so a flapping student doesn't drown the log.
-    private long _droppedFrames;
-    private long _nextDropLogTickMs;
+    // Phase 22.3-E — "Fix 8" drop-counter fields removed.  _droppedFrames
+    // was declared + read at the end of WriterLoopAsync but never
+    // incremented anywhere, so the "total dropped frames" log line was
+    // dead code (always 0).  _nextDropLogTickMs was the throttling
+    // companion field, also never referenced.  Both surfaced as CS0649
+    // / CS0169 in `dotnet build`.
 
     // Fix 7 — last-seen timestamp updated on every successful read.  Reads use
     // Interlocked.Exchange to avoid a lock on the hot path.
@@ -616,12 +618,9 @@ internal class PeerConnection : IDisposable
         }
         catch (OperationCanceledException) { /* expected on dispose */ }
 
-        // Throttled drop-counter log.
-        var dropped = Interlocked.Read(ref _droppedFrames);
-        if (dropped > 0)
-        {
-            _logger.LogWarning("Peer {Id} writer exited; total dropped frames: {Dropped}", _id, dropped);
-        }
+        // Phase 22.3-E — drop-counter log removed; the counter was never
+        // actually incremented anywhere so the message was always "0
+        // dropped frames" and contributed only noise on writer exit.
     }
 
     /// <summary>

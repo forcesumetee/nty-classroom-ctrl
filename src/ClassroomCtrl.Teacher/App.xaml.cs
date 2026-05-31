@@ -79,7 +79,9 @@ public partial class App : Application
         // student connections.  Fire-and-forget on a worker thread; the main
         // startup path mustn't wait for the (potential) UAC prompt.  Idempotent
         // — netsh skips re-adding rules that already exist.
-        System.Threading.Tasks.Task.Run(() => FirewallService.EnsureRules());
+        // Phase 22.3-E — explicit discard so CS4014 (call not awaited) doesn't
+        // flag this intentional fire-and-forget.
+        _ = System.Threading.Tasks.Task.Run(() => FirewallService.EnsureRules());
 
         var preferred = ReadPreferredLanguage();
         Loc.Initialize(preferred);

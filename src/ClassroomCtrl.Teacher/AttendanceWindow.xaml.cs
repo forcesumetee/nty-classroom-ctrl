@@ -121,11 +121,16 @@ public partial class AttendanceWindow : Window
                 $"savedStatus={s.AttendanceStatus} marked={s.HasBeenMarked} " +
                 $"machine='{s.MachineName}' connected={connectedMachineNames.Contains(s.MachineName ?? "")} " +
                 $"→ initialRowStatus={initial} studentHash={s.GetHashCode()}");
+            // Phase 22.3-E — null-coalesce s.MachineName (string?) to ""
+            // since AttendanceRow.MachineName is the non-nullable string
+            // shape.  Matches the fallback used on line 122 above where
+            // connectedMachineNames is also compared against the empty
+            // string when MachineName is null.  Silences CS8601.
             return new AttendanceRow
             {
                 RosterIndex = i,
                 FullName = s.FullName,
-                MachineName = s.MachineName,
+                MachineName = s.MachineName ?? "",
                 StudentNumber = s.StudentNumber,
                 Status = initial,
             };
