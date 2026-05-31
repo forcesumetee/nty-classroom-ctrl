@@ -45,6 +45,18 @@ public partial class ConferenceGalleryWindow : Window
         _vm.RequestClose += (_, _) => Close();
         DataContext = _vm;
 
+        // Phase 22.2-B — seed the student's own tile at window-open time
+        // instead of lazily creating it on the first cam/mic/hand event
+        // (16-C added the lazy path via Set{Cam,Mic,Hand}Live → EnsurePeerTile).
+        // Without this, a participant who hasn't toggled anything sees ONLY
+        // the teacher's tile in their gallery — the affordance to find their
+        // own status in the room was missing.  EnsurePeerTile is idempotent;
+        // the later Set*Live calls just refresh state on the existing tile.
+        if (selfEndpointId != Guid.Empty)
+        {
+            EnsurePeerTile(selfEndpointId, _vm.SelfDisplayName, isSelf: true);
+        }
+
         // Header line: "Hosted by {name}" or generic "in progress" line.
         if (!string.IsNullOrWhiteSpace(hostName))
         {

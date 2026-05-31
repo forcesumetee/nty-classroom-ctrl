@@ -219,10 +219,24 @@ public class ClassroomWorker : BackgroundService
         var pingTask = Task.Run(() => HeartbeatLoopAsync(pingCts.Token), pingCts.Token);
         try
         {
+            // Phase 22.2-B — broadcast the PC hostname as the DisplayName
+            // so the teacher's gallery + chat sender both render the
+            // student tile / bubble as the machine name (e.g. "FORCE")
+            // rather than the per-user account name (Environment.UserName,
+            // e.g. "force").  Two reasons:
+            //   1. UserName varies across sessions on shared classroom PCs
+            //      (e.g. lab login varies by class); MachineName is stable.
+            //   2. The 22-series gallery treats every tile as "a machine in
+            //      the room" so mixing UserName in some tiles + MachineName
+            //      in others (the teacher's self-tile from 22.1-E) reads as
+            //      inconsistency.
+            // The MachineName field below is preserved so the teacher's
+            // StudentGrid still has both identifiers if a downstream feature
+            // needs the distinction.
             var hello = new HelloMessage
             {
                 MachineName = Environment.MachineName,
-                DisplayName = Environment.UserName,
+                DisplayName = Environment.MachineName,
                 OsVersion = Environment.OSVersion.VersionString,
                 ProtocolVersion = NetworkConstants.ProtocolVersion,
                 EndpointId = _endpointId,

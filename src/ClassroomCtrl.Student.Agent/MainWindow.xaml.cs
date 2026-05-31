@@ -1936,9 +1936,12 @@ public partial class MainWindow : Window
 
         if (App.Ipc != null)
         {
+            // Phase 22.2-B — chat sender uses MachineName to match the
+            // Hello.DisplayName convention so the teacher's chat panel
+            // labels rows with the same identifier her gallery tiles use.
             var msg = new ChatMessage
             {
-                SenderName = System.Environment.UserName,
+                SenderName = System.Environment.MachineName,
                 Text = text,
                 RoomId = _myRoomId,
                 TimestampUtcMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
