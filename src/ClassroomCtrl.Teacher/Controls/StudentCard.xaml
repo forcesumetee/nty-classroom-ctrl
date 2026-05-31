@@ -9,6 +9,7 @@
              Width="220">
     <UserControl.Resources>
         <conv:HexToBrushConverter x:Key="HexToBrush"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
     </UserControl.Resources>
 
     <!-- Phase 2 Section D — extracted from MainWindow.xaml DataTemplate.
@@ -17,15 +18,34 @@
          Pattern: stash the Window's DataContext (=MainViewModel) on the Border's Tag, then
          each MenuItem walks ContextMenu→PlacementTarget(=Border)→Tag to reach the commands.
          CommandParameter walks PlacementTarget.DataContext (=StudentViewModel of this card). -->
+    <!-- Phase 23 — Background/BorderBrush/BorderThickness moved from
+         local properties onto Style.Setters so the IsSelected DataTrigger
+         can override them (WPF: local values win over style triggers, so
+         the trigger only takes effect once the base values live in the
+         style).  The selected state lifts to a 2 px blue ring + bumps the
+         CornerRadius's effective inset.  Static properties (CornerRadius,
+         SnapsToDevicePixels, ClipToBounds, Cursor) and event handlers
+         stay local. -->
     <Border x:Name="CardRoot"
             Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
-            Background="{DynamicResource Surface.Card}"
-            BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
             CornerRadius="12" SnapsToDevicePixels="True"
             ClipToBounds="True"
             Cursor="Hand"
             MouseLeftButtonDown="Card_LeftClick"
             PreviewMouseRightButtonDown="Card_RightClick">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Border.Default}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                        <Setter Property="BorderBrush" Value="#4285F4"/>
+                        <Setter Property="BorderThickness" Value="3"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
         <Border.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="{DynamicResource Menu_ViewStudentScreen}"
@@ -154,6 +174,19 @@
                                 Visibility="{Binding TalkingBadgeVisibility}"
                                 ToolTip="{DynamicResource Lbl_Talking}">
                             <TextBlock Text="🎤" Foreground="White" FontSize="11"/>
+                        </Border>
+                        <!-- Phase 23 — selection checkmark.  Inline with the
+                             other top-right badges so the visual stack stays
+                             coherent when Host / Talking are also showing.
+                             Bound directly to IsSelected via the local
+                             BoolToVisibility converter. -->
+                        <Border Width="22" Height="22" CornerRadius="11"
+                                Background="#4285F4" Margin="2,0,0,0"
+                                Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="✓" Foreground="White"
+                                       FontSize="12" FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
 
