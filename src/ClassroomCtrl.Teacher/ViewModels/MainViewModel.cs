@@ -210,9 +210,22 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
 
         // Build the desired tile set: self-tile first (teacher), then all
         // connected students in their existing order.
+        // Phase 22.1-E — teacher self-tile name uses Environment.MachineName
+        // instead of OrganizationSubtitle (which resolves to
+        // BrandingService.Current.OrganizationName — typically the school /
+        // company name like "NTY MULTIMEDIA").  Students already see their
+        // own tile labeled with the PC name; this brings the teacher tile
+        // in line so the gallery reads as "machines in the room" rather
+        // than mixing one branding label with N machine names.  Falls back
+        // to "Teacher" if MachineName is somehow blank (defensive — the
+        // .NET API guarantees a non-empty string but environments with
+        // a missing COMPUTERNAME env var have surfaced edge cases).
         var desired = new System.Collections.Generic.List<(Guid Id, string Name, bool IsSelf)>();
         var selfId = App.Server?.TeacherEndpointId ?? Guid.Empty;
-        desired.Add((selfId, OrganizationSubtitle ?? "Teacher", true));
+        var selfTileName = string.IsNullOrWhiteSpace(System.Environment.MachineName)
+            ? "Teacher"
+            : System.Environment.MachineName;
+        desired.Add((selfId, selfTileName, true));
         foreach (var s in Students)
         {
             desired.Add((s.EndpointId, s.DisplayName, false));
