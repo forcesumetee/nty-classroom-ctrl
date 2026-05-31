@@ -183,8 +183,53 @@
                     Margin="4,0,0,0" Click="ToggleMic_Click"/>
         </Grid>
 
+        <!-- Phase 18 (v1.1) — Rejoin Conference banner.  Sits between the
+             action-button row and the chat list; visibility-managed
+             procedurally by UpdateRejoinBannerVisibility() so MainWindow
+             stays DataContext-free (mirrors the BellBadge x:Name pattern).
+             Initial Visibility=Collapsed; ConferenceStart cache + _confWindow
+             nullification by Closed handler flips it visible.  Banner is
+             nested inside the chat-list Border row using a vertical-stack
+             host so it doesn't displace any other Grid.Row mappings — keeps
+             every existing dispatch handler's coordinate assumptions intact. -->
+        <Grid Grid.Row="2" Margin="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Border x:Name="RejoinBanner" Grid.Row="0"
+                    Margin="16,4,16,8" Padding="12,10"
+                    CornerRadius="8"
+                    Background="{DynamicResource Accent.PrimarySubtle}"
+                    BorderBrush="{DynamicResource Border.Soft}" BorderThickness="1"
+                    Visibility="Collapsed">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="💼" FontSize="16" Margin="0,0,6,0"
+                                   FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="RejoinBannerTitle"
+                                   Text="{DynamicResource Rejoin_BannerTitle}"
+                                   FontWeight="SemiBold" FontSize="13"
+                                   Foreground="{DynamicResource Text.Primary}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock x:Name="RejoinHostText"
+                               FontSize="11"
+                               Foreground="{DynamicResource Text.Secondary}"
+                               Margin="0,0,0,8"
+                               TextTrimming="CharacterEllipsis"/>
+                    <Button x:Name="RejoinButton"
+                            Content="{DynamicResource Rejoin_ButtonText}"
+                            Click="RejoinConference_Click"
+                            Style="{DynamicResource Button.Primary}"
+                            HorizontalAlignment="Stretch"
+                            Padding="12,6"/>
+                </StackPanel>
+            </Border>
+
         <!-- Chat / system messages — wrapped in Surface.Card per Phase 4-7 design -->
-        <Border Grid.Row="2" Margin="16,4"
+        <Border Grid.Row="1" Margin="16,4"
                 Background="{DynamicResource Surface.Card}"
                 BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
                 CornerRadius="8">
@@ -207,6 +252,7 @@
                 </ListBox.ItemTemplate>
             </ListBox>
         </Border>
+        </Grid>
 
         <!-- Footer — chat input + Send -->
         <Border Grid.Row="3" Padding="16,10"

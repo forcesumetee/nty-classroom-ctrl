@@ -63,6 +63,19 @@ public partial class MainWindow : Window
     // the same Agent session reliably reopens it.
     private ConferenceGalleryWindow? _confWindow;
 
+    // Phase 18 (v1.1) — last Conference session payload kept resident on the
+    // MainWindow even after _confWindow closes, so the Rejoin banner has
+    // everything it needs to re-instantiate ConferenceGalleryWindow with the
+    // same SessionId / TeacherId / HostName.  Cleared on ConferenceEnd
+    // (0x0671) so the banner doesn't suggest rejoining a session the teacher
+    // already terminated.  _isConferenceActive backs the banner visibility
+    // via UpdateRejoinBannerVisibility(); _confWindow == null is the
+    // "window not currently open" signal that completes the visibility rule.
+    private bool _isConferenceActive;
+    private System.Guid _activeConferenceSessionId;
+    private System.Guid _activeConferenceTeacherId;
+    private string _activeConferenceHostName = "";
+
     // Phase 13-D (Tier 3): per-group voice chat.  Single MicBroadcaster
     // instance per Agent process; CurrentGroupId / SelfEndpointId tracked
     // alongside via BreakoutAssign + Hello capture.  Stays in muted+PTT
@@ -801,48 +814,15 @@ public partial class MainWindow : Window
                     var teacherId = env.SenderId;
                     Dispatcher.Invoke(() =>
                     {
-                        if (_confWindow != null) return;   // idempotent on repeat envelopes
-                        // Phase 16-B step 7 — ctor takes teacher EndpointId
-                        // so the gallery seeds with a tile matching the sender.
-                        // Phase 16-C — also pass own endpoint id + display name
-                        // so the self-tile + cam toolbar can wire correctly.
-                        _confWindow = new ConferenceGalleryWindow(
-                            cs.SessionId, teacherId, cs.HostName,
-                            _myEndpointId ?? System.Guid.Empty,
-                            System.Environment.MachineName);
-                        _confWindow.ShellViewModel.OnToggleCamera = ToggleConferenceCamera;
-                        // Phase 16-X (Bug F fix, 2026-06-01) — mic toggle on
-                        // the Conference toolbar 🎙 button routes to the
-                        // existing Phase 4 Part 3b ToggleMicrophone, owned
-                        // by this MainWindow.  MicStateChanged is the
-                        // canonical mic-transition broadcast event; subscribe
-                        // here to push every state into the shell VM +
-                        // self-tile mic indicator.  Seed with the current
-                        // state in case mic was already on when the
-                        // Conference window opened (rare but possible).
-                        _confWindow.ShellViewModel.OnToggleMic = ToggleMicrophone;
-                        EventHandler<bool> micSync = (_, micOn) =>
-                            Dispatcher.BeginInvoke(new Action(() =>
-                                _confWindow?.SetSelfMicLive(micOn)));
-                        MicStateChanged += micSync;
-                        _confWindow.SetSelfMicLive(_micOn);
-                        // Phase 16-X (Bug H fix, 2026-06-01) — hand-raise
-                        // toolbar wire-up.  ToggleHandRaiseAsync is fire-and-
-                        // forget; the wire emit + state push happen inside.
-                        _confWindow.ShellViewModel.OnToggleHandRaise =
-                            () => _ = ToggleHandRaiseAsync();
-                        _confWindow.SetSelfHandRaised(_handRaised);
-                        _confWindow.Closed += (_, _) =>
-                        {
-                            // Phase 16-C — auto-stop own cam if window closes mid-broadcast.
-                            try { _studentCamera?.Stop(); } catch { }
-                            // Phase 16-X (Bug F) — drop the MicStateChanged
-                            // hook so it doesn't push state into a disposed
-                            // VM on the next mic toggle.
-                            MicStateChanged -= micSync;
-                            _confWindow = null;
-                        };
-                        _confWindow.Show();
+                        // Phase 18 step 1 — cache session details on the
+                        // MainWindow so the Rejoin banner can re-instantiate
+                        // ConferenceGalleryWindow with the same payload after
+                        // the student closes it accidentally mid-session.
+                        _isConferenceActive = true;
+                        _activeConferenceSessionId = cs.SessionId;
+                        _activeConferenceTeacherId = teacherId;
+                        _activeConferenceHostName  = cs.HostName ?? "";
+                        OpenConferenceWindow();
                     });
                 }
                 catch (Exception ex)
@@ -854,8 +834,16 @@ public partial class MainWindow : Window
             case MessageType.ConferenceEnd:
                 Dispatcher.Invoke(() =>
                 {
+                    // Phase 18 — clear cached session details so the rejoin
+                    // banner doesn't suggest re-entering a session the teacher
+                    // already terminated.
+                    _isConferenceActive = false;
+                    _activeConferenceSessionId = System.Guid.Empty;
+                    _activeConferenceTeacherId = System.Guid.Empty;
+                    _activeConferenceHostName  = "";
                     try { _confWindow?.Close(); } catch { }
                     _confWindow = null;
+                    UpdateRejoinBannerVisibility();
                 });
                 break;
 
@@ -1330,6 +1318,102 @@ public partial class MainWindow : Window
     /// until force-close.  Returns immediately; awaits + UI updates
     /// happen on continuations marshalled by the captured
     /// SynchronizationContext.</summary>
+    /// <summary>Phase 18 (v1.1) — single-source construction of the
+    /// student-side Conference shell window.  Originally inlined in the
+    /// ConferenceStart dispatch arm; extracted here so the Rejoin button
+    /// can call the same setup path after the student accidentally closed
+    /// _confWindow during an active session.  Caller must have already
+    /// populated <c>_activeConferenceSessionId</c> + <c>_activeConferenceTeacherId</c>
+    /// + <c>_activeConferenceHostName</c> (the ConferenceStart arm caches
+    /// these; the Rejoin click handler verifies they're still resident).</summary>
+    private void OpenConferenceWindow()
+    {
+        if (_confWindow != null) return;   // idempotent on repeat envelopes / double-clicks
+        // Phase 16-B step 7 — ctor takes teacher EndpointId so the gallery
+        // seeds with a tile matching the sender.  Phase 16-C — also pass own
+        // endpoint id + display name so the self-tile + cam toolbar wires
+        // correctly.
+        _confWindow = new ConferenceGalleryWindow(
+            _activeConferenceSessionId, _activeConferenceTeacherId, _activeConferenceHostName,
+            _myEndpointId ?? System.Guid.Empty,
+            System.Environment.MachineName);
+        _confWindow.ShellViewModel.OnToggleCamera = ToggleConferenceCamera;
+        // Phase 16-X (Bug F fix, 2026-06-01) — mic toggle on the Conference
+        // toolbar 🎙 button routes to the existing Phase 4 Part 3b
+        // ToggleMicrophone, owned by this MainWindow.  MicStateChanged is the
+        // canonical mic-transition broadcast event; subscribe here to push
+        // every state into the shell VM + self-tile mic indicator.  Seed
+        // with the current state in case mic was already on when the
+        // Conference window opened.
+        _confWindow.ShellViewModel.OnToggleMic = ToggleMicrophone;
+        EventHandler<bool> micSync = (_, micOn) =>
+            Dispatcher.BeginInvoke(new Action(() =>
+                _confWindow?.SetSelfMicLive(micOn)));
+        MicStateChanged += micSync;
+        _confWindow.SetSelfMicLive(_micOn);
+        // Phase 16-X (Bug H fix, 2026-06-01) — hand-raise toolbar wire-up.
+        // ToggleHandRaiseAsync is fire-and-forget; the wire emit + state push
+        // happen inside.
+        _confWindow.ShellViewModel.OnToggleHandRaise =
+            () => _ = ToggleHandRaiseAsync();
+        _confWindow.SetSelfHandRaised(_handRaised);
+        _confWindow.Closed += (_, _) =>
+        {
+            // Phase 16-C — auto-stop own cam if window closes mid-broadcast.
+            try { _studentCamera?.Stop(); } catch { }
+            // Phase 16-X (Bug F) — drop the MicStateChanged hook so it
+            // doesn't push state into a disposed VM on the next mic toggle.
+            MicStateChanged -= micSync;
+            _confWindow = null;
+            // Phase 18 — refresh banner so it appears when the student closes
+            // the window mid-session (teacher hasn't ended yet → still active
+            // → banner becomes visible).
+            UpdateRejoinBannerVisibility();
+        };
+        _confWindow.Show();
+        UpdateRejoinBannerVisibility();
+    }
+
+    /// <summary>Phase 18 (v1.1) — Rejoin banner visibility rule.
+    /// Visible iff (Conference is active) AND (Gallery window is not
+    /// currently open).  Called from ConferenceStart / ConferenceEnd /
+    /// _confWindow.Closed.  XAML-side <c>RejoinBanner</c> Border is
+    /// the named element manipulated procedurally (matches the existing
+    /// BellBadge pattern in this file — keeps MainWindow DataContext-free).</summary>
+    private void UpdateRejoinBannerVisibility()
+    {
+        if (RejoinBanner == null) return;   // pre-InitializeComponent guard
+        var show = _isConferenceActive && _confWindow == null;
+        RejoinBanner.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (show && RejoinHostText != null)
+            RejoinHostText.Text = _activeConferenceHostName;
+    }
+
+    private void RejoinConference_Click(object sender, RoutedEventArgs e)
+    {
+        // Phase 18 step 3 — idempotent guard: re-clicks while window already
+        // open are no-ops (race against banner refresh on Closed).
+        if (!_isConferenceActive) return;
+        if (_confWindow != null)
+        {
+            // Stale banner.  Bring the existing window forward instead of
+            // creating a duplicate.
+            WindowAttention.BringToFront(_confWindow);
+            UpdateRejoinBannerVisibility();
+            return;
+        }
+        try
+        {
+            OpenConferenceWindow();
+            _confWindow?.Activate();
+            IpcClient.LogToFile($"[MainWindow] RejoinConference reopened sessionId={_activeConferenceSessionId}");
+        }
+        catch (Exception ex)
+        {
+            IpcClient.LogToFile($"[MainWindow] RejoinConference failed: {ex.Message}");
+        }
+    }
+
     private async void ToggleConferenceCamera()
     {
         if (_confWindow == null) return;

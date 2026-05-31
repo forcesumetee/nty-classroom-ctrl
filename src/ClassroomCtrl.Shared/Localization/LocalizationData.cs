@@ -89,6 +89,11 @@ internal static class LocalizationData
         // Phase 17.1 step 2 — TaskbarItemInfo.Overlay tooltip.  {0} = unread
         // count; only rendered when count > 0.
         ["Notif_UnreadTooltip"] = "{0} unread notifications",
+        // Phase 18 (v1.1) — Rejoin Conference banner on the classic student
+        // window.  Surfaced when the student accidentally closed
+        // ConferenceGalleryWindow while the teacher's session is still active.
+        ["Rejoin_BannerTitle"] = "Conference in progress",
+        ["Rejoin_ButtonText"] = "Rejoin Conference",
         ["Menu_LockScreen"] = "Lock screen",
         ["Menu_UnlockScreen"] = "Unlock screen",
 
@@ -734,6 +739,8 @@ internal static class LocalizationData
         ["Notif_HandRaise_Body"] = "ยกมือ",
         ["Notif_Chat_Body"] = "ส่งข้อความ",
         ["Notif_UnreadTooltip"] = "ไม่ได้อ่าน {0} รายการ",
+        ["Rejoin_BannerTitle"] = "การประชุมกำลังดำเนินอยู่",
+        ["Rejoin_ButtonText"] = "เข้าร่วมการประชุมอีกครั้ง",
         ["Menu_LockScreen"] = "ล็อกหน้าจอ",
         ["Menu_UnlockScreen"] = "ปลดล็อกหน้าจอ",
 
