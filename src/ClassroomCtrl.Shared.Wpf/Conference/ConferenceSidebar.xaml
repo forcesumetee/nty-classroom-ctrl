@@ -30,14 +30,17 @@
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
 
-        <!-- Tab pill — used twice in the header for Chat / Participants tab
-             selection.  Active state set via DataTrigger on the parent's
-             IsConferenceChatTabSelected / IsConferenceParticipantsTabSelected
-             flags so the pill highlight stays in sync no matter how the tab
-             is switched (toolbar click, sidebar click, ✋ shortcut). -->
+        <!-- Tab indicator — Phase 22.3-D rewrite.  Was a CornerRadius=999
+             rounded pill which read as an oval-in-rectangle when active.
+             Now matches the Phase 22.1-B mode-toggle pattern: flat text
+             button with a 2 px bottom-border accent in the active state.
+             Same DataTriggers (per-tab IsConferenceChatTabSelected /
+             IsConferenceParticipantsTabSelected) — only the visual
+             treatment changed. -->
         <Style x:Key="SidebarTabPill" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
             <Setter Property="Padding" Value="14,6"/>
             <Setter Property="Margin" Value="2,0"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -49,15 +52,18 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Pill" CornerRadius="999"
-                                Background="{TemplateBinding Background}">
+                        <Border x:Name="Tab"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Pill" Property="Background"
+                                <Setter TargetName="Tab" Property="Background"
                                         Value="{StaticResource ConfHoverOverlayBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -98,9 +104,10 @@
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                    Foreground="{StaticResource ConfTextSecondaryBrush}"/>
                     </Button>
-                    <!-- Tab cluster.  Active tab fills with the accent
-                         blue (matches the Zoom / Meet tab convention)
-                         + light text; inactive stays secondary. -->
+                    <!-- Tab cluster.  Phase 22.3-D — active tab now uses
+                         underline accent (BorderBrush=blue, blue text)
+                         instead of the prior CornerRadius=999 oval pill
+                         fill.  Matches Phase 22.1-B mode-toggle pattern. -->
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Command="{Binding SelectConferenceChatTabCommand}"
                                 Content="{DynamicResource Conf_SidebarChatTab}">
@@ -108,8 +115,8 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource SidebarTabPill}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsConferenceChatTabSelected}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource ConfAccentBlueBrush}"/>
-                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource ConfAccentBlueBrush}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource ConfAccentBlueBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -121,8 +128,8 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource SidebarTabPill}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsConferenceParticipantsTabSelected}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource ConfAccentBlueBrush}"/>
-                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource ConfAccentBlueBrush}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource ConfAccentBlueBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -159,15 +166,32 @@
                                  that becomes a glaring white box on the
                                  dark surface).  Send button background
                                  swapped to ConfAccentBlueBrush. -->
+                            <!-- Phase 22.3-D — explicit Foreground +
+                                 explicit TextElement.Foreground on the
+                                 Button itself.  Without these the 📎 glyph
+                                 inherited from whichever Foreground the
+                                 default WPF Button template chose to
+                                 cascade — which DIFFERED between Teacher
+                                 and Student because their Application
+                                 .Resources merge dictionaries land in a
+                                 different order (Teacher's
+                                 MaterialDesign3.Defaults sets
+                                 Button.Foreground; Student.Agent's chain
+                                 leaves it on the WPF system default).
+                                 Pinning Foreground both ways keeps the
+                                 icon the same colour on both surfaces. -->
                             <Button Grid.Column="0"
                                     Click="AttachFileButton_Click"
                                     Width="36" Height="36" Padding="0"
                                     Background="Transparent" BorderThickness="0"
+                                    Foreground="{StaticResource ConfTextSecondaryBrush}"
+                                    TextElement.Foreground="{StaticResource ConfTextSecondaryBrush}"
                                     Cursor="Hand"
                                     HorizontalAlignment="Left"
                                     ToolTip="{DynamicResource Chat_AttachFile_Tooltip}">
                                 <TextBlock Text="📎" FontSize="16"
-                                           FontFamily="Segoe UI Emoji"/>
+                                           FontFamily="Segoe UI Emoji"
+                                           Foreground="{StaticResource ConfTextSecondaryBrush}"/>
                             </Button>
                             <TextBox Grid.Column="0"
                                      Margin="40,0,0,0"
