@@ -45,17 +45,17 @@ public partial class ConferenceGalleryWindow : Window
         _vm.RequestClose += (_, _) => Close();
         DataContext = _vm;
 
-        // Phase 22.2-B — seed the student's own tile at window-open time
-        // instead of lazily creating it on the first cam/mic/hand event
-        // (16-C added the lazy path via Set{Cam,Mic,Hand}Live → EnsurePeerTile).
-        // Without this, a participant who hasn't toggled anything sees ONLY
-        // the teacher's tile in their gallery — the affordance to find their
-        // own status in the room was missing.  EnsurePeerTile is idempotent;
-        // the later Set*Live calls just refresh state on the existing tile.
-        if (selfEndpointId != Guid.Empty)
-        {
-            EnsurePeerTile(selfEndpointId, _vm.SelfDisplayName, isSelf: true);
-        }
+        // Phase 22.2-B / Phase 22.3-B — seed the student's own tile at
+        // window-open time instead of lazily creating it on the first
+        // cam/mic/hand event.  If selfEndpointId is Guid.Empty here
+        // (Phase 22.3-B repro: ConferenceStart arrives as a broadcast
+        // and lands BEFORE _myEndpointId is captured by MainWindow from
+        // any targeted envelope, so MainWindow.OpenConferenceWindow
+        // passes Empty), the seed is skipped now and MainWindow calls
+        // AdoptSelfEndpoint(...) later when the capture finally happens.
+        // EnsurePeerTile is idempotent; the later Set*Live calls just
+        // refresh state on the existing tile.
+        EnsureSelfTileIfReady();
 
         // Header line: "Hosted by {name}" or generic "in progress" line.
         if (!string.IsNullOrWhiteSpace(hostName))
@@ -67,6 +67,39 @@ public partial class ConferenceGalleryWindow : Window
         {
             HostLineText.Text = Loc.Get("Conf_HostLineUnknown", "Conference in progress");
         }
+    }
+
+    /// <summary>Phase 22.3-B — idempotent self-tile seed.  Adds the
+    /// student's own tile to the gallery iff SelfEndpointId is now
+    /// non-empty AND a tile for that id doesn't already exist.  Safe
+    /// to call repeatedly: returns true on first seed, false otherwise.
+    /// Called from this window's ctor AND from MainWindow's
+    /// AdoptSelfEndpoint hook when _myEndpointId is finally captured
+    /// later than ConferenceStart.</summary>
+    public bool EnsureSelfTileIfReady()
+    {
+        var id = _vm.SelfEndpointId;
+        if (id == Guid.Empty) return false;
+        if (_vm.ConferenceGallery.Tiles.Any(t => t.EndpointId == id)) return false;
+        EnsurePeerTile(id, _vm.SelfDisplayName, isSelf: true);
+        return true;
+    }
+
+    /// <summary>Phase 22.3-B — late-binding endpoint adoption.  Called
+    /// from MainWindow's _myEndpointId capture when the very first
+    /// targeted envelope arrives AFTER the Conference window was
+    /// already opened by a ConferenceStart broadcast.  Updates the
+    /// shell VM's SelfEndpointId so the self-tile setup pathway has
+    /// a non-empty id to work with, then seeds the tile.  No-op if
+    /// the VM's SelfEndpointId was already set (only the first call
+    /// wins; capturing the same id twice would just be redundant).</summary>
+    public void AdoptSelfEndpoint(Guid myEndpointId)
+    {
+        if (myEndpointId == Guid.Empty) return;
+        if (_vm.SelfEndpointId != Guid.Empty) return;
+        _vm.SelfEndpointId = myEndpointId;
+        IpcClient.LogToFile($"[ConferenceGalleryWindow] AdoptSelfEndpoint {myEndpointId} — seeding self-tile");
+        EnsureSelfTileIfReady();
     }
 
     /// <summary>Phase 16-C — seed / pick up a peer cam tile so the gallery has a

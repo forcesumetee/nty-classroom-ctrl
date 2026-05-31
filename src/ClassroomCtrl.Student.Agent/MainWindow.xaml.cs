@@ -260,6 +260,17 @@ public partial class MainWindow : Window
             // indicator picks us up reliably even if the very first emit (from
             // the MainWindow ctor) happened before Service had a TCP route.
             EmitWebcamState();
+            // Phase 22.3-B — if the Conference window opened from a
+            // ConferenceStart broadcast that landed BEFORE this capture,
+            // its self-tile seed was skipped (selfEndpointId was Empty).
+            // Push the captured id into the shell VM now + seed the tile
+            // so the student sees their own slot in the gallery without
+            // having to toggle cam/mic/hand first.
+            if (_confWindow != null && _myEndpointId.HasValue)
+            {
+                var capturedId = _myEndpointId.Value;
+                Dispatcher.BeginInvoke(new Action(() => _confWindow?.AdoptSelfEndpoint(capturedId)));
+            }
         }
 
         switch (env.Type)
