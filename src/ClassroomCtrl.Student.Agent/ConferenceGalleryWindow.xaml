@@ -28,13 +28,35 @@
         </Grid.RowDefinitions>
 
         <!-- Header bar with host line.  Mirrors the teacher's ConferenceView
-             header chip pattern (Phase 15-B step 7). -->
+             header chip pattern (Phase 15-B step 7).
+             Phase 21 (v1.1) — appended a "You are sharing" pill on the right.
+             Visible only while IsSharingActive is true (the shell VM flips
+             this when ShareState transitions to Sharing).  The amber accent
+             matches the toolbar 🖥 button's DataTrigger states added in
+             Phase 20 so a user grokking the affordance sees consistent
+             color across the two surfaces. -->
         <Border Grid.Row="0" Padding="20,10"
                 Background="{DynamicResource Surface.Elevated}"
                 BorderBrush="{DynamicResource Border.Soft}" BorderThickness="0,0,0,1">
             <DockPanel>
                 <TextBlock Text="📹" FontSize="20" Margin="0,0,12,0"
                            VerticalAlignment="Center"/>
+                <Border DockPanel.Dock="Right"
+                        VerticalAlignment="Center"
+                        Background="#10B981"
+                        CornerRadius="999"
+                        Padding="10,4"
+                        Visibility="{Binding IsSharingActive, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🖥" FontSize="13" Margin="0,0,6,0"
+                                   VerticalAlignment="Center"
+                                   FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                        <TextBlock Text="{DynamicResource Share_YouAreSharing}"
+                                   VerticalAlignment="Center"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="White"/>
+                    </StackPanel>
+                </Border>
                 <TextBlock x:Name="HostLineText"
                            VerticalAlignment="Center"
                            FontSize="14" FontWeight="SemiBold"

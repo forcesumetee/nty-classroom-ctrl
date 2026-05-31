@@ -112,6 +112,10 @@ internal static class LocalizationData
         ["Share_Approve"] = "Approve",
         ["Share_Deny"] = "Deny",
         ["Share_RevokeButton"] = "Revoke",
+        // Phase 21 (v1.1) — "You are sharing" pill in the student
+        // conference window header (right side of the host line).
+        // Shown only while the broadcaster is actively emitting frames.
+        ["Share_YouAreSharing"] = "You are sharing",
         ["Menu_LockScreen"] = "Lock screen",
         ["Menu_UnlockScreen"] = "Unlock screen",
 
@@ -779,6 +783,8 @@ internal static class LocalizationData
         ["Share_Approve"] = "อนุญาต",
         ["Share_Deny"] = "ปฏิเสธ",
         ["Share_RevokeButton"] = "เพิกถอน",
+        // Phase 21 (v1.1) — "You are sharing" pill (header right side).
+        ["Share_YouAreSharing"] = "คุณกำลังแชร์",
         ["Menu_LockScreen"] = "ล็อกหน้าจอ",
         ["Menu_UnlockScreen"] = "ปลดล็อกหน้าจอ",
 

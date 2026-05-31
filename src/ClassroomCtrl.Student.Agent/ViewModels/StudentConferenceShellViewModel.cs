@@ -187,9 +187,17 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
         _ => "",
     };
 
+    /// <summary>Phase 21 (v1.1) — drives the "You are sharing" pill in the
+    /// student conference window header (ConferenceGalleryWindow.xaml).
+    /// True only while the broadcaster is actively emitting frames so a
+    /// student who's been Approved but hasn't clicked Start yet doesn't
+    /// see the indicator.</summary>
+    public bool IsSharingActive => ShareState == ShareRequestState.Sharing;
+
     partial void OnShareStateChanged(ShareRequestState value)
     {
         OnPropertyChanged(nameof(ShareScreenButtonText));
+        OnPropertyChanged(nameof(IsSharingActive));
     }
 
     /// <summary>Phase 20 (v1.1) — toolbar 🖥 click handler.  Single command
