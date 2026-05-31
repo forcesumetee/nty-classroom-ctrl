@@ -33,6 +33,11 @@ public partial class App : Application
     /// <summary>Phase 9.5: Webcam capture + JPEG broadcast.</summary>
     public static CameraBroadcastService? Camera { get; private set; }
 
+    /// <summary>Phase 19 (v1.1): chat-embedded file-attachment persistence
+    /// + open/download helpers.  Shared between Teacher.MainViewModel
+    /// (send + receive) and the Conference sidebar chat bubble template.</summary>
+    public static ClassroomCtrl.Shared.Attachments.AttachmentManager? Attachments { get; private set; }
+
     /// <summary>Phase 17 (v1.x roadmap #5): LINE-style in-app notification stack.
     /// Surfaced by <c>NotificationOverlay</c> docked to MainWindow's bottom-right
     /// corner; HandRaise / Chat dispatch arms call <see cref="NotificationService.Show"/>
@@ -157,6 +162,13 @@ public partial class App : Application
         // dispatch arm.  NotificationOverlay (placed in MainWindow.xaml) binds
         // its ItemsControl to Notifications.ActiveItems.
         Notifications = new NotificationService();
+
+        // Phase 19 (v1.1) — chat-embedded file attachment manager.  Persists
+        // received bytes to %LOCALAPPDATA%\NTY\ClassroomCtrl\Attachments\
+        // + surfaces Open / CopyTo helpers for the chat-bubble UI.  Shared
+        // across MainViewModel's send/receive paths + the Conference sidebar
+        // chat surface.
+        Attachments = new ClassroomCtrl.Shared.Attachments.AttachmentManager();
 
         // Phase 14: Audit log
         Audit = new AuditLogService();

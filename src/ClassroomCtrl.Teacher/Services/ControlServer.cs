@@ -146,14 +146,17 @@ public class ControlServer : IDisposable
 
     public Task StartAsync(CancellationToken ct) => _tcp.StartAsync(ct);
 
-    public Task BroadcastChatAsync(string text, CancellationToken ct)
+    public Task BroadcastChatAsync(string text, CancellationToken ct, FileAttachment? attachment = null)
     {
         var msg = new ChatMessage
         {
             SenderId = _teacherId,
             SenderName = "Teacher",
             Text = text,
-            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            // Phase 19 (v1.1) — inline attachment (see ChatMessage [Key(7)]
+            // remark for the design choice rationale).
+            Attachment = attachment,
         };
 
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
@@ -168,7 +171,7 @@ public class ControlServer : IDisposable
     /// Classroom rail; for the current customer (Teacher+Student on
     /// matched binaries) every receiver knows the field after this
     /// commit.</summary>
-    public Task BroadcastConferenceChatAsync(string text, string senderName, CancellationToken ct)
+    public Task BroadcastConferenceChatAsync(string text, string senderName, CancellationToken ct, FileAttachment? attachment = null)
     {
         var msg = new ChatMessage
         {
@@ -177,13 +180,14 @@ public class ControlServer : IDisposable
             Text = text,
             TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             IsConferenceContext = true,
+            Attachment = attachment,
         };
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
         return _tcp.BroadcastAsync(Envelope.Create(MessageType.ChatBroadcast, bytes, _teacherId), ct);
     }
 
     /// <summary>Send a direct message to ONE student (Phase 3 — Direct Messages 1:1).</summary>
-    public Task SendDirectMessageAsync(Guid endpointId, string text, CancellationToken ct)
+    public Task SendDirectMessageAsync(Guid endpointId, string text, CancellationToken ct, FileAttachment? attachment = null)
     {
         var msg = new ChatMessage
         {
@@ -192,6 +196,7 @@ public class ControlServer : IDisposable
             RecipientId = endpointId,
             Text = text,
             TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Attachment = attachment,
         };
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
         var env = Envelope.CreateTargeted(MessageType.ChatDirect, bytes, _teacherId, endpointId);

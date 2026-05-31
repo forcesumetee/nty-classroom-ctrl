@@ -281,14 +281,30 @@ public partial class MainWindow : Window
                         if (chat.IsConferenceContext)
                         {
                             if (_myEndpointId.HasValue && chat.SenderId == _myEndpointId.Value) return;
-                            _confWindow?.ShellViewModel.AppendConferenceChat(chat.SenderName, chat.Text);
+                            // Phase 19 (v1.1) — persist attachment bytes so
+                            // the Conference sidebar bubble template's Open
+                            // button has a valid local file by the time it
+                            // renders.  Fire-and-forget; failure logged.
+                            PersistAttachmentFireAndForget(chat.Attachment);
+                            _confWindow?.ShellViewModel.AppendConferenceChat(chat.SenderName, chat.Text, chat.Attachment);
                             // Phase 17.2 step 3 (Feature L) — pop the Conference
                             // window forward so the student notices a peer/teacher
                             // chat without watching the sidebar 24/7.
                             WindowAttention.BringToFront(_confWindow);
                             return;
                         }
-                        ChatList.Items.Add($"[{chat.SenderName}] {chat.Text}");
+                        // Phase 19 (v1.1) — classic ChatList stays text-only
+                        // (rich attachment card lives in the Conference
+                        // sidebar); the student sees an inline indicator and
+                        // can open via the bell popup that wraps a
+                        // notification with the attachment metadata.
+                        var classicLine = chat.Attachment != null
+                            ? $"[{chat.SenderName}] {chat.Text}  📎 {chat.Attachment.FileName}"
+                            : $"[{chat.SenderName}] {chat.Text}";
+                        ChatList.Items.Add(classicLine);
+                        PersistAttachmentFireAndForget(chat.Attachment);
+                        if (chat.Attachment != null)
+                            AddAttachmentSystemNotification(chat.SenderName, chat.Attachment);
                         // Phase 17.2 step 3 (Feature L) — classic ChatBroadcast is
                         // teacher → student; pop MainWindow so the student notices
                         // mid-other-app.  Self-loopback guard isn't needed here
@@ -303,7 +319,13 @@ public partial class MainWindow : Window
                     var chat = MessagePack.MessagePackSerializer.Deserialize<ChatMessage>(env.Payload);
                     Dispatcher.Invoke(() =>
                     {
-                        ChatList.Items.Add($"[DM from {chat.SenderName}] {chat.Text}");
+                        var line = chat.Attachment != null
+                            ? $"[DM from {chat.SenderName}] {chat.Text}  📎 {chat.Attachment.FileName}"
+                            : $"[DM from {chat.SenderName}] {chat.Text}";
+                        ChatList.Items.Add(line);
+                        PersistAttachmentFireAndForget(chat.Attachment);
+                        if (chat.Attachment != null)
+                            AddAttachmentSystemNotification(chat.SenderName, chat.Attachment);
                         // Phase 17.2 step 3 (Feature L) — DMs are explicitly
                         // targeted to me; pop MainWindow regardless of state.
                         WindowAttention.BringToFront(this);
@@ -316,7 +338,13 @@ public partial class MainWindow : Window
                     var chat = MessagePack.MessagePackSerializer.Deserialize<ChatMessage>(env.Payload);
                     Dispatcher.Invoke(() =>
                     {
-                        ChatList.Items.Add($"[Room] [{chat.SenderName}] {chat.Text}");
+                        var line = chat.Attachment != null
+                            ? $"[Room] [{chat.SenderName}] {chat.Text}  📎 {chat.Attachment.FileName}"
+                            : $"[Room] [{chat.SenderName}] {chat.Text}";
+                        ChatList.Items.Add(line);
+                        PersistAttachmentFireAndForget(chat.Attachment);
+                        if (chat.Attachment != null)
+                            AddAttachmentSystemNotification(chat.SenderName, chat.Attachment);
                         // Phase 17.2 step 3 (Feature L) — room chat could be
                         // teacher OR a peer in the same breakout; either way
                         // skip self-echoes (peer student me writing my own
@@ -1318,6 +1346,38 @@ public partial class MainWindow : Window
     /// until force-close.  Returns immediately; awaits + UI updates
     /// happen on continuations marshalled by the captured
     /// SynchronizationContext.</summary>
+    /// <summary>Phase 19 (v1.1) — fire-and-forget save of a received chat
+    /// attachment to the local AttachmentManager cache.  Null-attachment
+    /// → no-op so call sites can pass <c>chat.Attachment</c> directly
+    /// without their own null check.  Failures log to IpcClient.LogToFile
+    /// + leave the attachment metadata in the chat line / system
+    /// notification so the user knows a file was received but can't be
+    /// opened — better than silent loss.</summary>
+    private static void PersistAttachmentFireAndForget(ClassroomCtrl.Shared.Protocol.FileAttachment? attachment)
+    {
+        if (attachment == null || App.Attachments == null) return;
+        _ = App.Attachments.SaveAsync(attachment).ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+                IpcClient.LogToFile($"[MainWindow] Attachment save failed: {t.Exception?.GetBaseException().Message}");
+        });
+    }
+
+    /// <summary>Phase 19 (v1.1) — drop a system-notification entry into the
+    /// bell popup for incoming attachments on the classic ChatList path
+    /// (Conference sidebar's bubble template handles its own attachment
+    /// card so this only fires for Classroom-mode chat).  The 🔔 popup is
+    /// already the student's "non-chat events" surface; using it here
+    /// keeps the rich Open / Download UX without rebuilding the ChatList
+    /// DataTemplate as a typed VM.</summary>
+    private void AddAttachmentSystemNotification(string senderName, ClassroomCtrl.Shared.Protocol.FileAttachment attachment)
+    {
+        var sizeText = ClassroomCtrl.Shared.Attachments.AttachmentManager.FormatSize(attachment.FileSize);
+        AddSystemNotification(
+            $"{(string.IsNullOrEmpty(senderName) ? "Teacher" : senderName)}: 📎 {attachment.FileName} ({sizeText})",
+            "📎");
+    }
+
     /// <summary>Phase 18 (v1.1) — single-source construction of the
     /// student-side Conference shell window.  Originally inlined in the
     /// ConferenceStart dispatch arm; extracted here so the Rejoin button

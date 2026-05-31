@@ -140,18 +140,27 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <!-- Phase 16-X (Bug G fix, 2026-06-01) — chat tab
-                                 binds to ConferenceConversation, NOT the
-                                 classroom-rail ActiveConversation, so a
-                                 message composed here stays inside the
-                                 Conference surface.  Send command flips to
-                                 SendConferenceChatCommand which stamps
-                                 IsConferenceContext=true on the wire so
-                                 receivers route only to their Conference
-                                 chat pane (not Classroom rail).  Both
-                                 Teacher.MainViewModel and Student.
-                                 StudentConferenceShellViewModel expose
-                                 the same property + command names. -->
+                                 binds to ConferenceConversation.  Phase 19
+                                 (v1.1) — added 📎 attach button to the left
+                                 of the TextBox + a draft-preview strip
+                                 above this row (see DockPanel.Dock="Top"
+                                 sibling below).  All three commands resolve
+                                 by name on both Teacher.MainViewModel + the
+                                 student shell VM via reflection in the
+                                 code-behind (consistent with the existing
+                                 ReactionButton_Click pattern). -->
+                            <Button Grid.Column="0"
+                                    Click="AttachFileButton_Click"
+                                    Width="36" Height="36" Padding="0"
+                                    Background="Transparent" BorderThickness="0"
+                                    Cursor="Hand"
+                                    HorizontalAlignment="Left"
+                                    ToolTip="{DynamicResource Chat_AttachFile_Tooltip}">
+                                <TextBlock Text="📎" FontSize="16"
+                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                            </Button>
                             <TextBox Grid.Column="0"
+                                     Margin="40,0,0,0"
                                      Style="{DynamicResource TextBox.Default}"
                                      Text="{Binding ConferenceConversation.DraftInput, UpdateSourceTrigger=PropertyChanged}"/>
                             <Button Grid.Column="1"
@@ -162,6 +171,56 @@
                                 <TextBlock Text="➤" FontSize="14" Foreground="White"/>
                             </Button>
                         </Grid>
+                    </Border>
+
+                    <!-- Phase 19 (v1.1) — draft attachment preview strip.
+                         Visible iff HasConferenceDraftAttachment (Teacher) or
+                         HasDraftAttachment (Student); the binding fallback
+                         is "Collapsed" (the converter outputs Collapsed for
+                         missing properties) which is the correct default
+                         when neither host VM has draft state. -->
+                    <Border DockPanel.Dock="Bottom"
+                            Margin="10,0,10,0" Padding="8,6"
+                            Background="{DynamicResource Surface.Card}"
+                            BorderBrush="{DynamicResource Border.Soft}"
+                            BorderThickness="1" CornerRadius="6">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasConferenceDraftAttachment}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HasDraftAttachment}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right"
+                                    Click="ClearDraftAttachment_Click"
+                                    Width="24" Height="24" Padding="0" Margin="6,0,0,0"
+                                    Background="Transparent" BorderThickness="0"
+                                    Cursor="Hand"
+                                    ToolTip="{DynamicResource Chat_AttachFile_Clear}">
+                                <TextBlock Text="✕" FontSize="12"
+                                           Foreground="{DynamicResource Text.Secondary}"/>
+                            </Button>
+                            <TextBlock VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Text.Primary}"
+                                       FontSize="12"
+                                       TextTrimming="CharacterEllipsis">
+                                <Run Text="📎"/>
+                                <Run Text=" "/>
+                                <!-- One Run for Teacher VM (ConferenceDraftAttachmentLabel),
+                                     one for Student VM (DraftAttachmentLabel) — only the
+                                     populated one renders since the other binds to a
+                                     missing property and resolves to empty string. -->
+                                <Run Text="{Binding ConferenceDraftAttachmentLabel, Mode=OneWay, FallbackValue=''}"/>
+                                <Run Text="{Binding DraftAttachmentLabel, Mode=OneWay, FallbackValue=''}"/>
+                            </TextBlock>
+                        </DockPanel>
                     </Border>
 
                     <!-- Bubble list. -->
@@ -179,6 +238,62 @@
                                             <TextBlock Text="{Binding SenderName}"
                                                        FontSize="11" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource Text.Secondary}"/>
+                                            <!-- Phase 19 (v1.1) — file-attachment card.
+                                                 Visible iff the ChatMessage VM carries
+                                                 a non-null Attachment.  Icon + filename +
+                                                 size on the left; Download + Open buttons
+                                                 on the right.  Both buttons forward the
+                                                 ChatMessage as Tag so the code-behind can
+                                                 extract the FileAttachment without
+                                                 plumbing CommandParameter on every host. -->
+                                            <Border Margin="0,4,0,4" Padding="8,6"
+                                                    CornerRadius="6"
+                                                    Background="{DynamicResource Surface.Elevated}"
+                                                    BorderBrush="{DynamicResource Border.Soft}"
+                                                    BorderThickness="1"
+                                                    Visibility="{Binding HasAttachment, Converter={StaticResource BoolToVisibility}}">
+                                                <DockPanel>
+                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                                                VerticalAlignment="Center" Margin="6,0,0,0">
+                                                        <Button Click="DownloadAttachment_Click"
+                                                                Tag="{Binding}"
+                                                                Content="{DynamicResource Chat_AttachFile_Download}"
+                                                                FontSize="11"
+                                                                Padding="6,2" Margin="0,0,4,0"
+                                                                Background="{DynamicResource Surface.Card}"
+                                                                Foreground="{DynamicResource Text.Primary}"
+                                                                BorderBrush="{DynamicResource Border.Default}"
+                                                                BorderThickness="1"
+                                                                Cursor="Hand"/>
+                                                        <Button Click="OpenAttachment_Click"
+                                                                Tag="{Binding}"
+                                                                Content="{DynamicResource Chat_AttachFile_Open}"
+                                                                FontSize="11"
+                                                                Padding="6,2"
+                                                                Background="{DynamicResource Accent.Primary}"
+                                                                Foreground="White"
+                                                                BorderThickness="0"
+                                                                Cursor="Hand"/>
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding AttachmentIcon}"
+                                                                   FontSize="18"
+                                                                   FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                                                   VerticalAlignment="Center"
+                                                                   Margin="0,0,8,0"/>
+                                                        <StackPanel VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding AttachmentFileName}"
+                                                                       FontSize="12" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource Text.Primary}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       MaxWidth="160"/>
+                                                            <TextBlock Text="{Binding AttachmentSizeFormatted}"
+                                                                       FontSize="10"
+                                                                       Foreground="{DynamicResource Text.Secondary}"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
                                             <TextBlock Text="{Binding MessageText}"
                                                        FontSize="12"
                                                        TextWrapping="Wrap"

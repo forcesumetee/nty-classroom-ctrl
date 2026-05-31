@@ -23,6 +23,12 @@ public partial class App : Application
 
     public static IpcClient? Ipc { get; private set; }
 
+    /// <summary>Phase 19 (v1.1): chat-embedded file-attachment persistence
+    /// + open/download helpers.  Singleton shared between MainWindow's
+    /// dispatch arms (receive path) + the chat-bubble UI (open / copy
+    /// actions in the Conference sidebar template).</summary>
+    public static ClassroomCtrl.Shared.Attachments.AttachmentManager? Attachments { get; private set; }
+
     [System.Runtime.InteropServices.DllImport("shcore.dll")]
     private static extern int SetProcessDpiAwareness(int value);
 
@@ -64,6 +70,10 @@ public partial class App : Application
         }
 
         Ipc = new IpcClient();
+        // Phase 19 (v1.1) — singleton attachment manager.  Order-insensitive
+        // wrt Ipc/MainWindow init since SaveAsync is only ever called from
+        // dispatch arms which fire after Ipc + MainWindow are up.
+        Attachments = new ClassroomCtrl.Shared.Attachments.AttachmentManager();
         Ipc.Start();
 
         _mainWindow = new MainWindow();

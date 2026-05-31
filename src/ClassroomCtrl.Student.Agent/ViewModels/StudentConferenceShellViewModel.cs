@@ -59,14 +59,90 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     /// <summary>Phase 16-X (Bug G fix) — append a received chat to the
     /// Conference conversation.  Called by MainWindow on inbound
     /// ChatBroadcast with IsConferenceContext=true.</summary>
-    public void AppendConferenceChat(string senderName, string text)
+    public void AppendConferenceChat(string senderName, string text,
+        ClassroomCtrl.Shared.Protocol.FileAttachment? attachment = null)
     {
         ConferenceConversation.Messages.Add(new ModelChatMessage
         {
             SenderName = string.IsNullOrEmpty(senderName) ? "Participant" : senderName,
             Kind = ChatMessageKind.Teacher,
             MessageText = text,
+            Attachment = attachment,
         });
+    }
+
+    // Phase 19 (v1.1) — Conference sidebar attach button state.  Mirrors the
+    // Teacher VM design: metadata DTO + cached byte buffer; cleared on Send
+    // or explicit dismiss.  The OpenAttachmentPicker bridge fires the
+    // OpenFileDialog from MainWindow's UI thread context (App.Current
+    // .Dispatcher walk in PickAttachment helper).
+    [ObservableProperty] private ClassroomCtrl.Shared.Protocol.FileAttachment? draftAttachment;
+    private byte[]? _draftAttachmentBytes;
+
+    public bool HasDraftAttachment => DraftAttachment != null;
+    public string DraftAttachmentLabel => DraftAttachment == null
+        ? ""
+        : $"{DraftAttachment.FileName} ({ClassroomCtrl.Shared.Attachments.AttachmentManager.FormatSize(DraftAttachment.FileSize)})";
+
+    partial void OnDraftAttachmentChanged(ClassroomCtrl.Shared.Protocol.FileAttachment? value)
+    {
+        OnPropertyChanged(nameof(HasDraftAttachment));
+        OnPropertyChanged(nameof(DraftAttachmentLabel));
+    }
+
+    /// <summary>Phase 19 — file picker invoked from the 📎 button in the
+    /// Conference sidebar.  Caps at 10 MB + blocks .exe/.bat/etc; failure
+    /// surfaces via best-effort LogToFile (the sidebar doesn't have a
+    /// system-chat surface to dump errors into like Teacher does).</summary>
+    public void OpenAttachmentPicker()
+    {
+        try
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = ClassroomCtrl.Shared.Localization.Loc.Get("Chat_AttachFile_Tooltip", "Attach file"),
+                Filter = "Documents|*.pdf;*.docx;*.xlsx;*.pptx;*.txt;*.rtf|" +
+                         "Images|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp|" +
+                         "Archives|*.zip;*.rar;*.7z|" +
+                         "All files|*.*",
+                CheckFileExists = true,
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            var info = new System.IO.FileInfo(dlg.FileName);
+            if (info.Length > 10 * 1024 * 1024)
+            {
+                IpcClient.LogToFile($"[StudentConferenceShellViewModel] Attach blocked: size {info.Length} > 10MB");
+                return;
+            }
+            var ext = info.Extension.ToLowerInvariant();
+            var blocked = new[] { ".exe", ".bat", ".scr", ".com", ".cmd", ".vbs", ".ps1", ".msi", ".dll" };
+            if (System.Array.IndexOf(blocked, ext) >= 0)
+            {
+                IpcClient.LogToFile($"[StudentConferenceShellViewModel] Attach blocked: type {ext}");
+                return;
+            }
+
+            _draftAttachmentBytes = System.IO.File.ReadAllBytes(dlg.FileName);
+            DraftAttachment = new ClassroomCtrl.Shared.Protocol.FileAttachment
+            {
+                Id = System.Guid.NewGuid(),
+                FileName = info.Name,
+                FileSize = info.Length,
+                FileType = ext,
+                Data = System.Array.Empty<byte>(),
+            };
+        }
+        catch (System.Exception ex)
+        {
+            IpcClient.LogToFile($"[StudentConferenceShellViewModel] Attach failed: {ex.Message}");
+        }
+    }
+
+    public void ClearDraftAttachment()
+    {
+        DraftAttachment = null;
+        _draftAttachmentBytes = null;
     }
 
     /// <summary>Phase 16-D — Conference role.  Student is a Participant today;
@@ -294,8 +370,23 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
         SendConferenceChatCommand = new RelayCommand(async () =>
         {
             var text = (ConferenceConversation.DraftInput ?? "").Trim();
-            if (string.IsNullOrEmpty(text)) return;
+            // Phase 19 (v1.1) — allow attachment-only sends (no caption text).
+            if (string.IsNullOrEmpty(text) && DraftAttachment == null) return;
             ConferenceConversation.DraftInput = "";
+
+            // Phase 19 — fill the attachment Data slot at Send time + persist
+            // to local cache so the sender's own Open button on the
+            // optimistic bubble works without a wire echo.
+            ClassroomCtrl.Shared.Protocol.FileAttachment? attach = null;
+            if (DraftAttachment != null && _draftAttachmentBytes != null)
+            {
+                attach = DraftAttachment;
+                attach.Data = _draftAttachmentBytes;
+                if (App.Attachments != null)
+                {
+                    try { await App.Attachments.SaveAsync(attach).ConfigureAwait(true); } catch { }
+                }
+            }
 
             // Optimistic local Me-bubble — broadcast doesn't echo to sender.
             ConferenceConversation.Messages.Add(new ModelChatMessage
@@ -303,7 +394,10 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
                 SenderName = "Me",
                 Kind = ChatMessageKind.Student,
                 MessageText = text,
+                Attachment = attach,
             });
+
+            ClearDraftAttachment();
 
             if (App.Ipc == null) return;
             var msg = new ProtoChatMessage
@@ -313,6 +407,7 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
                 Text = text,
                 TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 IsConferenceContext = true,
+                Attachment = attach,
             };
             try
             {

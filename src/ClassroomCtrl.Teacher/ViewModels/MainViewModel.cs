@@ -130,6 +130,45 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     /// flips today, including the 14-B StoppedDueToError handler).</summary>
     [ObservableProperty] private bool isBroadcastingCamera;
 
+    /// <summary>Phase 19 (v1.1) — Conference sidebar chat draft attachment.
+    /// AttachFileCommand fires the OpenFileDialog; once a file is selected
+    /// (and passes the 10-MB + extension-blocklist gates) the bytes are
+    /// cached in <see cref="_conferenceDraftAttachmentBytes"/> and the
+    /// metadata DTO is wired here so the sidebar preview strip shows it.
+    /// SendConferenceChat zips the attachment into the wire ChatMessage,
+    /// clears DraftAttachment, and resets the byte buffer.</summary>
+    [ObservableProperty] private ClassroomCtrl.Shared.Protocol.FileAttachment? conferenceDraftAttachment;
+    private byte[]? _conferenceDraftAttachmentBytes;
+
+    /// <summary>Same pattern for the Classroom rail (Everyone / DM tabs).
+    /// Separate field so a teacher mid-composing in the Conference sidebar
+    /// doesn't see their attachment vanish if they tab over to the
+    /// Classroom rail and click attach there.</summary>
+    [ObservableProperty] private ClassroomCtrl.Shared.Protocol.FileAttachment? classroomDraftAttachment;
+    private byte[]? _classroomDraftAttachmentBytes;
+
+    /// <summary>Phase 19 — surfaces "📄 worksheet.pdf (250 KB)" in the
+    /// Conference sidebar preview strip.  Recomputed when the OP changes.</summary>
+    public string ConferenceDraftAttachmentLabel => ConferenceDraftAttachment == null
+        ? ""
+        : $"{ConferenceDraftAttachment.FileName} ({ClassroomCtrl.Shared.Attachments.AttachmentManager.FormatSize(ConferenceDraftAttachment.FileSize)})";
+    public bool HasConferenceDraftAttachment => ConferenceDraftAttachment != null;
+    public string ClassroomDraftAttachmentLabel => ClassroomDraftAttachment == null
+        ? ""
+        : $"{ClassroomDraftAttachment.FileName} ({ClassroomCtrl.Shared.Attachments.AttachmentManager.FormatSize(ClassroomDraftAttachment.FileSize)})";
+    public bool HasClassroomDraftAttachment => ClassroomDraftAttachment != null;
+
+    partial void OnConferenceDraftAttachmentChanged(ClassroomCtrl.Shared.Protocol.FileAttachment? value)
+    {
+        OnPropertyChanged(nameof(ConferenceDraftAttachmentLabel));
+        OnPropertyChanged(nameof(HasConferenceDraftAttachment));
+    }
+    partial void OnClassroomDraftAttachmentChanged(ClassroomCtrl.Shared.Protocol.FileAttachment? value)
+    {
+        OnPropertyChanged(nameof(ClassroomDraftAttachmentLabel));
+        OnPropertyChanged(nameof(HasClassroomDraftAttachment));
+    }
+
     /// <summary>Phase 17.1 step 2 — bound by <c>Window.TaskbarItemInfo.Overlay</c>
     /// to paint a red-dot badge on the Teacher's taskbar icon when one or
     /// more notifications are unread.  Generated programmatically by
@@ -277,13 +316,15 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             MessageText = text,
         });
 
-    internal void AppendStudentChat(string senderName, string text)
+    internal void AppendStudentChat(string senderName, string text,
+        ClassroomCtrl.Shared.Protocol.FileAttachment? attachment = null)
     {
         EveryoneConversation.Messages.Add(new ChatMessage
         {
             SenderName = senderName,
             Kind = ChatMessageKind.Student,
             MessageText = text,
+            Attachment = attachment,
         });
         // If the user is reading some other tab, mark Everyone as having unread.
         if (ActiveConversation != EveryoneConversation) EveryoneConversation.UnreadCount++;
@@ -1944,21 +1985,28 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             // Phase 17.2 step 1 (Bug I fix, 2026-05-31) — diagnostic so the
-            // next 2-PC suppression bug has a trace line.  Captures the three
-            // suppression-relevant signals at decision time.  Debug.WriteLine
-            // is the Teacher equivalent of IpcClient.LogToFile on the Student
-            // side: visible in attached debuggers + DebugView, zero perf cost
-            // in Release without a debugger attached.
+            // next 2-PC suppression bug has a trace line.
             var isActive = IsWindowActivelyVisible();
             System.Diagnostics.Debug.WriteLine($"[MainViewModel] OnChatReceived sender={chat.SenderName} " +
                                                 $"isConf={chat.IsConferenceContext} hasRecipient={chat.RecipientId.HasValue} " +
-                                                $"isWindowActive={isActive}");
+                                                $"isWindowActive={isActive} hasAttachment={chat.Attachment != null}");
+
+            // Phase 19 (v1.1) — persist any inline attachment BEFORE adding
+            // the chat-bubble VM so the Open / Download buttons in the
+            // template always have a valid local file.  Fire-and-forget the
+            // SaveAsync; the rare disk-write failure logs to Debug and
+            // gracefully skips the attachment (text-only fallback).
+            if (chat.Attachment != null && App.Attachments != null)
+            {
+                _ = App.Attachments.SaveAsync(chat.Attachment).ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        System.Diagnostics.Debug.WriteLine($"[MainViewModel] AttachmentSave failed: {t.Exception?.GetBaseException().Message}");
+                });
+            }
 
             // Phase 16-X (Bug G fix, 2026-06-01) — Conference-context chats
-            // land in ConferenceConversation only.  Earliest filter point so
-            // the existing DM / Room / Everyone branches stay simple.  A
-            // pre-16-X sender doesn't set the flag, so legacy broadcasts
-            // fall through to the existing path unchanged.
+            // land in ConferenceConversation only.
             if (chat.IsConferenceContext)
             {
                 ConferenceConversation.Messages.Add(new ChatMessage
@@ -1966,6 +2014,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                     SenderName = string.IsNullOrEmpty(chat.SenderName) ? "Participant" : chat.SenderName,
                     Kind = ChatMessageKind.Student,
                     MessageText = chat.Text,
+                    Attachment = chat.Attachment,
                 });
 
                 // Phase 17.2 step 1 (Bug I fix) — relaxed suppression rule.
@@ -2021,6 +2070,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                     SenderName = chat.SenderName,
                     Kind = ChatMessageKind.Student,
                     MessageText = chat.Text,
+                    Attachment = chat.Attachment,
                 });
                 if (ActiveConversation != conv) conv.UnreadCount++;
 
@@ -2046,7 +2096,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 var room = Rooms.FirstOrDefault(r => r.RoomId == chat.RoomId.Value);
                 prefix = room != null ? $"[{room.RoomName}] " : "[Room] ";
             }
-            AppendStudentChat(chat.SenderName, prefix + chat.Text);
+            AppendStudentChat(chat.SenderName, prefix + chat.Text, chat.Attachment);
 
             // Phase 17.2 step 1 (Bug I fix) — relaxed suppression for whole-
             // class / room chats.  OLD rule was "suppress whenever
@@ -3049,10 +3099,27 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     {
         var conv = ConferenceConversation;
         var text = (conv.DraftInput ?? "").Trim();
-        if (string.IsNullOrEmpty(text)) return;
+        // Phase 19 (v1.1) — allow empty text body if an attachment is present
+        // (LINE-style "file alone, no caption" send).
+        if (string.IsNullOrEmpty(text) && ConferenceDraftAttachment == null) return;
         conv.DraftInput = "";
 
         if (App.Server == null) return;
+
+        // Phase 19 — embed attachment bytes inline before clearing the draft.
+        ClassroomCtrl.Shared.Protocol.FileAttachment? attach = null;
+        if (ConferenceDraftAttachment != null && _conferenceDraftAttachmentBytes != null)
+        {
+            attach = ConferenceDraftAttachment;
+            attach.Data = _conferenceDraftAttachmentBytes;
+        }
+
+        // Persist the outgoing attachment locally too so the teacher can
+        // Open it from their own bubble without re-fetching.  Best-effort.
+        if (attach != null)
+        {
+            try { await App.Attachments!.SaveAsync(attach).ConfigureAwait(true); } catch { }
+        }
 
         // Append outgoing bubble locally so the user sees their own message
         // immediately without waiting for any echo (broadcast doesn't echo
@@ -3062,17 +3129,109 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             SenderName = Loc.Get("Chat_MePrefix"),
             Kind = ChatMessageKind.Teacher,
             MessageText = text,
+            Attachment = attach,
         });
+
+        ClearConferenceDraftAttachment();
 
         var senderName = Loc.Get("Conf_TeacherDisplayName", "Teacher");
         try
         {
             await App.Server.BroadcastConferenceChatAsync(text, senderName,
-                System.Threading.CancellationToken.None);
+                System.Threading.CancellationToken.None, attach);
         }
         catch (System.Exception ex)
         {
             AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
+        }
+    }
+
+    /// <summary>Phase 19 (v1.1) — Conference sidebar 📎 attach button.
+    /// Reads bytes immediately so a later Send can fire-and-forget the wire
+    /// even if the user has since renamed / moved the source file.  Size +
+    /// extension gates surface user-visible system-chat messages on failure.</summary>
+    public void OpenConferenceAttachmentPicker()
+    {
+        var picked = PickAttachment();
+        if (picked == null) return;
+        ConferenceDraftAttachment = picked.Value.Item1;
+        _conferenceDraftAttachmentBytes = picked.Value.Item2;
+    }
+
+    /// <summary>Same as <see cref="OpenConferenceAttachmentPicker"/> for the
+    /// Classroom rail (Everyone tab) chat — DM tab reuses the same draft
+    /// slot but routes through SendChat's DM branch.</summary>
+    public void OpenClassroomAttachmentPicker()
+    {
+        var picked = PickAttachment();
+        if (picked == null) return;
+        ClassroomDraftAttachment = picked.Value.Item1;
+        _classroomDraftAttachmentBytes = picked.Value.Item2;
+    }
+
+    public void ClearConferenceDraftAttachment()
+    {
+        ConferenceDraftAttachment = null;
+        _conferenceDraftAttachmentBytes = null;
+    }
+    public void ClearClassroomDraftAttachment()
+    {
+        ClassroomDraftAttachment = null;
+        _classroomDraftAttachmentBytes = null;
+    }
+
+    /// <summary>Phase 19 shared OpenFileDialog + validation gate.  Returns
+    /// (metadata DTO, bytes) tuple or null on cancel / failure.  10 MB cap +
+    /// extension blocklist mirror the v1.1 design note in the FileAttachment
+    /// XML doc.</summary>
+    private (ClassroomCtrl.Shared.Protocol.FileAttachment, byte[])? PickAttachment()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = Loc.Get("Chat_AttachFile_Tooltip", "Attach file"),
+            Filter = "Documents|*.pdf;*.docx;*.xlsx;*.pptx;*.txt;*.rtf|" +
+                     "Images|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp|" +
+                     "Archives|*.zip;*.rar;*.7z|" +
+                     "All files|*.*",
+            CheckFileExists = true,
+        };
+        if (dlg.ShowDialog() != true) return null;
+
+        try
+        {
+            var info = new System.IO.FileInfo(dlg.FileName);
+            if (info.Length > 10 * 1024 * 1024)
+            {
+                AppendErrorChat(Loc.Get("Chat_AttachFile_TooLarge",
+                    "File too large (max 10 MB)"));
+                return null;
+            }
+            var ext = info.Extension.ToLowerInvariant();
+            var blocked = new[] { ".exe", ".bat", ".scr", ".com", ".cmd", ".vbs", ".ps1", ".msi", ".dll" };
+            if (blocked.Contains(ext))
+            {
+                AppendErrorChat(Loc.Get("Chat_AttachFile_TypeBlocked",
+                    "File type not allowed"));
+                return null;
+            }
+
+            var bytes = System.IO.File.ReadAllBytes(dlg.FileName);
+            var meta = new ClassroomCtrl.Shared.Protocol.FileAttachment
+            {
+                Id = System.Guid.NewGuid(),
+                FileName = info.Name,
+                FileSize = info.Length,
+                FileType = ext,
+                // Data populated only at Send time so the draft preview
+                // doesn't carry a heavy byte[] in the VM longer than needed.
+                Data = System.Array.Empty<byte>(),
+            };
+            return (meta, bytes);
+        }
+        catch (System.Exception ex)
+        {
+            AppendErrorChat(Loc.Format("Err_SendFailed", ex.Message));
+            return null;
         }
     }
 

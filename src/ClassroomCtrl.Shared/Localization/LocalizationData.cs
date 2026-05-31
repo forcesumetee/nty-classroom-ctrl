@@ -94,6 +94,13 @@ internal static class LocalizationData
         // ConferenceGalleryWindow while the teacher's session is still active.
         ["Rejoin_BannerTitle"] = "Conference in progress",
         ["Rejoin_ButtonText"] = "Rejoin Conference",
+        // Phase 19 (v1.1) — file attachments in chat.
+        ["Chat_AttachFile_Tooltip"] = "Attach file",
+        ["Chat_AttachFile_Clear"] = "Remove attachment",
+        ["Chat_AttachFile_Download"] = "Download",
+        ["Chat_AttachFile_Open"] = "Open",
+        ["Chat_AttachFile_TooLarge"] = "File too large (max 10 MB)",
+        ["Chat_AttachFile_TypeBlocked"] = "File type not allowed",
         ["Menu_LockScreen"] = "Lock screen",
         ["Menu_UnlockScreen"] = "Unlock screen",
 
@@ -741,6 +748,12 @@ internal static class LocalizationData
         ["Notif_UnreadTooltip"] = "ไม่ได้อ่าน {0} รายการ",
         ["Rejoin_BannerTitle"] = "การประชุมกำลังดำเนินอยู่",
         ["Rejoin_ButtonText"] = "เข้าร่วมการประชุมอีกครั้ง",
+        ["Chat_AttachFile_Tooltip"] = "แนบไฟล์",
+        ["Chat_AttachFile_Clear"] = "ลบไฟล์แนบ",
+        ["Chat_AttachFile_Download"] = "ดาวน์โหลด",
+        ["Chat_AttachFile_Open"] = "เปิด",
+        ["Chat_AttachFile_TooLarge"] = "ไฟล์ใหญ่เกินไป (ไม่เกิน 10 MB)",
+        ["Chat_AttachFile_TypeBlocked"] = "ประเภทไฟล์ไม่อนุญาต",
         ["Menu_LockScreen"] = "ล็อกหน้าจอ",
         ["Menu_UnlockScreen"] = "ปลดล็อกหน้าจอ",
 
