@@ -100,6 +100,15 @@ public partial class ConferenceTile : UserControl
 
     private void OuterBorder_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        try
+        {
+            System.IO.File.AppendAllText(@"c:\ClassroomCtrl\layout_log.txt", 
+                $"[{System.DateTime.Now:HH:mm:ss.fff}] [OuterBorder_SizeChanged] " +
+                $"WidthChanged={e.WidthChanged}, Prev={e.PreviousSize}, New={e.NewSize}, " +
+                $"ActualWidth={OuterBorder.ActualWidth}. TargetHeight={OuterBorder.ActualWidth * 0.5625}\n");
+        }
+        catch { }
+
         // Phase 22.5-A: enforce 16:9 aspect ratio purely in code-behind
         // This avoids the circular layout loop caused by binding Height to ActualWidth.
         // Because the Width is dictated by the UniformGrid slot, updating the Height
@@ -107,6 +116,12 @@ public partial class ConferenceTile : UserControl
         if (e.WidthChanged)
         {
             OuterBorder.Height = OuterBorder.ActualWidth * 0.5625;
+            try
+            {
+                System.IO.File.AppendAllText(@"c:\ClassroomCtrl\layout_log.txt", 
+                    $"[{System.DateTime.Now:HH:mm:ss.fff}] [OuterBorder_SizeChanged] Set Height={OuterBorder.Height}, ActualHeight={OuterBorder.ActualHeight}\n");
+            }
+            catch { }
         }
     }
 }

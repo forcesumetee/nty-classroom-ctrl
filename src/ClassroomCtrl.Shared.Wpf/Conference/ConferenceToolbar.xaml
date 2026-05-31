@@ -248,7 +248,7 @@
                         <StackPanel x:Name="ReactionRow" Orientation="Horizontal"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center">
-                            <Button Width="44" Height="44" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0" Padding="0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
@@ -262,7 +262,7 @@
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/thumbs_up.png"
                                        Stretch="Fill"/>
                             </Button>
-                            <Button Width="44" Height="44" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0" Padding="0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
@@ -276,7 +276,7 @@
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/heart.png"
                                        Stretch="Fill"/>
                             </Button>
-                            <Button Width="44" Height="44" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0" Padding="0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
@@ -290,7 +290,7 @@
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/laugh.png"
                                        Stretch="Fill"/>
                             </Button>
-                            <Button Width="44" Height="44" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0" Padding="0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
@@ -304,7 +304,7 @@
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/surprise.png"
                                        Stretch="Fill"/>
                             </Button>
-                            <Button Width="44" Height="44" Margin="2,0"
+                            <Button Width="44" Height="44" Margin="2,0" Padding="0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
