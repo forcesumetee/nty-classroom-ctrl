@@ -6,9 +6,16 @@
              xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters"
              xmlns:models="clr-namespace:ClassroomCtrl.Shared.Models;assembly=ClassroomCtrl.Shared"
              mc:Ignorable="d"
-             Background="{DynamicResource Surface.Elevated}"
-             FontFamily="Segoe UI"
+             Background="{StaticResource ConfSidebarBgBrush}"
+             TextElement.Foreground="{StaticResource ConfTextPrimaryBrush}"
+             FontFamily="{StaticResource ConfFontFamily}"
              d:DesignWidth="340" d:DesignHeight="640">
+    <!-- Phase 22 — dark sidebar.  Background flipped from Classroom
+         Surface.Elevated to ConfSidebarBgBrush; TextElement.Foreground
+         set so every descendant TextBlock that doesn't override
+         Foreground inherits a light-on-dark color.  All bindings
+         identical to the 15-D / 16-D / 19 baseline; only colors and
+         borders changed. -->
     <!-- Phase 15-D step 2 — slide-in sidebar overlay for the Conference shell.
          Hosts two tabs (Chat | Participants).  Chat reuses EveryoneConversation
          (the same conversation backing the Classroom right-rail), giving a
@@ -36,7 +43,7 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}"/>
+            <Setter Property="Foreground" Value="{StaticResource ConfTextSecondaryBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Template">
@@ -45,12 +52,13 @@
                         <Border x:Name="Pill" CornerRadius="999"
                                 Background="{TemplateBinding Background}">
                             <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Pill" Property="Background"
-                                        Value="{DynamicResource Surface.Card}"/>
+                                        Value="{StaticResource ConfHoverOverlayBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -59,7 +67,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Border BorderBrush="{DynamicResource Border.Soft}"
+    <Border BorderBrush="{StaticResource ConfBorderSubtleBrush}"
             BorderThickness="1,0,0,0">
         <Grid>
             <Grid.RowDefinitions>
@@ -71,7 +79,7 @@
 
             <!-- Header bar: tabs on the left, close X on the right. -->
             <Border Grid.Row="0"
-                    BorderBrush="{DynamicResource Border.Soft}"
+                    BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                     BorderThickness="0,0,0,1"
                     Padding="10,8">
                 <DockPanel>
@@ -88,9 +96,11 @@
                             ToolTip="{DynamicResource Conf_SidebarClose}">
                         <TextBlock Text="✕" FontSize="14"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Foreground="{DynamicResource Text.Secondary}"/>
+                                   Foreground="{StaticResource ConfTextSecondaryBrush}"/>
                     </Button>
-                    <!-- Tab cluster. -->
+                    <!-- Tab cluster.  Active tab fills with the accent
+                         blue (matches the Zoom / Meet tab convention)
+                         + light text; inactive stays secondary. -->
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Command="{Binding SelectConferenceChatTabCommand}"
                                 Content="{DynamicResource Conf_SidebarChatTab}">
@@ -98,8 +108,8 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource SidebarTabPill}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsConferenceChatTabSelected}" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource Accent.PrimarySubtle}"/>
-                                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+                                            <Setter Property="Background" Value="{StaticResource ConfAccentBlueBrush}"/>
+                                            <Setter Property="Foreground" Value="White"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -111,8 +121,8 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource SidebarTabPill}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsConferenceParticipantsTabSelected}" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource Accent.PrimarySubtle}"/>
-                                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+                                            <Setter Property="Background" Value="{StaticResource ConfAccentBlueBrush}"/>
+                                            <Setter Property="Foreground" Value="White"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -131,7 +141,7 @@
                     Visibility="{Binding IsConferenceChatTabSelected, Converter={StaticResource BoolToVisibility}}">
                     <!-- Bottom input row. -->
                     <Border DockPanel.Dock="Bottom"
-                            BorderBrush="{DynamicResource Border.Soft}"
+                            BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                             BorderThickness="0,1,0,0"
                             Padding="10">
                         <Grid>
@@ -139,16 +149,16 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <!-- Phase 16-X (Bug G fix, 2026-06-01) — chat tab
-                                 binds to ConferenceConversation.  Phase 19
-                                 (v1.1) — added 📎 attach button to the left
-                                 of the TextBox + a draft-preview strip
-                                 above this row (see DockPanel.Dock="Top"
-                                 sibling below).  All three commands resolve
-                                 by name on both Teacher.MainViewModel + the
-                                 student shell VM via reflection in the
-                                 code-behind (consistent with the existing
-                                 ReactionButton_Click pattern). -->
+                            <!-- Phase 16-X (Bug G fix) — chat tab binds to
+                                 ConferenceConversation.  Phase 19 — 📎 attach
+                                 button + draft preview strip preserved.
+                                 Phase 22 — TextBox.Default style dropped in
+                                 favor of an inline dark style so the input
+                                 reads as dark-on-dark (the Classroom
+                                 TextBox.Default has a near-white background
+                                 that becomes a glaring white box on the
+                                 dark surface).  Send button background
+                                 swapped to ConfAccentBlueBrush. -->
                             <Button Grid.Column="0"
                                     Click="AttachFileButton_Click"
                                     Width="36" Height="36" Padding="0"
@@ -161,12 +171,21 @@
                             </Button>
                             <TextBox Grid.Column="0"
                                      Margin="40,0,0,0"
-                                     Style="{DynamicResource TextBox.Default}"
+                                     Padding="8,6"
+                                     Background="{StaticResource ConfChatInputBgBrush}"
+                                     Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                     CaretBrush="{StaticResource ConfTextPrimaryBrush}"
+                                     BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                                     BorderThickness="1"
+                                     FontFamily="{StaticResource ConfFontFamily}"
                                      Text="{Binding ConferenceConversation.DraftInput, UpdateSourceTrigger=PropertyChanged}"/>
                             <Button Grid.Column="1"
-                                    Style="{DynamicResource Button.Primary}"
+                                    Background="{StaticResource ConfAccentBlueBrush}"
+                                    BorderThickness="0"
+                                    Foreground="White"
                                     Command="{Binding SendConferenceChatCommand}"
                                     Margin="8,0,0,0" Width="40" Height="40" Padding="0"
+                                    Cursor="Hand"
                                     ToolTip="{DynamicResource Btn_Send}">
                                 <TextBlock Text="➤" FontSize="14" Foreground="White"/>
                             </Button>
@@ -181,8 +200,8 @@
                          when neither host VM has draft state. -->
                     <Border DockPanel.Dock="Bottom"
                             Margin="10,0,10,0" Padding="8,6"
-                            Background="{DynamicResource Surface.Card}"
-                            BorderBrush="{DynamicResource Border.Soft}"
+                            Background="{StaticResource ConfChatInputBgBrush}"
+                            BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                             BorderThickness="1" CornerRadius="6">
                         <Border.Style>
                             <Style TargetType="Border">
@@ -205,10 +224,10 @@
                                     Cursor="Hand"
                                     ToolTip="{DynamicResource Chat_AttachFile_Clear}">
                                 <TextBlock Text="✕" FontSize="12"
-                                           Foreground="{DynamicResource Text.Secondary}"/>
+                                           Foreground="{StaticResource ConfTextSecondaryBrush}"/>
                             </Button>
                             <TextBlock VerticalAlignment="Center"
-                                       Foreground="{DynamicResource Text.Primary}"
+                                       Foreground="{StaticResource ConfTextPrimaryBrush}"
                                        FontSize="12"
                                        TextTrimming="CharacterEllipsis">
                                 <Run Text="📎"/>
@@ -230,26 +249,29 @@
                                       Margin="10,8">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:ChatMessage}">
+                                    <!-- Phase 22 — dark bubble.  v1.2 carry-over:
+                                         distinguish own / other via an IsOwn
+                                         property on the ChatMessage VM; today
+                                         every bubble uses ConfChatOtherBubbleBrush
+                                         since the model doesn't expose ownership. -->
                                     <Border Margin="0,0,0,6" Padding="10,8" CornerRadius="8"
-                                            Background="{DynamicResource Surface.Card}"
-                                            BorderBrush="{DynamicResource Border.Soft}"
+                                            Background="{StaticResource ConfChatOtherBubbleBrush}"
+                                            BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                                             BorderThickness="1">
                                         <StackPanel>
                                             <TextBlock Text="{Binding SenderName}"
                                                        FontSize="11" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource Text.Secondary}"/>
-                                            <!-- Phase 19 (v1.1) — file-attachment card.
-                                                 Visible iff the ChatMessage VM carries
-                                                 a non-null Attachment.  Icon + filename +
-                                                 size on the left; Download + Open buttons
-                                                 on the right.  Both buttons forward the
-                                                 ChatMessage as Tag so the code-behind can
-                                                 extract the FileAttachment without
-                                                 plumbing CommandParameter on every host. -->
+                                                       Foreground="{StaticResource ConfTextSecondaryBrush}"/>
+                                            <!-- Phase 19 file-attachment card — dark-themed.
+                                                 Surface flipped to ConfChatOwnBubbleBrush
+                                                 so the card reads as a panel-on-panel
+                                                 inset.  Download / Open buttons recolored
+                                                 (Download neutral, Open accent blue).
+                                                 All Click handlers + Tag bindings preserved. -->
                                             <Border Margin="0,4,0,4" Padding="8,6"
                                                     CornerRadius="6"
-                                                    Background="{DynamicResource Surface.Elevated}"
-                                                    BorderBrush="{DynamicResource Border.Soft}"
+                                                    Background="{StaticResource ConfChatOwnBubbleBrush}"
+                                                    BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                                                     BorderThickness="1"
                                                     Visibility="{Binding HasAttachment, Converter={StaticResource BoolToVisibility}}">
                                                 <DockPanel>
@@ -260,9 +282,9 @@
                                                                 Content="{DynamicResource Chat_AttachFile_Download}"
                                                                 FontSize="11"
                                                                 Padding="6,2" Margin="0,0,4,0"
-                                                                Background="{DynamicResource Surface.Card}"
-                                                                Foreground="{DynamicResource Text.Primary}"
-                                                                BorderBrush="{DynamicResource Border.Default}"
+                                                                Background="Transparent"
+                                                                Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                                                BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                                                                 BorderThickness="1"
                                                                 Cursor="Hand"/>
                                                         <Button Click="OpenAttachment_Click"
@@ -270,7 +292,7 @@
                                                                 Content="{DynamicResource Chat_AttachFile_Open}"
                                                                 FontSize="11"
                                                                 Padding="6,2"
-                                                                Background="{DynamicResource Accent.Primary}"
+                                                                Background="{StaticResource ConfAccentBlueBrush}"
                                                                 Foreground="White"
                                                                 BorderThickness="0"
                                                                 Cursor="Hand"/>
@@ -284,12 +306,12 @@
                                                         <StackPanel VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding AttachmentFileName}"
                                                                        FontSize="12" FontWeight="SemiBold"
-                                                                       Foreground="{DynamicResource Text.Primary}"
+                                                                       Foreground="{StaticResource ConfTextPrimaryBrush}"
                                                                        TextTrimming="CharacterEllipsis"
                                                                        MaxWidth="160"/>
                                                             <TextBlock Text="{Binding AttachmentSizeFormatted}"
                                                                        FontSize="10"
-                                                                       Foreground="{DynamicResource Text.Secondary}"/>
+                                                                       Foreground="{StaticResource ConfTextSecondaryBrush}"/>
                                                         </StackPanel>
                                                     </StackPanel>
                                                 </DockPanel>
@@ -297,7 +319,7 @@
                                             <TextBlock Text="{Binding MessageText}"
                                                        FontSize="12"
                                                        TextWrapping="Wrap"
-                                                       Foreground="{DynamicResource Text.Primary}"
+                                                       Foreground="{StaticResource ConfTextPrimaryBrush}"
                                                        Margin="0,2,0,0"/>
                                         </StackPanel>
                                     </Border>
@@ -344,25 +366,23 @@
                                 </StackPanel.Style>
                                 <TextBlock Text="{DynamicResource Conf_RaisedHandsHeader}"
                                            FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource Text.Secondary}"
+                                           Foreground="{StaticResource ConfTextSecondaryBrush}"
                                            Margin="2,0,0,6"/>
                                 <ItemsControl ItemsSource="{Binding ConferenceGallery.RaisedHandQueue}"
                                               Margin="0,0,0,8">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Background="#FBBF24"
+                                            <!-- Amber raised-hand row.  Dark text on amber
+                                                 reads as "alert" without being aggressive;
+                                                 matches the hand-raise badge on the tile. -->
+                                            <Border Background="{StaticResource ConfAccentYellowBrush}"
                                                     CornerRadius="8"
                                                     Padding="10,8" Margin="0,0,0,4">
                                                 <DockPanel>
-                                                    <!-- Phase 16-D step 10 — Recognize is a host-only
-                                                         action; participants see the queue but cannot
-                                                         dismiss hands.  Visibility binds to the host
-                                                         shell VM's Role.CanRecognizeHand via the same
-                                                         AncestorType=UserControl walk the Command uses. -->
                                                     <Button DockPanel.Dock="Right"
                                                             Content="{DynamicResource Conf_Recognize}"
                                                             FontSize="11" FontWeight="SemiBold"
-                                                            Background="#1F2937" Foreground="White"
+                                                            Background="#1F1F23" Foreground="White"
                                                             BorderThickness="0" Padding="10,4"
                                                             Cursor="Hand"
                                                             Focusable="False" FocusVisualStyle="{x:Null}"
@@ -373,10 +393,11 @@
                                                                       RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"/>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="✋" FontSize="14" Margin="0,0,8,0"/>
+                                                        <TextBlock Text="✋" FontSize="14" Margin="0,0,8,0"
+                                                                   Foreground="#1F1F23"/>
                                                         <TextBlock Text="{Binding DisplayName}"
                                                                    FontSize="12" FontWeight="SemiBold"
-                                                                   Foreground="#1F2937"
+                                                                   Foreground="#1F1F23"
                                                                    VerticalAlignment="Center"
                                                                    TextTrimming="CharacterEllipsis"/>
                                                     </StackPanel>
@@ -385,7 +406,7 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <Border Height="1" Background="{DynamicResource Border.Soft}"
+                                <Border Height="1" Background="{StaticResource ConfBorderSubtleBrush}"
                                         Margin="0,0,0,8"/>
                             </StackPanel>
 
@@ -393,25 +414,29 @@
                             <ItemsControl ItemsSource="{Binding Students}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="{DynamicResource Surface.Card}"
-                                            BorderBrush="{DynamicResource Border.Soft}"
+                                    <!-- Dark participant row.  ConfTileBgBrush matches the
+                                         gallery tile so the surfaces feel like the same
+                                         family.  All bindings (DisplayName, MachineName,
+                                         MicLive, CamLive, HandRaisedVisibility, Role.*
+                                         walks, MuteParticipantCommand) preserved exactly. -->
+                                    <Border Background="{StaticResource ConfTileBgBrush}"
+                                            BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                                             BorderThickness="1"
                                             CornerRadius="8"
                                             Padding="10,8"
                                             Margin="0,0,0,6">
                                         <DockPanel>
-                                            <!-- Avatar placeholder.  Per-student initials
-                                                 would need a converter or a new computed
-                                                 property; the 👤 glyph keeps the list
-                                                 readable today and matches Meet's
-                                                 default-avatar treatment. -->
+                                            <!-- Avatar placeholder.  Semi-transparent blue
+                                                 host-badge brush so it reads as a calm
+                                                 chip on the dark row. -->
                                             <Border DockPanel.Dock="Left"
                                                     Width="36" Height="36"
                                                     CornerRadius="999"
-                                                    Background="{DynamicResource Accent.PrimarySubtle}"
+                                                    Background="{StaticResource ConfHostBadgeBgBrush}"
                                                     Margin="0,0,10,0"
                                                     VerticalAlignment="Center">
                                                 <TextBlock Text="👤" FontSize="18"
+                                                           Foreground="{StaticResource ConfTextPrimaryBrush}"
                                                            HorizontalAlignment="Center"
                                                            VerticalAlignment="Center"/>
                                             </Border>
@@ -420,39 +445,44 @@
                                             <StackPanel DockPanel.Dock="Right"
                                                         Orientation="Horizontal"
                                                         VerticalAlignment="Center">
-                                                <!-- ✋ Hand-raise badge.  Bound to the
-                                                     existing 0x0110/0x0111 wired
-                                                     HandRaisedVisibility. -->
                                                 <Border Padding="6,2"
-                                                        Background="#FBBF24"
+                                                        Background="{StaticResource ConfAccentYellowBrush}"
                                                         CornerRadius="999"
                                                         Margin="0,0,4,0"
                                                         Visibility="{Binding HandRaisedVisibility}">
-                                                    <TextBlock Text="✋" FontSize="11"/>
+                                                    <TextBlock Text="✋" FontSize="11"
+                                                               Foreground="#1F1F23"/>
                                                 </Border>
-                                                <!-- 🎙 Mic indicator — green when speaking,
-                                                     dim when off; matches the gallery
-                                                     tile pattern from Phase 15-C. -->
-                                                <TextBlock Text="🎙" FontSize="14" Margin="4,0">
+                                                <!-- Mic indicator: ConfTextSecondaryBrush
+                                                     when muted, ConfTextPrimaryBrush when
+                                                     live.  Replaces the Opacity-based
+                                                     dim used in 15-C — explicit color
+                                                     reads better on the dark surface. -->
+                                                <TextBlock Text="🎙" FontSize="14" Margin="4,0"
+                                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
-                                                            <Setter Property="Opacity" Value="0.35"/>
+                                                            <Setter Property="Foreground"
+                                                                    Value="{StaticResource ConfTextSecondaryBrush}"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding MicLive}" Value="True">
-                                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                                    <Setter Property="Foreground"
+                                                                            Value="{StaticResource ConfTextPrimaryBrush}"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </TextBlock.Style>
                                                 </TextBlock>
-                                                <!-- 📷 Cam indicator. -->
-                                                <TextBlock Text="📷" FontSize="14" Margin="4,0,0,0">
+                                                <TextBlock Text="📷" FontSize="14" Margin="4,0,0,0"
+                                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
-                                                            <Setter Property="Opacity" Value="0.35"/>
+                                                            <Setter Property="Foreground"
+                                                                    Value="{StaticResource ConfTextSecondaryBrush}"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding CamLive}" Value="True">
-                                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                                    <Setter Property="Foreground"
+                                                                            Value="{StaticResource ConfTextPrimaryBrush}"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
@@ -460,16 +490,13 @@
                                                 </TextBlock>
                                             </StackPanel>
 
-                                            <!-- Phase 16-D step 10 — host-only Mute admin button.
-                                                 Sits between the state-indicator cluster and the name
-                                                 column so the click target doesn't shift when admin
-                                                 actions are absent (participant view).  Visibility
-                                                 binds to Role.CanMuteOthers via the AncestorType
-                                                 walk that other host-bindings use. -->
+                                            <!-- Host-only Mute admin button.  ConfAccentRed
+                                                 keeps the destructive-action color cue. -->
                                             <Button DockPanel.Dock="Right"
                                                     Content="{DynamicResource Conf_Mute}"
                                                     FontSize="11" FontWeight="SemiBold"
-                                                    Background="#DC2626" Foreground="White"
+                                                    Background="{StaticResource ConfAccentRedBrush}"
+                                                    Foreground="White"
                                                     BorderThickness="0" Padding="8,3"
                                                     Margin="6,0,0,0"
                                                     Cursor="Hand"
@@ -486,11 +513,11 @@
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding DisplayName}"
                                                            FontSize="12" FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource Text.Primary}"
+                                                           Foreground="{StaticResource ConfTextPrimaryBrush}"
                                                            TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding MachineName}"
                                                            FontSize="10"
-                                                           Foreground="{DynamicResource Text.Muted}"
+                                                           Foreground="{StaticResource ConfTextSecondaryBrush}"
                                                            TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                         </DockPanel>
