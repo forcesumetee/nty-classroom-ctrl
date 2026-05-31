@@ -269,9 +269,18 @@ public partial class MainWindow : Window
                         {
                             if (_myEndpointId.HasValue && chat.SenderId == _myEndpointId.Value) return;
                             _confWindow?.ShellViewModel.AppendConferenceChat(chat.SenderName, chat.Text);
+                            // Phase 17.2 step 3 (Feature L) — pop the Conference
+                            // window forward so the student notices a peer/teacher
+                            // chat without watching the sidebar 24/7.
+                            WindowAttention.BringToFront(_confWindow);
                             return;
                         }
                         ChatList.Items.Add($"[{chat.SenderName}] {chat.Text}");
+                        // Phase 17.2 step 3 (Feature L) — classic ChatBroadcast is
+                        // teacher → student; pop MainWindow so the student notices
+                        // mid-other-app.  Self-loopback guard isn't needed here
+                        // because students don't emit non-Conference broadcasts.
+                        WindowAttention.BringToFront(this);
                     });
                 }
                 break;
@@ -282,6 +291,9 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         ChatList.Items.Add($"[DM from {chat.SenderName}] {chat.Text}");
+                        // Phase 17.2 step 3 (Feature L) — DMs are explicitly
+                        // targeted to me; pop MainWindow regardless of state.
+                        WindowAttention.BringToFront(this);
                     });
                 }
                 break;
@@ -292,6 +304,12 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         ChatList.Items.Add($"[Room] [{chat.SenderName}] {chat.Text}");
+                        // Phase 17.2 step 3 (Feature L) — room chat could be
+                        // teacher OR a peer in the same breakout; either way
+                        // skip self-echoes (peer student me writing my own
+                        // ChatRoom is rare today but cheap to guard).
+                        if (!_myEndpointId.HasValue || chat.SenderId != _myEndpointId.Value)
+                            WindowAttention.BringToFront(this);
                     });
                 }
                 break;
