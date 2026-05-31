@@ -6,9 +6,9 @@
              xmlns:conv="clr-namespace:ClassroomCtrl.Teacher.Converters"
              xmlns:confctrls="clr-namespace:ClassroomCtrl.Shared.Wpf.Conference;assembly=ClassroomCtrl.Shared.Wpf"
              mc:Ignorable="d"
-             Background="{DynamicResource Surface.Background}"
-             TextElement.Foreground="{DynamicResource Text.Primary}"
-             FontFamily="Segoe UI"
+             Background="{StaticResource ConfWindowBgBrush}"
+             TextElement.Foreground="{StaticResource ConfTextPrimaryBrush}"
+             FontFamily="{StaticResource ConfFontFamily}"
              d:DesignWidth="1280" d:DesignHeight="640">
     <!-- Phase 15-B (MVP) — Conference shell skeleton.  Two visual states driven
          by MainViewModel.ConferenceSessionId == Guid.Empty:
@@ -88,18 +88,37 @@
                      site needs the in-gallery preview (today the teacher
                      already monitors their share from the broadcaster's
                      own preview surface). -->
+                <!-- Phase 22 — teacher self-sharing banner restyled to the
+                     dark Zoom-style pill (pulse-dot + status text) so it
+                     visually matches the Student.Agent header indicator.
+                     Same Visibility binding; only the visual treatment
+                     changed. -->
                 <Border VerticalAlignment="Top" HorizontalAlignment="Center"
                         Margin="0,12,0,0" Padding="14,8"
-                        CornerRadius="999"
-                        Background="#10B981"
+                        CornerRadius="{StaticResource ConfStatusBarRadius}"
+                        Background="{StaticResource ConfStatusBarBgBrush}"
                         Visibility="{Binding IsScreenSharing,
                                      Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🖥" FontSize="13" Margin="0,0,6,0"
-                                   VerticalAlignment="Center"/>
+                        <Ellipse Width="8" Height="8"
+                                 Fill="{StaticResource ConfAccentRedBrush}"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,8,0">
+                            <Ellipse.Triggers>
+                                <EventTrigger RoutedEvent="Ellipse.Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                             From="1" To="0.4"
+                                                             Duration="0:0:0.75" AutoReverse="True"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </Ellipse.Triggers>
+                        </Ellipse>
                         <TextBlock Text="{DynamicResource Conf_ScreenShareBanner}"
-                                   FontSize="12" FontWeight="SemiBold"
-                                   Foreground="White"
+                                   FontSize="12" FontWeight="Medium"
+                                   Foreground="{StaticResource ConfTextPrimaryBrush}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
