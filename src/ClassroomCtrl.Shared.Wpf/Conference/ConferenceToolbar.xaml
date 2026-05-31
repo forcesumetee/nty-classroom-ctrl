@@ -220,9 +220,6 @@
                             BorderThickness="1"
                             CornerRadius="10"
                             Padding="8"
-                            MinWidth="280"
-                            MinHeight="72"
-                            ClipToBounds="False"
                             TextOptions.TextFormattingMode="Ideal"
                             TextOptions.TextRenderingMode="ClearType">
                         <Border.Resources>
@@ -250,14 +247,12 @@
                              working without any wire change. -->
                         <StackPanel x:Name="ReactionRow" Orientation="Horizontal"
                                     HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    ClipToBounds="False">
+                                    VerticalAlignment="Center">
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
                                     Focusable="False" FocusVisualStyle="{x:Null}"
-                                    ClipToBounds="False"
                                     ToolTip="👍"
                                     Click="ReactionButton_Click"
                                     Tag="👍">
@@ -265,14 +260,13 @@
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/thumbs_up.png"
-                                       Stretch="Uniform"/>
+                                       Stretch="Fill"/>
                             </Button>
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
                                     Focusable="False" FocusVisualStyle="{x:Null}"
-                                    ClipToBounds="False"
                                     ToolTip="❤️"
                                     Click="ReactionButton_Click"
                                     Tag="❤️">
@@ -280,14 +274,13 @@
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/heart.png"
-                                       Stretch="Uniform"/>
+                                       Stretch="Fill"/>
                             </Button>
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
                                     Focusable="False" FocusVisualStyle="{x:Null}"
-                                    ClipToBounds="False"
                                     ToolTip="😂"
                                     Click="ReactionButton_Click"
                                     Tag="😂">
@@ -295,14 +288,13 @@
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/laugh.png"
-                                       Stretch="Uniform"/>
+                                       Stretch="Fill"/>
                             </Button>
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
                                     Focusable="False" FocusVisualStyle="{x:Null}"
-                                    ClipToBounds="False"
                                     ToolTip="😮"
                                     Click="ReactionButton_Click"
                                     Tag="😮">
@@ -310,14 +302,13 @@
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/surprise.png"
-                                       Stretch="Uniform"/>
+                                       Stretch="Fill"/>
                             </Button>
                             <Button Width="44" Height="44" Margin="2,0"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Cursor="Hand"
                                     Focusable="False" FocusVisualStyle="{x:Null}"
-                                    ClipToBounds="False"
                                     ToolTip="😢"
                                     Click="ReactionButton_Click"
                                     Tag="😢">
@@ -325,7 +316,7 @@
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        Source="pack://application:,,,/ClassroomCtrl.Shared.Wpf;component/Resources/Reactions/sad.png"
-                                       Stretch="Uniform"/>
+                                       Stretch="Fill"/>
                             </Button>
                         </StackPanel>
                     </Border>
