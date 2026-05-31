@@ -23,6 +23,8 @@
             BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
             CornerRadius="12" SnapsToDevicePixels="True"
             ClipToBounds="True"
+            Cursor="Hand"
+            MouseLeftButtonDown="Card_LeftClick"
             PreviewMouseRightButtonDown="Card_RightClick">
         <Border.ContextMenu>
             <ContextMenu>
