@@ -45,12 +45,17 @@
                            VerticalAlignment="Center"
                            Foreground="{StaticResource ConfTextPrimaryBrush}"/>
 
-                <!-- Sharing indicator: subtle pulse dot + "You are sharing"
-                     text.  The pulse storyboard uses Opacity 1 → 0.4 every
-                     0.75 s autoreverse, matching the look the mockup
-                     specified (slow, calm — not aggressive).  Whole
-                     cluster is collapsed when IsSharingActive=false so
-                     it doesn't shift the host-name layout when idle. -->
+                <!-- Sharing indicator + quick Stop affordance.
+                     Phase 22 step 9 — added an inline Stop button next
+                     to the pulse-dot so the student can halt their share
+                     without hunting the toolbar.  The button reuses the
+                     existing ShareScreenCommand (which the shell VM's
+                     state machine handles via ToggleShareRequestAsync —
+                     Sharing → Approved + Broadcaster.Stop()).  Same
+                     locale key (Share_StopShareButton) the toolbar
+                     button uses so EN+TH stay in sync.
+                     Pulse storyboard: Opacity 1 → 0.4 every 0.75 s
+                     autoreverse — calm, not aggressive. -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
                             VerticalAlignment="Center"
                             Visibility="{Binding IsSharingActive, Converter={StaticResource BoolToVisibility}}">
@@ -74,6 +79,16 @@
                                VerticalAlignment="Center"
                                FontSize="12" FontWeight="Medium"
                                Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+                    <Button Content="{DynamicResource Share_StopShareButton}"
+                            Command="{Binding ShareScreenCommand}"
+                            Margin="12,0,0,0"
+                            Padding="10,3"
+                            Background="{StaticResource ConfAccentRedBrush}"
+                            Foreground="White"
+                            BorderThickness="0"
+                            FontSize="11" FontWeight="Medium"
+                            Cursor="Hand"
+                            VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- Host line.  Foreground swapped to ConfTextPrimaryBrush

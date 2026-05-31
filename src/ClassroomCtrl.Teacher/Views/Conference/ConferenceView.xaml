@@ -88,11 +88,13 @@
                      site needs the in-gallery preview (today the teacher
                      already monitors their share from the broadcaster's
                      own preview surface). -->
-                <!-- Phase 22 — teacher self-sharing banner restyled to the
-                     dark Zoom-style pill (pulse-dot + status text) so it
-                     visually matches the Student.Agent header indicator.
-                     Same Visibility binding; only the visual treatment
-                     changed. -->
+                <!-- Phase 22 — teacher self-sharing banner.  Pulse-dot +
+                     "You are sharing" text + inline Stop button matches
+                     the Student.Agent ConferenceGalleryWindow indicator
+                     so both surfaces feel like one product.  Same
+                     Visibility binding (IsScreenSharing); Stop uses
+                     ShareScreenCommand which is the existing
+                     ToggleShareScreen pathway. -->
                 <Border VerticalAlignment="Top" HorizontalAlignment="Center"
                         Margin="0,12,0,0" Padding="14,8"
                         CornerRadius="{StaticResource ConfStatusBarRadius}"
@@ -120,6 +122,16 @@
                                    FontSize="12" FontWeight="Medium"
                                    Foreground="{StaticResource ConfTextPrimaryBrush}"
                                    VerticalAlignment="Center"/>
+                        <Button Content="{DynamicResource Share_StopShareButton}"
+                                Command="{Binding ShareScreenCommand}"
+                                Margin="12,0,0,0"
+                                Padding="10,3"
+                                Background="{StaticResource ConfAccentRedBrush}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="11" FontWeight="Medium"
+                                Cursor="Hand"
+                                VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
 
