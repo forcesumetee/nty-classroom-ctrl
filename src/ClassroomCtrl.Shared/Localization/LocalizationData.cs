@@ -262,6 +262,10 @@ internal static class LocalizationData
         ["Conf_WaitingForShare"] = "Waiting for the share to start…",
         ["Conf_IsSharing"] = "is sharing",
         ["Conf_TeacherDisplayName"] = "Teacher",
+        // Phase 21 (v1.1) — generic Participant fall-back label used by the
+        // student-share Start banner when the inbound envelope's SourceName
+        // is blank (e.g. corrupted Hello payload).  Mirrors Conf_TeacherDisplayName.
+        ["Conf_StudentDisplayName"] = "Student",
         // Phase 16-B+ step 11 — Conference-share system chat messages.
         ["Conf_ChatShareStarted"] = "[Conference] You started sharing your screen.",
         ["Conf_ChatShareStopped"] = "[Conference] You stopped sharing your screen.",
@@ -921,6 +925,8 @@ internal static class LocalizationData
         ["Conf_WaitingForShare"] = "กำลังรอการแชร์หน้าจอ…",
         ["Conf_IsSharing"] = "กำลังแชร์",
         ["Conf_TeacherDisplayName"] = "ครู",
+        // Phase 21 (v1.1) — generic Participant fall-back when SourceName blank.
+        ["Conf_StudentDisplayName"] = "นักเรียน",
         // Phase 16-B+ step 11 — Conference-share system chat messages.
         ["Conf_ChatShareStarted"] = "[Conference] คุณเริ่มแชร์หน้าจอแล้ว",
         ["Conf_ChatShareStopped"] = "[Conference] คุณหยุดแชร์หน้าจอแล้ว",

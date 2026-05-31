@@ -892,6 +892,16 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             App.Server.ConferenceCameraStartReceived += OnConferenceCameraStartReceived;
             App.Server.ConferenceCameraFrameReceived += OnConferenceCameraFrameReceived;
             App.Server.ConferenceCameraStopReceived  += OnConferenceCameraStopReceived;
+            // Phase 21 (v1.1) — incoming student share reception.  When an
+            // approved student broadcasts ConferenceShareStart/Frame/Stop
+            // (0x0683-0x0685) the teacher's ControlServer relays to every
+            // peer AND raises these events here so the teacher's own gallery
+            // also flips to ConferenceShareView with the student's pixels.
+            // Without these the teacher would see the student's share on
+            // every other student's screen but not in her own window.
+            App.Server.ConferenceShareStartReceived += OnConferenceShareStartReceived;
+            App.Server.ConferenceShareFrameReceived += OnConferenceShareFrameReceived;
+            App.Server.ConferenceShareStopReceived  += OnConferenceShareStopReceived;
             // Phase 13-B (Tier 1) — sync local Rooms collection from canonical
             // server state on every mutation.  GroupManagerView + the Step-7
             // badges + status chip all read off Rooms.
@@ -3117,6 +3127,89 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             if (tile == null) return;
             tile.IsCamLive = false;
             tile.JpegFrame = null;
+        }));
+    }
+
+    /// <summary>Phase 21 (v1.1) — incoming student-share Start.  Flips the
+    /// Conference gallery into ConferenceShareView with the student as
+    /// source.  If the teacher was locally sharing, stop her broadcaster
+    /// first so the two FrameEncoded / FrameReceived paths don't fight
+    /// over <see cref="ConferenceGalleryViewModel.ActiveShareFrame"/>
+    /// (last-write-wins flicker).  Source-name fall-back uses the
+    /// generic "Student" label.</summary>
+    private void OnConferenceShareStartReceived(object? sender,
+        (System.Guid SourceId, ClassroomCtrl.Shared.Protocol.ConferenceShareStartMessage Msg) e)
+    {
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new System.Action(() =>
+        {
+            if (!IsConferenceSessionActive || ConferenceGallery == null) return;
+            // Yield the floor: a teacher local share + a student share at
+            // once would race for ActiveShareFrame.  ToggleShareScreen is
+            // idempotent — no-op if IsScreenSharing is already false.
+            if (IsScreenSharing && App.ScreenBroadcaster?.IsConferenceShare == true)
+            {
+                try { ToggleShareScreen(); } catch { /* defensive */ }
+            }
+            ConferenceGallery.ActiveShareEndpointId = e.SourceId;
+            ConferenceGallery.ActiveShareSourceName = string.IsNullOrWhiteSpace(e.Msg.SourceName)
+                ? Loc.Get("Conf_StudentDisplayName", "Student")
+                : e.Msg.SourceName;
+            ConferenceGallery.ActiveShareFrame = null;
+        }));
+    }
+
+    /// <summary>Phase 21 (v1.1) — incoming student-share Frame.  Decodes
+    /// MJPEG bytes to a BitmapImage and pushes into
+    /// <see cref="ConferenceGalleryViewModel.ActiveShareFrame"/> so the
+    /// teacher's ConferenceShareView re-renders.  H.264 deferred to v1.2
+    /// (matches the existing in-frame share decoder gate).  Transient
+    /// decode failures leave the prior frame visible — the next frame
+    /// lands at ~10 FPS so a brief glitch is invisible.</summary>
+    private void OnConferenceShareFrameReceived(object? sender,
+        (System.Guid SourceId, ClassroomCtrl.Shared.Protocol.ConferenceShareFrameMessage Msg) e)
+    {
+        if (!IsConferenceSessionActive || ConferenceGallery == null) return;
+        if (e.Msg.Codec != ClassroomCtrl.Shared.Protocol.VideoCodec.Mjpeg) return;
+        var bytes = e.Msg.FrameData;
+        var sourceId = e.SourceId;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new System.Action(() =>
+        {
+            // Late frame between Stop / Start: ignore so a stale frame doesn't
+            // pop the share-view back open.
+            if (ConferenceGallery.ActiveShareEndpointId == null) return;
+            try
+            {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                using var ms = new System.IO.MemoryStream(bytes);
+                bmp.BeginInit();
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                bmp.Freeze();
+                ConferenceGallery.ActiveShareFrame = bmp;
+            }
+            catch { /* transient decode: prior frame stays. */ }
+        }));
+    }
+
+    /// <summary>Phase 21 (v1.1) — incoming student-share Stop.  Clears
+    /// gallery share state only when the stop matches the currently
+    /// rendered source so a stale Stop from a prior sharer doesn't
+    /// blank an in-progress share.  Also drops the permission ledger
+    /// entry so the next Approve cycle starts clean.</summary>
+    private void OnConferenceShareStopReceived(object? sender, System.Guid sourceId)
+    {
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new System.Action(() =>
+        {
+            if (ConferenceGallery == null) return;
+            if (ConferenceGallery.ActiveShareEndpointId == sourceId)
+            {
+                ConferenceGallery.ActiveShareEndpointId = null;
+                ConferenceGallery.ActiveShareSourceName = "";
+                ConferenceGallery.ActiveShareFrame = null;
+            }
+            if (_activeSharerId == sourceId) _activeSharerId = null;
+            _studentSharePermissions[sourceId] = false;
         }));
     }
 
