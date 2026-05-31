@@ -6,399 +6,300 @@
              xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters"
              mc:Ignorable="d"
              Background="Transparent"
-             FontFamily="Segoe UI"
+             FontFamily="{StaticResource ConfFontFamily}"
              d:DesignWidth="900" d:DesignHeight="68">
-    <!-- Phase 15-D step 1 — Meet-style bottom toolbar.  Seven circular pill
-         buttons centered horizontally; the rightmost End button is red.
-         Each button reuses an existing command where available; new
-         commands (sidebar / hand / more) are wired alongside this control
-         in MainViewModel.  Step 1 ships the visual skeleton + bindings;
-         the sidebar / hand-raise / reaction-picker behaviors fill in
-         across steps 2–6 (15-D) and steps 2–4 (15-E).
-
-         Phase 16-B step 4 — moved from Teacher/Views/Conference/ to
-         Shared.Wpf so both Teacher and Student.Agent host the same
-         toolbar.  Commands continue to bind by DataContext + name;
-         Student.Agent's StudentConferenceShellViewModel exposes the
-         same command names so the toolbar Just Works on both shells. -->
+    <!-- Phase 22 — dark compact pill dock.
+         Visual rewrite of the 15-D toolbar.  Container Border collapsed
+         from a full-width row with a top border to a centered floating
+         pill (ConfToolbarBgBrush, ConfToolbarCornerRadius).  Buttons
+         picked up from the shared ConfToolbarButtonStyle defined in
+         ConferenceDarkTheme.xaml so layout is identical across Teacher
+         + Student.  Active-state colors use ConfAccentGreen (mic /
+         cam / share on) and ConfAccentYellow (hand raise + share
+         request pending).  End/Leave keeps a filled red pill via
+         ConfToolbarEndButtonStyle.
+         All command bindings preserved (ToggleMic / ToggleCamera /
+         ShareScreen / ToggleConferenceSidebar / RaiseHand / EndConference
+         and the reaction popup + its named click handlers).
+         The Phase 16-X (Bug D Part 1 retry) emoji popup is preserved
+         verbatim — surrogate-pair char refs + multi-font fallback +
+         implicit TextBlock style still required for Win11 Thai-locale
+         22H2+ glyph rendering. -->
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
-
-        <!-- Toolbar pill button style.  Default state = neutral elevated
-             surface; toggle on/off variants set via DataTrigger on the
-             host's IsMicOn / IsScreenSharing / IsConferenceSidebarVisible
-             properties.  Cursor=Hand and Focusable=False match existing
-             toolbar buttons elsewhere in the shell (Phase 15-C gallery
-             tile, header pill). -->
-        <Style x:Key="ConfToolbarButton" TargetType="Button">
-            <Setter Property="Width" Value="56"/>
-            <Setter Property="Height" Value="56"/>
-            <Setter Property="Margin" Value="6,0"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Focusable" Value="False"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Background" Value="{DynamicResource Surface.Elevated}"/>
-            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Pill" CornerRadius="999"
-                                Background="{TemplateBinding Background}"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource Border.Soft}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Pill" Property="Background"
-                                        Value="{DynamicResource Surface.Card}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Same shape, danger accent (red).  Reserved for the End button. -->
-        <Style x:Key="ConfToolbarButtonDanger" TargetType="Button"
-               BasedOn="{StaticResource ConfToolbarButton}">
-            <Setter Property="Background" Value="#DC2626"/>
-            <Setter Property="Foreground" Value="White"/>
-        </Style>
-
-        <!-- Active-state pill (e.g. mic on, sidebar open, screen-share on). -->
-        <Style x:Key="ConfToolbarButtonActive" TargetType="Button"
-               BasedOn="{StaticResource ConfToolbarButton}">
-            <Setter Property="Background" Value="#10B981"/>
-            <Setter Property="Foreground" Value="White"/>
-        </Style>
     </UserControl.Resources>
 
-    <Border Background="{DynamicResource Surface.Elevated}"
-            BorderBrush="{DynamicResource Border.Soft}"
-            BorderThickness="0,1,0,0"
-            Padding="0,8">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <!-- Left cluster reserved for future elapsed-time chip. -->
-                <ColumnDefinition Width="*"/>
-                <!-- Center cluster: all controls. -->
-                <ColumnDefinition Width="Auto"/>
-                <!-- Right cluster reserved for future toggles. -->
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+    <Border Background="{StaticResource ConfToolbarBgBrush}"
+            CornerRadius="{StaticResource ConfToolbarCornerRadius}"
+            Padding="8"
+            HorizontalAlignment="Center"
+            Margin="0,12,0,12">
+        <StackPanel Orientation="Horizontal">
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal"
-                        HorizontalAlignment="Center">
+            <!-- 🎙 Mic toggle.  Active style when mic is live. -->
+            <Button Command="{Binding ToggleMicCommand}"
+                    ToolTip="{Binding MicTooltipText}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButtonStyle}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMicOn}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentGreenBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentGreenBrush}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <TextBlock Text="🎙" FontSize="18"
+                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+            </Button>
 
-                <!-- 🎙 Mic toggle.  Active style when mic is live. -->
-                <Button Command="{Binding ToggleMicCommand}"
-                        ToolTip="{Binding MicTooltipText}">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsMicOn}" Value="True">
-                                    <Setter Property="Background" Value="#10B981"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                    <TextBlock Text="🎙" FontSize="20"/>
+            <!-- 📷 Camera toggle.  Active style when teacher cam is live. -->
+            <Button Command="{Binding ToggleCameraCommand}"
+                    ToolTip="{Binding CameraButtonText}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButtonStyle}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsBroadcastingCamera}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentGreenBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentGreenBrush}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <TextBlock Text="📷" FontSize="18"
+                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+            </Button>
+
+            <!-- 🖥 Screen share toggle.
+                 Visibility gated by Role.CanShareScreen (16-D); behavior
+                 differs by host VM.  Teacher: ShareScreenCommand drives
+                 the 16-B+ in-frame share directly.  Student: drives the
+                 Phase 20 request state machine — Idle → Requesting →
+                 Approved → Sharing.  Active-state DataTriggers map to
+                 amber (Requesting — pending teacher approval) or green
+                 (Approved / Sharing — student has the floor).  All
+                 bindings preserved from 15-D + 20 + 21. -->
+            <Button Command="{Binding ShareScreenCommand}"
+                    ToolTip="{Binding ShareScreenButtonText, FallbackValue={x:Null}}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButtonStyle}">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Role.CanShareScreen}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsScreenSharing}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentGreenBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentGreenBrush}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding ShareState}" Value="Requesting">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentYellowBrush}"/>
+                                <Setter Property="Foreground" Value="#1F1F23"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentYellowBrush}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding ShareState}" Value="Approved">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentGreenBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentGreenBrush}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding ShareState}" Value="Sharing">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentGreenBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentGreenBrush}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <TextBlock Text="🖥" FontSize="18"
+                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+            </Button>
+
+            <!-- 💬 Chat sidebar toggle. -->
+            <Button Command="{Binding ToggleConferenceSidebarCommand}"
+                    ToolTip="{DynamicResource Conf_Tooltip_Chat}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButtonStyle}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsConferenceSidebarVisible}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentGreenBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentGreenBrush}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <TextBlock Text="💬" FontSize="18"
+                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+            </Button>
+
+            <!-- ✋ Hand raise.  Teacher: opens queue sidebar.  Student:
+                 toggles own hand raise + emits 0x0110 / 0x0111 envelope.
+                 Active-state amber pill fires for either teacher
+                 HasNotifications (pending raised hands) OR student
+                 IsHandRaised (own hand up). -->
+            <Button Command="{Binding RaiseHandCommand}"
+                    ToolTip="{DynamicResource Conf_Tooltip_Hand}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButtonStyle}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasNotifications}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentYellowBrush}"/>
+                                <Setter Property="Foreground" Value="#1F1F23"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentYellowBrush}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsHandRaised}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource ConfAccentYellowBrush}"/>
+                                <Setter Property="Foreground" Value="#1F1F23"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource ConfAccentYellowBrush}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <TextBlock Text="✋" FontSize="18"
+                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+            </Button>
+
+            <!-- ⋮ More — opens the reaction picker popup.
+                 16-X (Bug D Part 1 retry) emoji fix is preserved verbatim:
+                   (a) Border.Resources implicit TextBlock style — fills
+                       FontFamily even if a deeper TextBlock forgets to
+                       set it.  Belt against an inheritance break across
+                       PopupRoot.
+                   (b) Per-Run FontFamily with a multi-font fallback chain
+                       — Segoe UI Emoji is the primary, Segoe UI Symbol
+                       is a Windows-7+ secondary, Segoe UI is the system
+                       default that at least has SOME emoji glyphs.
+                   (c) UTF-16 surrogate-pair char refs (&#xD83D; &#xDC4D;
+                       etc.) instead of literal emoji bytes — sidesteps
+                       any XAML-parse path that might mis-shape the
+                       original UTF-8 emoji bytes into single high-
+                       surrogate code units (which the Win11 Thai locale
+                       text shaper renders as random Latin glyphs).
+                 Popup background swapped to ConfTitleBarBgBrush so the
+                 picker reads as a darker overlay rather than the light
+                 Classroom Surface.Card it pulled before.
+            -->
+            <Grid>
+                <Button x:Name="MoreButton"
+                        ToolTip="{DynamicResource Conf_Tooltip_More}"
+                        Click="MoreButton_Click"
+                        Style="{StaticResource ConfToolbarButtonStyle}">
+                    <TextBlock Text="⋮" FontSize="20" FontWeight="Bold"/>
                 </Button>
+                <Popup x:Name="MorePopup"
+                       PlacementTarget="{Binding ElementName=MoreButton}"
+                       Placement="Top"
+                       StaysOpen="False"
+                       AllowsTransparency="True">
+                    <Border Background="{StaticResource ConfTitleBarBgBrush}"
+                            BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="8">
+                        <Border.Resources>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontFamily"
+                                        Value="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                                <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+                            </Style>
+                        </Border.Resources>
+                        <StackPanel x:Name="ReactionRow" Orientation="Horizontal"
+                                    TextElement.FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                            <Button Width="40" Height="40" Margin="2,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Focusable="False" FocusVisualStyle="{x:Null}"
+                                    ToolTip="👍"
+                                    Click="ReactionButton_Click"
+                                    Tag="👍">
+                                <TextBlock FontSize="22"
+                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                    <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                         Text="&#x1F44D;"/>
+                                </TextBlock>
+                            </Button>
+                            <Button Width="40" Height="40" Margin="2,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Focusable="False" FocusVisualStyle="{x:Null}"
+                                    ToolTip="❤️"
+                                    Click="ReactionButton_Click"
+                                    Tag="❤️">
+                                <TextBlock FontSize="22"
+                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                    <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                         Text="&#x2764;&#xFE0F;"/>
+                                </TextBlock>
+                            </Button>
+                            <Button Width="40" Height="40" Margin="2,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Focusable="False" FocusVisualStyle="{x:Null}"
+                                    ToolTip="😂"
+                                    Click="ReactionButton_Click"
+                                    Tag="😂">
+                                <TextBlock FontSize="22"
+                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                    <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                         Text="&#x1F602;"/>
+                                </TextBlock>
+                            </Button>
+                            <Button Width="40" Height="40" Margin="2,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Focusable="False" FocusVisualStyle="{x:Null}"
+                                    ToolTip="😮"
+                                    Click="ReactionButton_Click"
+                                    Tag="😮">
+                                <TextBlock FontSize="22"
+                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                    <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                         Text="&#x1F62E;"/>
+                                </TextBlock>
+                            </Button>
+                            <Button Width="40" Height="40" Margin="2,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Focusable="False" FocusVisualStyle="{x:Null}"
+                                    ToolTip="😢"
+                                    Click="ReactionButton_Click"
+                                    Tag="😢">
+                                <TextBlock FontSize="22"
+                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                    <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                         Text="&#x1F622;"/>
+                                </TextBlock>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Grid>
 
-                <!-- 📷 Camera toggle.  Active style when teacher cam is live. -->
-                <Button Command="{Binding ToggleCameraCommand}"
-                        ToolTip="{Binding CameraButtonText}">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsBroadcastingCamera}" Value="True">
-                                    <Setter Property="Background" Value="#10B981"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                    <TextBlock Text="📷" FontSize="20"/>
-                </Button>
-
-                <!-- 🖥 Screen share toggle.
-                     Phase 16-D step 9 — Visibility gated by Role.CanShareScreen.
-                     Phase 20 (v1.1) — ParticipantRole.CanShareScreen flipped
-                     from false → true so students see the button; behavior
-                     differs by host VM:
-                       Teacher: ShareScreenCommand starts/stops the 16-B+
-                         Conference share path directly.
-                       Student: ShareScreenCommand drives a request-flow
-                         state machine (ShareState) — Idle → Requesting →
-                         Approved → Sharing — backed by wire codes
-                         0x0686 (request) + 0x0687 (response).  The amber
-                         active-state pill fires on either IsScreenSharing
-                         (Teacher) OR a non-Idle ShareState != Idle / != Denied
-                         (Student is past the request gate). -->
-                <Button Command="{Binding ShareScreenCommand}"
-                        ToolTip="{Binding ShareScreenButtonText, FallbackValue={x:Null}}">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Role.CanShareScreen}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding IsScreenSharing}" Value="True">
-                                    <Setter Property="Background" Value="#10B981"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </DataTrigger>
-                                <!-- Phase 20 amber active-state for Student
-                                     state machine (mirror semantics of the
-                                     ✋ raised-hand pill). -->
-                                <DataTrigger Binding="{Binding ShareState}" Value="Requesting">
-                                    <Setter Property="Background" Value="#FBBF24"/>
-                                    <Setter Property="Foreground" Value="#1F2937"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding ShareState}" Value="Approved">
-                                    <Setter Property="Background" Value="#10B981"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding ShareState}" Value="Sharing">
-                                    <Setter Property="Background" Value="#10B981"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                    <TextBlock Text="🖥" FontSize="20"/>
-                </Button>
-
-                <!-- 💬 Chat sidebar toggle.  Highlights when sidebar is open. -->
-                <Button Command="{Binding ToggleConferenceSidebarCommand}"
-                        ToolTip="{DynamicResource Conf_Tooltip_Chat}">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsConferenceSidebarVisible}" Value="True">
-                                    <Setter Property="Background" Value="#10B981"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                    <TextBlock Text="💬" FontSize="20"/>
-                </Button>
-
-                <!-- ✋ Hand raise.  Phase 15-D ships as a sidebar-open shortcut
-                     to the Participants tab so the teacher can review the
-                     raised-hand queue.  Phase 15-E adds teacher-side
-                     Recognize semantics (per-row action).
-                     Phase 16-X (Bug H fix, 2026-06-01) — Command renamed
-                     to a shared RaiseHandCommand so the same XAML works
-                     against both VMs:
-                       Teacher.MainViewModel.RaiseHandCommand → opens the
-                         queue sidebar (existing 15-D behavior).
-                       Student.StudentConferenceShellViewModel
-                         .RaiseHandCommand → toggles own hand raise +
-                         emits 0x0110 / 0x0111 envelope.
-                     Active-state DataTrigger gained a sibling on
-                     IsHandRaised so the amber pill highlights for either
-                     "teacher has notifications" OR "student has raised
-                     hand"; both Setters write the same colors so trigger
-                     order doesn't matter. -->
-                <Button Command="{Binding RaiseHandCommand}"
-                        ToolTip="{DynamicResource Conf_Tooltip_Hand}">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasNotifications}" Value="True">
-                                    <Setter Property="Background" Value="#FBBF24"/>
-                                    <Setter Property="Foreground" Value="#1F2937"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding IsHandRaised}" Value="True">
-                                    <Setter Property="Background" Value="#FBBF24"/>
-                                    <Setter Property="Foreground" Value="#1F2937"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                    <TextBlock Text="✋" FontSize="20"/>
-                </Button>
-
-                <!-- ⋮ More — opens the reaction picker popup.
-
-                     Phase 16-B+ step 2 — UI bug fix.  The popup was previously
-                     declared inside <Button.Resources>, which placed it
-                     OUTSIDE the visual tree.  Consequences:
-                       (1) DataContext did NOT inherit from the toolbar host,
-                           so {Binding SendReactionCommand} silently failed
-                           and emoji clicks did nothing.
-                       (2) ElementName binding to MoreButton from inside the
-                           resource dictionary was unreliable across name
-                           scopes — placement often resolved to {0,0}.
-                       (3) AllowsTransparency=True combined with a missing
-                           DynamicResource (Surface.Card not yet applied at
-                           popup-open time) rendered as a blank white box.
-                     Fix: wrap the button + popup in a Grid so the Popup is
-                     a SIBLING in the visual tree.  PlacementTarget now uses
-                     a direct x:Reference; DataContext + DynamicResource
-                     inheritance work normally; the emoji row + theme
-                     background render correctly. -->
-                <Grid>
-                    <Button x:Name="MoreButton"
-                            ToolTip="{DynamicResource Conf_Tooltip_More}"
-                            Click="MoreButton_Click"
-                            Style="{StaticResource ConfToolbarButton}">
-                        <TextBlock Text="⋮" FontSize="22" FontWeight="Bold"/>
-                    </Button>
-                    <Popup x:Name="MorePopup"
-                           PlacementTarget="{Binding ElementName=MoreButton}"
-                           Placement="Top"
-                           StaysOpen="False"
-                           AllowsTransparency="True">
-                        <!-- Phase 16-X (Bug D Part 1 retry, 2026-05-31).
-                             Three layers of defence against the Popup-root
-                             emoji-fallback bug on Win11 Thai-locale 22H2+:
-
-                             (a) Border.Resources implicit TextBlock style —
-                                 fills FontFamily even if a deeper TextBlock
-                                 forgets to set it.  Belt against an
-                                 inheritance break across PopupRoot.
-
-                             (b) Per-Run FontFamily with a multi-font
-                                 fallback chain — Segoe UI Emoji is the
-                                 primary, Segoe UI Symbol is a Windows-7+
-                                 secondary, Segoe UI is the system default
-                                 that at least has SOME emoji glyphs.  WPF
-                                 walks the list when the first font lacks
-                                 the glyph.
-
-                             (c) UTF-16 surrogate-pair char refs (&#xD83D;
-                                 &#xDC4D; etc.) instead of literal emoji
-                                 bytes — sidesteps any XAML-parse path that
-                                 might mis-shape the original UTF-8 emoji
-                                 bytes into single high-surrogate code
-                                 units (which the Win11 Thai locale text
-                                 shaper renders as random Latin glyphs:
-                                 "( € ₹ ( (" was the user's repro).
-                        -->
-                        <Border Background="{DynamicResource Surface.Card}"
-                                BorderBrush="{DynamicResource Border.Soft}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="8">
-                            <Border.Resources>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="FontFamily"
-                                            Value="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
-                                </Style>
-                            </Border.Resources>
-                            <StackPanel x:Name="ReactionRow" Orientation="Horizontal"
-                                        TextElement.FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
-                                <Button Width="40" Height="40" Margin="2,0"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Cursor="Hand"
-                                        Focusable="False" FocusVisualStyle="{x:Null}"
-                                        ToolTip="👍"
-                                        Click="ReactionButton_Click"
-                                        Tag="👍">
-                                    <TextBlock FontSize="22"
-                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
-                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
-                                             Text="&#x1F44D;"/>
-                                    </TextBlock>
-                                </Button>
-                                <Button Width="40" Height="40" Margin="2,0"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Cursor="Hand"
-                                        Focusable="False" FocusVisualStyle="{x:Null}"
-                                        ToolTip="❤️"
-                                        Click="ReactionButton_Click"
-                                        Tag="❤️">
-                                    <!-- U+2764 + U+FE0F variation-selector-16
-                                         forces emoji-presentation for the
-                                         HEAVY BLACK HEART base character;
-                                         without VS16 it can render as a
-                                         monochrome dingbat in some font
-                                         fallbacks. -->
-                                    <TextBlock FontSize="22"
-                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
-                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
-                                             Text="&#x2764;&#xFE0F;"/>
-                                    </TextBlock>
-                                </Button>
-                                <Button Width="40" Height="40" Margin="2,0"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Cursor="Hand"
-                                        Focusable="False" FocusVisualStyle="{x:Null}"
-                                        ToolTip="😂"
-                                        Click="ReactionButton_Click"
-                                        Tag="😂">
-                                    <TextBlock FontSize="22"
-                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
-                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
-                                             Text="&#x1F602;"/>
-                                    </TextBlock>
-                                </Button>
-                                <Button Width="40" Height="40" Margin="2,0"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Cursor="Hand"
-                                        Focusable="False" FocusVisualStyle="{x:Null}"
-                                        ToolTip="😮"
-                                        Click="ReactionButton_Click"
-                                        Tag="😮">
-                                    <TextBlock FontSize="22"
-                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
-                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
-                                             Text="&#x1F62E;"/>
-                                    </TextBlock>
-                                </Button>
-                                <Button Width="40" Height="40" Margin="2,0"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Cursor="Hand"
-                                        Focusable="False" FocusVisualStyle="{x:Null}"
-                                        ToolTip="😢"
-                                        Click="ReactionButton_Click"
-                                        Tag="😢">
-                                    <TextBlock FontSize="22"
-                                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
-                                        <Run FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
-                                             Text="&#x1F622;"/>
-                                    </TextBlock>
-                                </Button>
-                            </StackPanel>
-                        </Border>
-                    </Popup>
-                </Grid>
-
-                <!-- 📞 End Conference / Leave.  Reuses existing
-                     EndConferenceCommand from Phase 15-B step 5; semantics
-                     differ by role: host ends for everyone (sends 0x0671
-                     ConferenceEnd) while participant just closes their
-                     window.
-                     Phase 16-D step 9 — Tooltip flips between Conf_EndConference
-                     and Conf_Leave based on Role.CanEndForAll so the button
-                     label reads correctly in either DataContext.  Both keys
-                     already exist in LocalizationData.cs for EN + TH. -->
-                <Button Command="{Binding EndConferenceCommand}">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarButtonDanger}">
-                            <Setter Property="ToolTip" Value="{DynamicResource Conf_Leave}"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Role.CanEndForAll}" Value="True">
-                                    <Setter Property="ToolTip" Value="{DynamicResource Conf_EndConference}"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                    <TextBlock Text="📞" FontSize="20"/>
-                </Button>
-            </StackPanel>
-        </Grid>
+            <!-- 📞 End Conference / Leave — filled red pill via
+                 ConfToolbarEndButtonStyle.  Tooltip flips on
+                 Role.CanEndForAll (host vs participant). -->
+            <Button Command="{Binding EndConferenceCommand}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource ConfToolbarEndButtonStyle}">
+                        <Setter Property="ToolTip" Value="{DynamicResource Conf_Leave}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Role.CanEndForAll}" Value="True">
+                                <Setter Property="ToolTip" Value="{DynamicResource Conf_EndConference}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <TextBlock Text="📞" FontSize="18"
+                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+            </Button>
+        </StackPanel>
     </Border>
 </UserControl>
