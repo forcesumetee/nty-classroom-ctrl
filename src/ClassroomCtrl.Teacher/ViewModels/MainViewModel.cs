@@ -3756,6 +3756,244 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     {
         return Students.Where(s => _selectedTileIds.Contains(s.EndpointId)).ToList();
     }
+
+    // ─────── Phase 23: Bulk action commands ───────
+
+    [RelayCommand]
+    private async Task BulkLock()
+    {
+        if (App.Server == null) return;
+        var targets = GetSelectedSnapshot();
+        if (targets.Count == 0) return;
+        try
+        {
+            foreach (var s in targets)
+            {
+                await App.Server.LockOneAsync(s.EndpointId, true, System.Threading.CancellationToken.None);
+            }
+            AppendSystemChat(Loc.Format("Chat_BulkLockedFmt", targets.Count));
+        }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+    }
+
+    [RelayCommand]
+    private async Task BulkUnlock()
+    {
+        if (App.Server == null) return;
+        var targets = GetSelectedSnapshot();
+        if (targets.Count == 0) return;
+        try
+        {
+            foreach (var s in targets)
+            {
+                await App.Server.LockOneAsync(s.EndpointId, false, System.Threading.CancellationToken.None);
+            }
+            AppendSystemChat(Loc.Format("Chat_BulkUnlockedFmt", targets.Count));
+        }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+    }
+
+    /// <summary>Open the existing ApplyPolicy dialog once, then apply the
+    /// resulting policy to every selected student.  Reuses the existing
+    /// per-student wire path (ApplyPolicyToOneAsync) so no broadcast goes
+    /// out — only the selected subset is affected.</summary>
+    [RelayCommand]
+    private void BulkApplyPolicy()
+    {
+        if (App.Server == null) return;
+        var targets = GetSelectedSnapshot();
+        if (targets.Count == 0) return;
+
+        var dlg = new Dialogs.ApplyPolicyDialog
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+            // Seed with the current broadcast policy as a sensible default
+            // (the dialog has no notion of "multi-student" so we can't
+            // pre-fill with intersections; broadcast values are the
+            // closest analogue and match what a user expects after
+            // "Apply Policy to All").
+            InitialBlockUsbStorage = CurrentBlockUsbStorage,
+            InitialBlockOpticalDrive = CurrentBlockOpticalDrive,
+            InitialBlockPrinting = CurrentBlockPrinting,
+            InitialBlockedProcessNames = new List<string>(CurrentBlockedProcessNames),
+            InitialBlockedHostnames = new List<string>(CurrentBlockedHostnames),
+            Title = Loc.Format("Dlg_BulkApplyPolicyTitleFmt", targets.Count),
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        if (dlg.RevertRequested)
+        {
+            BulkRevertPolicyInternal(targets);
+            return;
+        }
+
+        var expiresAt = dlg.DurationSeconds > 0
+            ? System.DateTimeOffset.UtcNow.AddSeconds(dlg.DurationSeconds).ToUnixTimeMilliseconds()
+            : 0L;
+
+        var msg = new ClassroomCtrl.Shared.Protocol.PolicyApplyMessage
+        {
+            BlockUsbStorage = dlg.BlockUsbStorage,
+            BlockOpticalDrive = dlg.BlockOpticalDrive,
+            BlockPrinting = dlg.BlockPrinting,
+            BlockedProcessNames = new List<string>(dlg.BlockedProcessNames),
+            BlockedHostnames = new List<string>(dlg.BlockedHostnames),
+            ExpiresAtUtcMs = expiresAt,
+        };
+
+        bool any = dlg.BlockUsbStorage || dlg.BlockOpticalDrive || dlg.BlockPrinting
+                || dlg.BlockedProcessNames.Count > 0 || dlg.BlockedHostnames.Count > 0;
+
+        foreach (var s in targets)
+        {
+            s.PerStudentBlockUsb = dlg.BlockUsbStorage;
+            s.PerStudentBlockOptical = dlg.BlockOpticalDrive;
+            s.PerStudentBlockPrint = dlg.BlockPrinting;
+            s.PerStudentBlockedProcessNames = new List<string>(dlg.BlockedProcessNames);
+            s.PerStudentBlockedHostnames = new List<string>(dlg.BlockedHostnames);
+            s.HasPerStudentPolicy = any;
+            s.PerStudentPolicyBadgeVisibility = any
+                ? System.Windows.Visibility.Visible
+                : System.Windows.Visibility.Collapsed;
+            _ = App.Server.ApplyPolicyToOneAsync(s.EndpointId, msg, System.Threading.CancellationToken.None);
+        }
+
+        var summary = BuildPolicySummary(msg);
+        AppendSystemChat(Loc.Format("Chat_BulkPolicyAppliedFmt", targets.Count, summary));
+    }
+
+    [RelayCommand]
+    private void BulkRevertPolicy()
+    {
+        var targets = GetSelectedSnapshot();
+        if (targets.Count == 0) return;
+        BulkRevertPolicyInternal(targets);
+    }
+
+    private void BulkRevertPolicyInternal(List<StudentViewModel> targets)
+    {
+        if (App.Server == null) return;
+        foreach (var s in targets)
+        {
+            s.PerStudentBlockUsb = false;
+            s.PerStudentBlockOptical = false;
+            s.PerStudentBlockPrint = false;
+            s.PerStudentBlockedProcessNames = new List<string>();
+            s.PerStudentBlockedHostnames = new List<string>();
+            s.HasPerStudentPolicy = false;
+            s.PerStudentPolicyBadgeVisibility = System.Windows.Visibility.Collapsed;
+            _ = App.Server.RevertPolicyForOneAsync(s.EndpointId, System.Threading.CancellationToken.None);
+        }
+        AppendSystemChat(Loc.Format("Chat_BulkPolicyRevertedFmt", targets.Count));
+    }
+
+    [RelayCommand]
+    private async Task BulkMuteMic()
+    {
+        if (App.Server == null) return;
+        var targets = GetSelectedSnapshot();
+        if (targets.Count == 0) return;
+        try
+        {
+            foreach (var s in targets)
+            {
+                await App.Server.SendMicMuteRequestAsync(s.EndpointId, true, "Bulk mute", System.Threading.CancellationToken.None);
+            }
+            AppendSystemChat(Loc.Format("Chat_BulkMicMutedFmt", targets.Count));
+        }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+    }
+
+    [RelayCommand]
+    private async Task BulkUnmuteMic()
+    {
+        if (App.Server == null) return;
+        var targets = GetSelectedSnapshot();
+        if (targets.Count == 0) return;
+        try
+        {
+            foreach (var s in targets)
+            {
+                await App.Server.SendMicMuteRequestAsync(s.EndpointId, false, "Bulk unmute", System.Threading.CancellationToken.None);
+            }
+            AppendSystemChat(Loc.Format("Chat_BulkMicUnmutedFmt", targets.Count));
+        }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+    }
+
+    /// <summary>Pick a file once, then send it to every selected student
+    /// as a DM attachment (FileAttachment inline byte[]).  Note: the
+    /// inline-data path is sized for small/medium docs; very large files
+    /// (>~10 MB) should use the existing all-students broadcast Send File
+    /// instead, which uses the chunked FileAnnounce path.</summary>
+    [RelayCommand]
+    private async Task BulkSendFile()
+    {
+        if (App.Server == null) return;
+        var targets = GetSelectedSnapshot();
+        if (targets.Count == 0) return;
+
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = Loc.Get("Btn_SendFile"),
+            Filter = "All files (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var data = await File.ReadAllBytesAsync(dlg.FileName);
+            var attachment = new ClassroomCtrl.Shared.Protocol.FileAttachment
+            {
+                Id = Guid.NewGuid(),
+                FileName = Path.GetFileName(dlg.FileName),
+                FileSize = data.LongLength,
+                FileType = Path.GetExtension(dlg.FileName).ToLowerInvariant(),
+                Data = data,
+            };
+            foreach (var s in targets)
+            {
+                await App.Server.SendDirectMessageAsync(s.EndpointId, "", System.Threading.CancellationToken.None, attachment);
+            }
+            AppendSystemChat(Loc.Format("Chat_BulkFileSentFmt", attachment.FileName, targets.Count));
+        }
+        catch (System.Exception ex)
+        {
+            AppendSystemChat(Loc.Format("Err_SendFileFailed", ex.Message));
+        }
+    }
+
+    [RelayCommand]
+    private async Task BulkLogoff() => await BulkPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType.ForceLogoff, "Confirm_BulkLogoffFmt");
+
+    [RelayCommand]
+    private async Task BulkRestart() => await BulkPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType.ForceRestart, "Confirm_BulkRestartFmt");
+
+    [RelayCommand]
+    private async Task BulkShutdown() => await BulkPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType.ForceShutdown, "Confirm_BulkShutdownFmt");
+
+    private async Task BulkPowerWithConfirm(ClassroomCtrl.Shared.Protocol.MessageType type, string confirmKey)
+    {
+        if (App.Server == null) return;
+        var targets = GetSelectedSnapshot();
+        if (targets.Count == 0) return;
+
+        var prompt = Loc.Format(confirmKey, targets.Count);
+        var result = System.Windows.MessageBox.Show(prompt, Loc.Get("Lbl_AppName"),
+            System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
+        if (result != System.Windows.MessageBoxResult.Yes) return;
+
+        try
+        {
+            foreach (var s in targets)
+            {
+                await App.Server.PowerOneAsync(s.EndpointId, type, System.Threading.CancellationToken.None);
+            }
+            AppendSystemChat(Loc.Format(GetIssuedChatKey(type), Loc.Format("Lbl_BulkTargetFmt", targets.Count)));
+        }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+    }
 }
 
 public partial class StudentViewModel : ObservableObject
