@@ -7,6 +7,7 @@
              mc:Ignorable="d"
              Background="Transparent"
              FontFamily="{StaticResource ConfFontFamily}"
+             SizeChanged="UserControl_SizeChanged"
              d:DesignWidth="340" d:DesignHeight="190">
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
@@ -40,8 +41,7 @@
     <Border x:Name="OuterBorder"
             CornerRadius="{StaticResource ConfTileCornerRadius}"
             ClipToBounds="True"
-            Margin="8"
-            SizeChanged="OuterBorder_SizeChanged">
+            Margin="8">
         <!-- Phase 22.5-A:
              Aspect-ratio sizing is now handled via code-behind SizeChanged 
              to break the circular layout loop caused by ActualWidth binding.

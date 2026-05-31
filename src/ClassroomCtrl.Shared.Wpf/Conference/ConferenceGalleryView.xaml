@@ -43,7 +43,7 @@
             <Button Background="Transparent" BorderThickness="0"
                     Padding="0" Cursor="Hand"
                     HorizontalAlignment="Stretch"
-                    VerticalAlignment="Top"
+                    VerticalAlignment="Stretch"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch"
                     MinHeight="160" MinWidth="200"

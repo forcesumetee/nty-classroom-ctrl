@@ -98,30 +98,29 @@ public partial class ConferenceTile : UserControl
         ReactionFloaterTransform.BeginAnimation(TranslateTransform.YProperty, rise);
     }
 
-    private void OuterBorder_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void UserControl_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        try
-        {
-            System.IO.File.AppendAllText(@"c:\ClassroomCtrl\layout_log.txt", 
-                $"[{System.DateTime.Now:HH:mm:ss.fff}] [OuterBorder_SizeChanged] " +
-                $"WidthChanged={e.WidthChanged}, Prev={e.PreviousSize}, New={e.NewSize}, " +
-                $"ActualWidth={OuterBorder.ActualWidth}. TargetHeight={OuterBorder.ActualWidth * 0.5625}\n");
-        }
-        catch { }
+        // Phase 22.5-D: bidirectional proportional scaling.
+        // We measure the available cell slot provided by the wrapper (minus Margin="8" x2).
+        double slotW = Math.Max(0, e.NewSize.Width - 16);
+        double slotH = Math.Max(0, e.NewSize.Height - 16);
 
-        // Phase 22.5-A: enforce 16:9 aspect ratio purely in code-behind
-        // This avoids the circular layout loop caused by binding Height to ActualWidth.
-        // Because the Width is dictated by the UniformGrid slot, updating the Height
-        // here does not trigger another width change.
-        if (e.WidthChanged)
+        if (slotW <= 0 || slotH <= 0) return;
+
+        double targetW = slotW;
+        double targetH = slotW * 0.5625; // 16:9 expected height
+
+        // If the cell is too short to fit 16:9 natively (e.g. wide layout), scale down by height (pillarbox)
+        if (targetH > slotH)
         {
-            OuterBorder.Height = OuterBorder.ActualWidth * 0.5625;
-            try
-            {
-                System.IO.File.AppendAllText(@"c:\ClassroomCtrl\layout_log.txt", 
-                    $"[{System.DateTime.Now:HH:mm:ss.fff}] [OuterBorder_SizeChanged] Set Height={OuterBorder.Height}, ActualHeight={OuterBorder.ActualHeight}\n");
-            }
-            catch { }
+            targetH = slotH;
+            targetW = slotH / 0.5625;
         }
+
+        // Apply explicitly computed sizes to the inner container.
+        // Since OuterBorder is hosted in a UserControl with Stretch alignment, 
+        // explicitly setting its dimensions automatically centers it.
+        OuterBorder.Width = targetW;
+        OuterBorder.Height = targetH;
     }
 }
