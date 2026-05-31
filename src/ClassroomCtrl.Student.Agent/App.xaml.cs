@@ -29,6 +29,13 @@ public partial class App : Application
     /// actions in the Conference sidebar template).</summary>
     public static ClassroomCtrl.Shared.Attachments.AttachmentManager? Attachments { get; private set; }
 
+    /// <summary>Phase 21 (v1.1): student-side Conference screen-share
+    /// broadcaster.  Singleton lifetime owned by the App so the capture
+    /// loop survives Conference window close/reopen (matches the
+    /// camera-broadcaster ownership model).  Start/Stop called from the
+    /// shell VM's <c>ShareScreenCommand</c> state transitions.</summary>
+    public static StudentConferenceShareBroadcaster? ConferenceShareBroadcaster { get; private set; }
+
     [System.Runtime.InteropServices.DllImport("shcore.dll")]
     private static extern int SetProcessDpiAwareness(int value);
 
@@ -74,6 +81,11 @@ public partial class App : Application
         // wrt Ipc/MainWindow init since SaveAsync is only ever called from
         // dispatch arms which fire after Ipc + MainWindow are up.
         Attachments = new ClassroomCtrl.Shared.Attachments.AttachmentManager();
+        // Phase 21 (v1.1) — singleton screen-share broadcaster.  Idle until
+        // the shell VM's Approved→Sharing transition fires Start.  No
+        // capture thread runs while idle, so the cost of always-instantiating
+        // is just one C# object + a few null fields.
+        ConferenceShareBroadcaster = new StudentConferenceShareBroadcaster();
         Ipc.Start();
 
         _mainWindow = new MainWindow();
@@ -106,6 +118,10 @@ public partial class App : Application
         try { RemoteControlReceiver.ReleaseAll(); } catch { }
 
         _screenCapturer?.Stop();
+        // Phase 21 (v1.1) — best-effort stop of an active share before the
+        // pipe closes so the teacher gets a real ConferenceShareStop
+        // envelope instead of inferring shutdown from the disconnect.
+        try { ConferenceShareBroadcaster?.Dispose(); } catch { }
         Ipc?.Stop();
         _tray?.Dispose();
 
