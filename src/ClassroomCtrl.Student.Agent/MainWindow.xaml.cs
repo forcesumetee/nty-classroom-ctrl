@@ -869,6 +869,10 @@ public partial class MainWindow : Window
                     _activeConferenceSessionId = System.Guid.Empty;
                     _activeConferenceTeacherId = System.Guid.Empty;
                     _activeConferenceHostName  = "";
+                    // Phase 21 (v1.1) — auto-stop any active share so the
+                    // student doesn't keep emitting frames into a dead
+                    // session.  Idempotent: no-op if not sharing.
+                    try { App.ConferenceShareBroadcaster?.Stop(); } catch { }
                     try { _confWindow?.Close(); } catch { }
                     _confWindow = null;
                     UpdateRejoinBannerVisibility();

@@ -236,20 +236,36 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
                 break;
 
             case ShareRequestState.Approved:
-                // Phase 20 (v1.1) — flow-only.  The actual screen capture
-                // (a Student-side ScreenBroadcaster emitting 0x0683-0x0685
-                // mirroring Teacher's 16-B+ path) is v1.2 scope.  Today we
-                // just transition the state so the UI affordances match
-                // what the user sees.  A system note explains the gap.
+                // Phase 21 (v1.1) — start the broadcaster.  ConferenceShareStart
+                // envelope is emitted from inside Start() before the first
+                // frame so receivers swap to share-view immediately.
+                // Capture loop runs at 10 FPS MJPEG 1280x720 ≈ 200-400 kbps
+                // per student (well under the 30-student fan-out budget the
+                // teacher already absorbs on her Classroom share).
                 ShareState = ShareRequestState.Sharing;
-                IpcClient.LogToFile("[StudentConferenceShellViewModel] ShareState=Sharing (v1.1: flow-only — wire frames not yet emitted by student-side capture)");
+                try
+                {
+                    var name = string.IsNullOrWhiteSpace(SelfDisplayName) ? "Student" : SelfDisplayName;
+                    App.ConferenceShareBroadcaster?.Start(name);
+                }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[StudentConferenceShellViewModel] Broadcaster.Start failed: {ex.Message}");
+                    // Defensive: revert state so the UI doesn't lie about
+                    // an active share that never started.
+                    ShareState = ShareRequestState.Approved;
+                }
                 break;
 
             case ShareRequestState.Sharing:
                 // Local stop — revert to Approved so the student can
-                // resume without re-requesting.  When v1.2 lands, this
-                // call site will stop the future Student.Agent
-                // ScreenBroadcaster instance before the state flip.
+                // resume without re-requesting.  Broadcaster.Stop() emits
+                // ConferenceShareStop so receivers swap back to tile-mode.
+                try { App.ConferenceShareBroadcaster?.Stop(); }
+                catch (Exception ex)
+                {
+                    IpcClient.LogToFile($"[StudentConferenceShellViewModel] Broadcaster.Stop failed: {ex.Message}");
+                }
                 ShareState = ShareRequestState.Approved;
                 IpcClient.LogToFile("[StudentConferenceShellViewModel] ShareState=Approved (stopped local share)");
                 break;
@@ -264,8 +280,17 @@ public partial class StudentConferenceShellViewModel : ObservableObject, IConfer
     {
         if (response.RevokeRequestId.HasValue)
         {
-            // Teacher revoked an active permission.  If we were mid-share,
-            // the future v1.2 ScreenBroadcaster.Stop call lands here too.
+            // Teacher revoked an active permission.  Phase 21 (v1.1) —
+            // stop the broadcaster so frame emission halts immediately;
+            // Stop() also fires ConferenceShareStop so the teacher's
+            // gallery clears even though the revoke and stop cross paths
+            // on the wire (the OnConferenceShareStopReceived guard already
+            // tolerates a no-op stop for a non-current sharer).
+            try { App.ConferenceShareBroadcaster?.Stop(); }
+            catch (Exception ex)
+            {
+                IpcClient.LogToFile($"[StudentConferenceShellViewModel] Revoke Stop failed: {ex.Message}");
+            }
             ShareState = ShareRequestState.Idle;
             IpcClient.LogToFile($"[StudentConferenceShellViewModel] ShareResponse=Revoke (id={response.RevokeRequestId})");
             return;
