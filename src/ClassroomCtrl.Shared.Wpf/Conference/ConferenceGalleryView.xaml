@@ -24,11 +24,29 @@
                       DataType="{x:Type vm:ConferenceTileViewModel}">
             <!-- Click anywhere on the tile to pin/unpin.  Forwarded via
                  PinCommand on the gallery VM; CommandParameter is the tile VM
-                 itself.  Cursor=Hand so the affordance is discoverable. -->
+                 itself.  Cursor=Hand so the affordance is discoverable.
+
+                 Phase 22.2-C — defensive stretch + MinHeight on the Button
+                 itself.  The 22.1-A fix put MinHeight=160 on the inner
+                 ConferenceTile's OuterBorder + Grid, but the DataTemplate's
+                 Button wrapper had no explicit alignment / min-size of its
+                 own.  When WPF realizes the Button at small UniformGrid
+                 cell sizes the Button's own measure can resolve to the
+                 ContentPresenter's natural rect (which doesn't pick up
+                 the inner UserControl's MinHeight reliably in every
+                 layout pass — a layered top-level Grid in the template
+                 chain occasionally measures content with infinity-
+                 constrained calls that defeat the inner MinHeight).
+                 Setting HCA/VCA + MinHeight here forces the Button to
+                 claim 160 px even before the inner tile's own MinHeight
+                 chain kicks in. -->
             <Button Background="Transparent" BorderThickness="0"
                     Padding="0" Cursor="Hand"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch"
+                    MinHeight="160" MinWidth="200"
                     Focusable="False" FocusVisualStyle="{x:Null}"
                     Command="{Binding DataContext.PinCommand,
                               RelativeSource={RelativeSource AncestorType=UserControl}}"
