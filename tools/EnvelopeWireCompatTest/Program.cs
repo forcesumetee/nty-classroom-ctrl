@@ -478,6 +478,46 @@ int errors = 0;
     }
 }
 
+// ──────── Test 25 (Phase 20 v1.1): ConferenceShareRequestMessage round-trip ────────
+{
+    var msg = new ConferenceShareRequestMessage
+    {
+        RequesterEndpointId = Guid.NewGuid(),
+        RequesterName = "นักเรียน สมศรี",   // UTF-16 Thai
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<ConferenceShareRequestMessage>(bytes);
+    if (back.RequesterEndpointId != msg.RequesterEndpointId) { errors += Fail("T25: RequesterEndpointId mismatch"); }
+    else if (back.RequesterName != msg.RequesterName) { errors += Fail($"T25: RequesterName mismatch (got '{back.RequesterName}')"); }
+    else { Pass("T25: ConferenceShareRequestMessage round-trip preserved (2 keys, UTF-16 Thai name)"); }
+}
+
+// ──────── Test 26 (Phase 20 v1.1): ConferenceShareResponseMessage three modes ────────
+//          Approve / Deny / Revoke — semantically distinct + the receiver branches on
+//          Approved + RevokeRequestId.HasValue.  Round-trip all three.
+{
+    foreach (var (approved, revokeId, label) in new[] {
+        (true,  (Guid?)null,         "Approve"),
+        (false, (Guid?)null,         "Deny"),
+        (false, (Guid?)Guid.NewGuid(), "Revoke"),
+    })
+    {
+        var msg = new ConferenceShareResponseMessage
+        {
+            RequesterEndpointId = Guid.NewGuid(),
+            Approved = approved,
+            RevokeRequestId = revokeId,
+        };
+        var bytes = MessagePackSerializer.Serialize(msg);
+        var back = MessagePackSerializer.Deserialize<ConferenceShareResponseMessage>(bytes);
+        if (back.RequesterEndpointId != msg.RequesterEndpointId) { errors += Fail($"T26/{label}: RequesterEndpointId mismatch"); break; }
+        if (back.Approved != msg.Approved) { errors += Fail($"T26/{label}: Approved mismatch"); break; }
+        if (back.RevokeRequestId != msg.RevokeRequestId) { errors += Fail($"T26/{label}: RevokeRequestId mismatch"); break; }
+    }
+    if (errors == 0)
+        Pass("T26: ConferenceShareResponseMessage Approve/Deny/Revoke round-trip preserved (3 keys)");
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");

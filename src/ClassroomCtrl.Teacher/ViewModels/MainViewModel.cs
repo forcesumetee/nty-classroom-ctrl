@@ -858,6 +858,8 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             App.Server.StudentLeft += OnStudentLeft;
             App.Server.ChatReceived += OnChatReceived;
             App.Server.HandRaiseReceived += OnHandRaiseReceived;
+            // Phase 20 (v1.1) — student-share permission flow.
+            App.Server.ConferenceShareRequestReceived += OnConferenceShareRequestReceived;
             // Phase 15-E step 4 — reaction fan-out fires the floating emoji.
             App.Server.ReactionReceived += OnReactionReceived;
             App.Server.ScreenshotReceived += OnScreenshotReceived;
@@ -1959,6 +1961,17 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             RaiseNotificationsChanged();
             // Phase 15-C — purge the departed student's tile from the gallery.
             if (IsConferenceSessionActive) RebuildConferenceGallery();
+
+            // Phase 20 (v1.1) — drop any share-permission state for the
+            // departed student.  Auto-revoke: if they were the active
+            // sharer, the wire revoke isn't needed (TCP closed) but we
+            // still clear _activeSharerId so the next request can be
+            // approved.  Pending request for the same student is also
+            // dropped so the notification card doesn't lie about who's
+            // waiting.
+            _studentSharePermissions.Remove(peerId);
+            _pendingShareRequests.Remove(peerId);
+            if (_activeSharerId == peerId) _activeSharerId = null;
         });
     }
 
@@ -2192,6 +2205,140 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     // notification UX now lives exclusively inside the Teacher window via
     // NotificationOverlay + the TaskbarItemInfo.Overlay red-dot badge added in
     // Phase 17.1 step 2.
+
+    // ─── Phase 20 (v1.1) — student-share permission state ───
+    //
+    // _studentSharePermissions: who currently holds an Approve verdict
+    // (i.e. is allowed to share or is actively sharing).  An entry exists
+    // ONLY while a permission is active; explicit Deny + Revoke + auto-
+    // clear paths all remove the entry.
+    //
+    // _pendingShareRequests: live request awaiting a teacher decision.
+    // Keyed by student EndpointId; entries drained by Approve / Deny;
+    // also drained by ConferenceEnd + StudentLeft so a teacher returning
+    // to a stale session doesn't see a phantom request after the
+    // requester disconnected.
+    //
+    // _activeSharerId: enforces the v1.1 "only one student sharing at a
+    // time" constraint.  Approve flips this so a second approval before
+    // the first sharer stops would re-Revoke the prior one (see
+    // ApproveShareRequest implementation).  Null = nobody sharing today
+    // OR teacher is the active sharer (we don't track teacher-as-sharer
+    // here since the gating only applies to students; teacher can still
+    // share over a student via the existing 16-B+ path if they want to
+    // pre-empt).
+    private readonly System.Collections.Generic.Dictionary<Guid, bool> _studentSharePermissions = new();
+    private readonly System.Collections.Generic.Dictionary<Guid, ConferenceShareRequestMessage> _pendingShareRequests = new();
+    private Guid? _activeSharerId;
+
+    /// <summary>Phase 20 (v1.1) — incoming student request handler.  Surfaces
+    /// a LINE-style notification card with Approve / Deny actions; the
+    /// MainWindow's notification overlay code-behind wires Click handlers
+    /// when it detects a NotificationItem with Type=ShareRequest.</summary>
+    private void OnConferenceShareRequestReceived(object? sender, ConferenceShareRequestMessage req)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            _pendingShareRequests[req.RequesterEndpointId] = req;
+
+            // Phase 20 — drop a system-chat line so the teacher has an
+            // out-of-band record even if they dismiss the notification.
+            AppendSystemChat(Loc.Format("Share_RequestSystemChat", req.RequesterName));
+
+            // Spawn the notification card.  Type=ShareRequest carries the
+            // requester id in the SenderName payload — the notification
+            // overlay can wire Approve / Deny by Sender match.
+            App.Notifications?.Show(new ClassroomCtrl.Teacher.Services.NotificationItem
+            {
+                Type = ClassroomCtrl.Teacher.Services.NotificationType.ShareRequest,
+                SenderName = string.IsNullOrEmpty(req.RequesterName) ? "Student" : req.RequesterName,
+                Message = Loc.Get("Share_RequestNotificationBody", "wants to share screen"),
+                ActionTargetId = req.RequesterEndpointId,
+            });
+        });
+    }
+
+    /// <summary>Phase 20 (v1.1) — Approve a pending request.  Flips the
+    /// permission to true + sends the wire response + marks the student
+    /// as the active sharer (single-sharer enforcement: any prior approver
+    /// is implicitly revoked before this approval lands).</summary>
+    public async System.Threading.Tasks.Task ApproveShareRequestAsync(Guid studentId)
+    {
+        if (App.Server == null) return;
+        // Single-active-sharer enforcement: revoke the prior approver, if
+        // any, before granting the new one.
+        if (_activeSharerId.HasValue && _activeSharerId.Value != studentId)
+        {
+            var prior = _activeSharerId.Value;
+            try
+            {
+                await App.Server.SendConferenceShareResponseAsync(
+                    prior, approved: false, revokeRequestId: System.Guid.NewGuid(),
+                    System.Threading.CancellationToken.None);
+            }
+            catch (System.Exception ex)
+            {
+                AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
+            }
+            _studentSharePermissions[prior] = false;
+        }
+        _studentSharePermissions[studentId] = true;
+        _activeSharerId = studentId;
+        _pendingShareRequests.Remove(studentId);
+        try
+        {
+            await App.Server.SendConferenceShareResponseAsync(
+                studentId, approved: true, revokeRequestId: null,
+                System.Threading.CancellationToken.None);
+        }
+        catch (System.Exception ex)
+        {
+            AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
+        }
+    }
+
+    /// <summary>Phase 20 (v1.1) — Deny a pending request without
+    /// granting permission.  Wire response with Approved=false + null
+    /// RevokeRequestId so the student VM transitions Idle (not Sharing).</summary>
+    public async System.Threading.Tasks.Task DenyShareRequestAsync(Guid studentId)
+    {
+        if (App.Server == null) return;
+        _pendingShareRequests.Remove(studentId);
+        _studentSharePermissions[studentId] = false;
+        try
+        {
+            await App.Server.SendConferenceShareResponseAsync(
+                studentId, approved: false, revokeRequestId: null,
+                System.Threading.CancellationToken.None);
+        }
+        catch (System.Exception ex)
+        {
+            AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
+        }
+    }
+
+    /// <summary>Phase 20 (v1.1) — Revoke an active sharer's permission
+    /// + stop their share.  Wire response with Approved=false + non-null
+    /// RevokeRequestId distinguishes "revoked mid-share" from "denied".</summary>
+    public async System.Threading.Tasks.Task RevokeShareForStudentAsync(Guid studentId)
+    {
+        if (App.Server == null) return;
+        _studentSharePermissions[studentId] = false;
+        if (_activeSharerId == studentId) _activeSharerId = null;
+        try
+        {
+            await App.Server.SendConferenceShareResponseAsync(
+                studentId, approved: false, revokeRequestId: System.Guid.NewGuid(),
+                System.Threading.CancellationToken.None);
+        }
+        catch (System.Exception ex)
+        {
+            AppendSystemChat(Loc.Format("Err_SendFailed", ex.Message));
+        }
+    }
+
+    public bool IsStudentApprovedToShare(Guid studentId)
+        => _studentSharePermissions.TryGetValue(studentId, out var approved) && approved;
 
     private void OnHandRaiseReceived(object? sender, ClassroomCtrl.Shared.Protocol.HandRaiseMessage hr)
     {
@@ -2524,6 +2671,13 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         // open during the session so the next Start opens a fresh shell.
         IsConferenceSidebarVisible = false;
         ConferenceSidebarTabIndex = 0;
+        // Phase 20 (v1.1) — clear all student-share permissions on End.
+        // A future Start will re-handshake; carrying stale grants across
+        // a session boundary would let a previously-approved student
+        // share without a fresh re-approval.
+        _studentSharePermissions.Clear();
+        _pendingShareRequests.Clear();
+        _activeSharerId = null;
     }
 
     /// <summary>Phase 14-B (Tier 1) — runtime cam failure handler.  Wired in

@@ -21,7 +21,17 @@ namespace ClassroomCtrl.Teacher.Services;
 /// + the Icon switch; no XAML change required because the overlay binds the
 /// glyph property directly.
 /// </summary>
-public enum NotificationType { HandRaise, Chat, Info }
+public enum NotificationType
+{
+    HandRaise,
+    Chat,
+    Info,
+    /// <summary>Phase 20 (v1.1) — student requesting screen-share permission.
+    /// Renders with inline Approve / Deny buttons; the overlay code-behind
+    /// reads <see cref="NotificationItem.ActionTargetId"/> to know which
+    /// student to respond to when a button is clicked.</summary>
+    ShareRequest,
+}
 
 /// <summary>
 /// Phase 17 — one notification card in the slide-in stack.  Immutable once
@@ -40,10 +50,23 @@ public class NotificationItem
     /// by the overlay XAML so the swatch updates without a converter.</summary>
     public string Icon => Type switch
     {
-        NotificationType.HandRaise => "✋",
-        NotificationType.Chat      => "💬",
-        _                          => "ℹ️",
+        NotificationType.HandRaise    => "✋",
+        NotificationType.Chat         => "💬",
+        NotificationType.ShareRequest => "🖥",
+        _                             => "ℹ️",
     };
+
+    /// <summary>Phase 20 (v1.1) — only meaningful for
+    /// <see cref="NotificationType.ShareRequest"/> cards.  Carries the
+    /// requester's EndpointId so the Approve / Deny click handlers in
+    /// the overlay can route through MainViewModel.ApproveShareRequestAsync /
+    /// DenyShareRequestAsync without a second lookup.</summary>
+    public Guid ActionTargetId { get; init; }
+
+    /// <summary>Phase 20 (v1.1) — true iff the card should render its
+    /// inline Approve / Deny action row.  Computed so the XAML template
+    /// has a single boolean trigger instead of switching on the enum.</summary>
+    public bool HasActionRow => Type == NotificationType.ShareRequest;
 }
 
 /// <summary>

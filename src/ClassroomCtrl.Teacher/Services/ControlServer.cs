@@ -674,6 +674,31 @@ public class ControlServer : IDisposable
     /// the matching Conference tile and spawns a floating animation.</summary>
     public event EventHandler<(Guid SenderId, ReactionMessage Msg)>? ReactionReceived;
 
+    /// <summary>Phase 20 (v1.1) — fires when a student sends a share-screen
+    /// request envelope (0x0686).  The MainViewModel surfaces an Approve /
+    /// Deny notification card; the response routes through
+    /// <see cref="SendConferenceShareResponseAsync"/>.</summary>
+    public event EventHandler<ConferenceShareRequestMessage>? ConferenceShareRequestReceived;
+
+    /// <summary>Phase 20 (v1.1) — send a targeted Approve / Deny / Revoke
+    /// to a single student.  Revoke uses Approved=false with a non-null
+    /// RevokeRequestId so the student VM can disambiguate "your request
+    /// was denied" from "the teacher pulled your share".</summary>
+    public Task SendConferenceShareResponseAsync(Guid targetStudentId, bool approved, Guid? revokeRequestId, CancellationToken ct)
+    {
+        var msg = new ConferenceShareResponseMessage
+        {
+            RequesterEndpointId = targetStudentId,
+            Approved = approved,
+            RevokeRequestId = revokeRequestId,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.ConferenceShareResponse, bytes, _teacherId, targetStudentId);
+        _logger.LogInformation("ConferenceShareResponse → {Target}: Approved={Approved} Revoke={Revoke}",
+            targetStudentId, approved, revokeRequestId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
     // ─────── Phase 16-B+ : In-frame Conference share — receiver side ───────
 
     /// <summary>Phase 16-B+ — fires when a ConferenceShareStart envelope
@@ -1475,6 +1500,26 @@ public class ControlServer : IDisposable
                     // (rather than _teacherId).
                     var relay = Envelope.Create(MessageType.Reaction, env.Payload, env.SenderId);
                     _ = _tcp.BroadcastAsync(relay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceShareRequest:
+                {
+                    var req = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareRequestMessage>(env.Payload);
+                    // SenderId in the envelope is the authoritative requester
+                    // id — the payload field is duplicated for diagnostics
+                    // but may be stale if the student VM raced its own
+                    // re-identification.  Trust the envelope, overwrite the
+                    // payload field before dispatching upstream so the
+                    // MainViewModel handler doesn't see a mismatch.
+                    req.RequesterEndpointId = env.SenderId;
+                    _logger.LogInformation("ConferenceShareRequest from {Sender} ({Name})",
+                        env.SenderId, req.RequesterName);
+                    try { ConferenceShareRequestReceived?.Invoke(this, req); }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "ConferenceShareRequestReceived handler failed for {Sender}", env.SenderId);
+                    }
                 }
                 break;
 

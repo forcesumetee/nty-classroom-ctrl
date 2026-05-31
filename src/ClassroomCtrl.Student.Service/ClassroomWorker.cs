@@ -706,6 +706,26 @@ public class ClassroomWorker : BackgroundService
                 await _ipc.ForwardToAgentAsync(env, ct);
                 break;
 
+            // Phase 20 (v1.1): student-share permission flow.
+            //   0x0686 ConferenceShareRequest  is S→T — never travels back
+            //     to the student so the Service forwarder never sees it
+            //     on the downstream channel.  Kept here as an explicit
+            //     no-op so a future architectural change that does relay
+            //     requests downstream (e.g. co-host model) lands a clear
+            //     "this is intentionally a teacher-only inbound" diff
+            //     instead of falling into the default arm.
+            //   0x0687 ConferenceShareResponse is T→S targeted at the
+            //     specific requester; IsForMe routes it to just that
+            //     student's Agent.
+            case MessageType.ConferenceShareRequest:
+                // No-op on downstream: teacher-only consumer.
+                break;
+            case MessageType.ConferenceShareResponse:
+                if (!IsForMe(env)) return;
+                _logger.LogInformation("ConferenceShareResponse from teacher (target={Target})", env.TargetEndpointId);
+                await _ipc.ForwardToAgentAsync(env, ct);
+                break;
+
             default:
                 _logger.LogDebug("Unhandled message type {Type}", env.Type);
                 break;

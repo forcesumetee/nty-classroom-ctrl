@@ -483,6 +483,45 @@ public class ConferenceCameraStopMessage
     [Key(0)] public Guid SourceEndpointId { get; set; }
 }
 
+// ───────── Phase 20 (v1.1): student-share permission flow ─────────
+
+/// <summary>
+/// Phase 20 (v1.1) — student → teacher request to share screen during an
+/// active Conference.  Routed targeted (TargetEndpointId = teacherId) so
+/// only the teacher's MainViewModel sees the request and surfaces the
+/// Approve / Deny notification card.  The teacher's response rides
+/// <see cref="ConferenceShareResponseMessage"/> on 0x0687.
+/// </summary>
+[MessagePackObject]
+public class ConferenceShareRequestMessage
+{
+    [Key(0)] public Guid RequesterEndpointId { get; set; }
+    [Key(1)] public string RequesterName { get; set; } = "";
+}
+
+/// <summary>
+/// Phase 20 (v1.1) — teacher → student response to a share request.
+/// Routed targeted to the original requester so the student VM's
+/// ShareRequestState machine can transition.
+///
+/// Three semantically distinct uses:
+///   1. Approve  (Approved=true,  RevokeRequestId=null)  → student state
+///      → Approved → student can click "Start sharing" next.
+///   2. Deny     (Approved=false, RevokeRequestId=null)  → student state
+///      → Denied → button reverts to "Request to share".
+///   3. Revoke   (Approved=false, RevokeRequestId=non-null Guid) → student
+///      state → Idle + ScreenBroadcaster.Stop() if currently sharing.
+///      The id is correlation telemetry; the receiver just treats any
+///      non-null RevokeRequestId as the explicit-revoke signal.
+/// </summary>
+[MessagePackObject]
+public class ConferenceShareResponseMessage
+{
+    [Key(0)] public Guid RequesterEndpointId { get; set; }
+    [Key(1)] public bool Approved { get; set; }
+    [Key(2)] public Guid? RevokeRequestId { get; set; }
+}
+
 // ───────────── File transfer DTOs (Spec §6.4) ─────────────
 
 [MessagePackObject]

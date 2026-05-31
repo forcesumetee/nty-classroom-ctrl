@@ -220,4 +220,16 @@ public enum MessageType : ushort
     ConferenceCameraStart = 0x0680,   // S→T→peers, ConferenceCameraStartMessage
     ConferenceCameraFrame = 0x0681,   // S→T→peers, ConferenceCameraFrameMessage
     ConferenceCameraStop  = 0x0682,   // S→T→peers, ConferenceCameraStopMessage
+
+    // Phase 20 (v1.1): Student-initiated Conference screen-share permission.
+    // The toolbar 🖥 button on the Participant role was hidden in 16-D; the
+    // request flow re-enables it as a "Request to share" affordance that
+    // routes through the teacher for approval.  No actual frame change —
+    // approved shares still ride 0x0683-0x0685 ConferenceShareStart/Frame/Stop.
+    //
+    // Routing: 0x0686 is S→T (TargetEndpointId = teacherId) so only the
+    // teacher gets the request; 0x0687 is T→S (TargetEndpointId = student
+    // who requested) so only the requester gets the verdict.
+    ConferenceShareRequest  = 0x0686,   // S→T, ConferenceShareRequestMessage
+    ConferenceShareResponse = 0x0687,   // T→S, ConferenceShareResponseMessage
 }
