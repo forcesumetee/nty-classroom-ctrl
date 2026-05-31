@@ -35,7 +35,7 @@
     <Border x:Name="OuterBorder"
             CornerRadius="{StaticResource ConfTileCornerRadius}"
             ClipToBounds="True"
-            Margin="8" MinHeight="120">
+            Margin="8" MinHeight="160" MinWidth="200">
         <Border.Style>
             <Style TargetType="Border">
                 <Setter Property="Background" Value="{StaticResource ConfTileBgBrush}"/>
@@ -63,7 +63,17 @@
             </Style>
         </Border.Style>
 
-        <Grid>
+        <!-- Phase 22.1-A: explicit MinHeight on the inner Grid too.
+             Without this the Grid could measure to its largest child's
+             natural size (status bar pill is ~24 px tall) and the outer
+             Border's MinHeight=160 would draw a tall box around a
+             tiny Grid — visually the tile would look like a thin status-
+             bar strip at the bottom of the cell because the placeholder
+             TextBlock has VerticalAlignment=Center against a small
+             arrange rect.  MinHeight here propagates the size constraint
+             inward so the placeholder TextBlock has a full tile to
+             center within. -->
+        <Grid MinHeight="160">
             <!-- Layer 1: video frame. -->
             <Image Source="{Binding JpegFrame}" Stretch="Uniform"
                    Visibility="{Binding JpegFrame, Converter={StaticResource NullToVisibility}}"/>
