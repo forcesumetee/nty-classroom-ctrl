@@ -1943,6 +1943,17 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     {
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
+            // Phase 17.2 step 1 (Bug I fix, 2026-05-31) — diagnostic so the
+            // next 2-PC suppression bug has a trace line.  Captures the three
+            // suppression-relevant signals at decision time.  Debug.WriteLine
+            // is the Teacher equivalent of IpcClient.LogToFile on the Student
+            // side: visible in attached debuggers + DebugView, zero perf cost
+            // in Release without a debugger attached.
+            var isActive = IsWindowActivelyVisible();
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] OnChatReceived sender={chat.SenderName} " +
+                                                $"isConf={chat.IsConferenceContext} hasRecipient={chat.RecipientId.HasValue} " +
+                                                $"isWindowActive={isActive}");
+
             // Phase 16-X (Bug G fix, 2026-06-01) — Conference-context chats
             // land in ConferenceConversation only.  Earliest filter point so
             // the existing DM / Room / Everyone branches stay simple.  A
@@ -1957,13 +1968,23 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                     MessageText = chat.Text,
                 });
 
-                // Phase 17 step 4 — slide-in card.  Suppress when the
-                // teacher is already viewing the Conference chat tab (sidebar
-                // visible + chat tab selected) so the corner overlay doesn't
-                // double-up on a message the teacher just watched land in the
-                // sidebar.  Any other state (sidebar closed, participants tab
-                // open, Conference window minimized) → notify.
-                if (!(IsConferenceSidebarVisible && IsConferenceChatTabSelected))
+                // Phase 17.2 step 1 (Bug I fix) — relaxed suppression rule.
+                // OLD (overly aggressive): suppress whenever the sidebar's
+                // chat tab is open, regardless of whether the window has
+                // focus — meant unfocused-window cases never notified.
+                // NEW (LINE-style): suppress only when ALL of
+                //   (window actively focused) AND
+                //   (sidebar visible) AND
+                //   (chat tab selected)
+                // are true — i.e. the teacher is provably watching this
+                // exact surface in real time.  Any minimize / Alt-Tab away
+                // means notify.
+                bool suppress = isActive
+                                && IsConferenceSidebarVisible
+                                && IsConferenceChatTabSelected;
+                System.Diagnostics.Debug.WriteLine($"[MainViewModel] Conference-chat branch suppress={suppress} " +
+                                                    $"sidebarVisible={IsConferenceSidebarVisible} chatTab={IsConferenceChatTabSelected}");
+                if (!suppress)
                     ShowChatNotification(chat.SenderName, chat.Text);
                 return;
             }
@@ -2003,10 +2024,14 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 });
                 if (ActiveConversation != conv) conv.UnreadCount++;
 
-                // Phase 17 step 4 — slide-in card.  Suppress when the
-                // teacher is already viewing this DM conversation (their
-                // eyes are on the rail; double-notification would be noise).
-                if (ActiveConversation != conv)
+                // Phase 17.2 step 1 (Bug I fix) — relaxed suppression.  Only
+                // skip the slide-in when the window is provably focused AND
+                // the active conversation IS this DM (teacher is reading the
+                // DM tab right now).  Window unfocused → always notify.
+                bool dmSuppress = isActive && ActiveConversation == conv;
+                System.Diagnostics.Debug.WriteLine($"[MainViewModel] DM branch suppress={dmSuppress} " +
+                                                    $"activeMatches={(ActiveConversation == conv)}");
+                if (!dmSuppress)
                     ShowChatNotification(displayName, chat.Text);
                 return;
             }
@@ -2023,13 +2048,36 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             }
             AppendStudentChat(chat.SenderName, prefix + chat.Text);
 
-            // Phase 17 step 4 — slide-in card for whole-class / room chats.
-            // Suppress when the teacher is already viewing the Everyone
-            // conversation (which is where these messages land), so a class
-            // discussion in progress doesn't spam the corner.
-            if (ActiveConversation != EveryoneConversation)
+            // Phase 17.2 step 1 (Bug I fix) — relaxed suppression for whole-
+            // class / room chats.  OLD rule was "suppress whenever
+            // ActiveConversation == EveryoneConversation" — but Everyone IS
+            // the default tab, so unfocused-window broadcasts were silently
+            // dropped (THE primary symptom of Bug I reported on 2-PC test).
+            // NEW rule: suppress only when ALL of (window actively focused)
+            // AND (Everyone tab is active) — i.e. teacher is provably reading
+            // the rail right now.  Unfocused / minimized → always notify.
+            bool broadcastSuppress = isActive && ActiveConversation == EveryoneConversation;
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Broadcast/Room branch suppress={broadcastSuppress} " +
+                                                $"everyoneActive={(ActiveConversation == EveryoneConversation)}");
+            if (!broadcastSuppress)
                 ShowChatNotification(chat.SenderName, prefix + chat.Text);
         });
+    }
+
+    /// <summary>Phase 17.2 step 1 (Bug I fix, 2026-05-31) — single source of
+    /// truth for "is the teacher currently looking at this app?"  Used by
+    /// every notification-suppression branch in OnChatReceived.  Returns true
+    /// iff the main window is visible, focused, AND not minimized — i.e. the
+    /// teacher's eyes can plausibly land on the corner notification overlay
+    /// + chat rail.  False = notify regardless of which conversation tab is
+    /// active, since the teacher won't see in-window UI anyway.</summary>
+    private static bool IsWindowActivelyVisible()
+    {
+        var w = System.Windows.Application.Current?.MainWindow;
+        return w != null
+            && w.IsVisible
+            && w.IsActive
+            && w.WindowState != System.Windows.WindowState.Minimized;
     }
 
     /// <summary>Phase 17 step 4 — push a Chat-kind LINE-style card onto the
