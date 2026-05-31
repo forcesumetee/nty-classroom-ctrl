@@ -97,4 +97,16 @@ public partial class ConferenceTile : UserControl
         ReactionFloater.BeginAnimation(OpacityProperty, fade);
         ReactionFloaterTransform.BeginAnimation(TranslateTransform.YProperty, rise);
     }
+
+    private void OuterBorder_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Phase 22.5-A: enforce 16:9 aspect ratio purely in code-behind
+        // This avoids the circular layout loop caused by binding Height to ActualWidth.
+        // Because the Width is dictated by the UniformGrid slot, updating the Height
+        // here does not trigger another width change.
+        if (e.WidthChanged)
+        {
+            OuterBorder.Height = OuterBorder.ActualWidth * 0.5625;
+        }
+    }
 }
