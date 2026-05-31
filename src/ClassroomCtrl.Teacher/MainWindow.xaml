@@ -773,6 +773,73 @@
                            FontWeight="Bold" FontSize="13"/>
             </Border>
 
+            <!-- Phase 23 — floating bulk action toolbar.  Slides into the top
+                 of the tile area when ≥1 tile is selected.  Sits on Row 1 as
+                 an overlay (HorizontalAlignment=Stretch + VerticalAlignment=
+                 Top) so it doesn't reflow the tile grid below — tiles scroll
+                 underneath the bar.  Action buttons are wired in step 23.5;
+                 step 23.4 ships count + Clear so the slide-in mechanic can
+                 be verified independently.
+                 Slide-in: a TranslateTransform.Y animates -56 → 0 on
+                 IsVisible=True via EventTrigger.Loaded inside the Border —
+                 fires whenever the Border becomes visible because the
+                 RenderTransform default Y resets every paint cycle. -->
+            <Border x:Name="BulkToolbar" Grid.Row="1"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                    Background="{DynamicResource Surface.Card}"
+                    BorderBrush="{DynamicResource Border.Default}"
+                    BorderThickness="0,0,0,1"
+                    Padding="20,10"
+                    Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="BulkToolbarTransform" Y="0"/>
+                </Border.RenderTransform>
+                <Border.Triggers>
+                    <EventTrigger RoutedEvent="Border.Loaded">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation
+                                    Storyboard.TargetName="BulkToolbarTransform"
+                                    Storyboard.TargetProperty="Y"
+                                    From="-56" To="0" Duration="0:0:0.18"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Border.Triggers>
+                <DockPanel>
+                    <!-- Count label (left) -->
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <TextBlock VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Text.Primary}"
+                                   FontWeight="SemiBold" FontSize="14">
+                            <Run Text="{Binding SelectedCount, Mode=OneWay}"/>
+                            <Run Text=" "/>
+                            <Run Text="{DynamicResource Lbl_SelectionStudentsSelected}"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Clear button (right) -->
+                    <Button DockPanel.Dock="Right" Width="28" Height="28"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand"
+                            ToolTip="{DynamicResource Lbl_SelectionClearTooltip}"
+                            Command="{Binding ClearSelectionCommand}">
+                        <TextBlock Text="✕" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource Text.Muted}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Button>
+
+                    <!-- Bulk action buttons — populated in step 23.5 -->
+                    <StackPanel x:Name="BulkActionsRow"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Margin="16,0,12,0"/>
+                </DockPanel>
+            </Border>
+
             <!-- Copyright (bottom-center of main column) -->
             <TextBlock Grid.Row="2"
                        Text="© NTY MULTIMEDIA CO.,LTD"
