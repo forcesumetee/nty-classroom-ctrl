@@ -159,35 +159,19 @@ public partial class MainWindow : Window
         });
     }
 
-    /// <summary>Phase 10.13.1 — Windows toast when chat arrives but MainWindow is hidden in tray
-    /// or minimized.  Uses the existing TrayIconManager.ShowBalloon (H.NotifyIcon-based);
-    /// Windows 10/11 surfaces it as a modern toast with the default notification sound.
-    /// DND toggle, custom overlay UI, reply-from-popup all deferred to Phase 10.14.
-    /// Caller is responsible for invoking on the UI thread (IsVisible/WindowState are
-    /// dispatcher-affined) — every call site is already inside Dispatcher.Invoke.</summary>
-    private void ShowChatToastIfHidden(MessageType kind, string body)
-    {
-        // Phase 10.14 (Item 5) — added IsActive so we also toast when the window is
-        // open in the background and another app has focus. The customer reported
-        // "I was using Word and missed a chat" after 10.13.1 shipped.
-        if (IsVisible && IsActive && WindowState != WindowState.Minimized) return;
-
-        // Phase 10.14 (Item 8) — was hard-coded Thai in 10.13.1; now Loc-resolved
-        // so the toast title respects the Teacher's selected language across all 10
-        // supported locales.  See LocalizationData.cs Toast_Chat* keys.
-        var title = kind switch
-        {
-            MessageType.ChatBroadcast => Loc.Get("Toast_ChatBroadcast"),
-            MessageType.ChatDirect    => Loc.Get("Toast_ChatDirect"),
-            MessageType.ChatRoom      => Loc.Get("Toast_ChatRoom"),
-            _ => Loc.Get("Toast_ChatBroadcast"),
-        };
-        // Truncate so the toast doesn't get clipped mid-sentence by Windows;
-        // 120 chars leaves room for the title + ellipsis on a one-line toast.
-        var trimmed = body ?? "";
-        if (trimmed.Length > 120) trimmed = trimmed.Substring(0, 117) + "...";
-        App.Tray?.ShowBalloon(title, trimmed);
-    }
+    // Phase 17.2 step 2 (Bug J fix, 2026-05-31) — removed ShowChatToastIfHidden
+    // (Phase 10.13.1 / 10.14 Item 5+8).  H.NotifyIcon.Wpf TaskbarIcon
+    // .ShowNotification surfaced an OS-level Windows toast when a teacher
+    // chat arrived while MainWindow was hidden / minimized / unfocused.  The
+    // user rejected the OS toast on the 2-PC follow-up validation (same
+    // class of complaint that drove Phase 17.1 step 1 on the Teacher side).
+    //
+    // Student-side replacement: pop-to-front on the active student window
+    // (classic MainWindow OR ConferenceGalleryWindow) wired in Phase 17.2
+    // step 3 via FlashWindowEx + Activate.  AddSystemNotification (the in-
+    // app notification list backing the bell popup) is untouched — it's
+    // the WPF-internal counterpart to the LINE-style overlay and continues
+    // to surface every Chat / HandRaise / system event in-app.
 
     private void OnNotificationsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
@@ -285,11 +269,9 @@ public partial class MainWindow : Window
                         {
                             if (_myEndpointId.HasValue && chat.SenderId == _myEndpointId.Value) return;
                             _confWindow?.ShellViewModel.AppendConferenceChat(chat.SenderName, chat.Text);
-                            ShowChatToastIfHidden(MessageType.ChatBroadcast, chat.Text);
                             return;
                         }
                         ChatList.Items.Add($"[{chat.SenderName}] {chat.Text}");
-                        ShowChatToastIfHidden(MessageType.ChatBroadcast, chat.Text);
                     });
                 }
                 break;
@@ -300,7 +282,6 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         ChatList.Items.Add($"[DM from {chat.SenderName}] {chat.Text}");
-                        ShowChatToastIfHidden(MessageType.ChatDirect, chat.Text);
                     });
                 }
                 break;
@@ -311,7 +292,6 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         ChatList.Items.Add($"[Room] [{chat.SenderName}] {chat.Text}");
-                        ShowChatToastIfHidden(MessageType.ChatRoom, chat.Text);
                     });
                 }
                 break;
@@ -353,8 +333,8 @@ public partial class MainWindow : Window
                             {
                                 _hostToolbar = new HostFloatingToolbar(_myEndpointId!.Value, assign.RoomName);
                                 _hostToolbar.Show();
-                                App.Tray?.ShowBalloon(Loc.Get("Lbl_AppName"),
-                                    Loc.Format("Toast_YouAreHost", assign.RoomName));
+                                // Phase 17.2 step 2 — OS toast removed; the in-app
+                                // bell-notification path covers the same UX.
                                 AddSystemNotification(Loc.Format("Toast_YouAreHost", assign.RoomName), "👑");
                             }
                         }
@@ -396,9 +376,11 @@ public partial class MainWindow : Window
                     var n = MessagePack.MessagePackSerializer.Deserialize<StudentRecordingNotifyMessage>(env.Payload);
                     Dispatcher.Invoke(() =>
                     {
+                        // Phase 17.2 step 2 — OS toast removed; route through
+                        // the in-app system-notification surface so the PDPA
+                        // "teacher is recording" cue still lands.
                         if (n.IsRecording)
-                            App.Tray?.ShowBalloon(Loc.Get("Lbl_AppName"),
-                                Loc.Get("Toast_TeacherRecording"));
+                            AddSystemNotification(Loc.Get("Toast_TeacherRecording"), "🎬");
                     });
                 }
                 catch (Exception ex) { IpcClient.LogToFile($"[MainWindow] StudentRecordingNotify decode: {ex.Message}"); }
@@ -447,11 +429,14 @@ public partial class MainWindow : Window
                 });
                 break;
 
-            // Phase 6.6: PDPA balloon — teacher captured my screen
+            // Phase 6.6: PDPA notification — teacher captured my screen.
+            // Phase 17.2 step 2 — Windows toast surface stripped; the in-app
+            // AddSystemNotification path (bell popup + Activity tab) still
+            // surfaces this event to the student.
             case MessageType.StudentScreenshotNotify:
                 Dispatcher.Invoke(() =>
                 {
-                    App.Tray?.ShowBalloon(Loc.Get("Lbl_AppName"), Loc.Get("Toast_TeacherScreenshot"));
+                    AddSystemNotification(Loc.Get("Toast_TeacherScreenshot"), "📸");
                 });
                 break;
 
@@ -646,11 +631,11 @@ public partial class MainWindow : Window
                     }
                     Dispatcher.Invoke(() =>
                     {
-                        var title = Loc.Get("Lbl_AppName");
                         var body = mm.Muted
                             ? (string.IsNullOrEmpty(mm.Reason) ? "Teacher muted your microphone." : mm.Reason)
                             : "Teacher allowed your microphone.";
-                        App.Tray?.ShowBalloon(title, body);
+                        // Phase 17.2 step 2 — OS toast removed; in-app
+                        // AddSystemNotification still surfaces the event.
                         AddSystemNotification(body, "🎤");
                     });
                 }
@@ -688,7 +673,8 @@ public partial class MainWindow : Window
                         // by the StudentBroadcaster via the StudentStreamStart message that follows.
                         if (_myEndpointId.HasValue && _myEndpointId.Value == ds.SourceStudentId)
                         {
-                            App.Tray?.ShowBalloon(Loc.Get("Lbl_AppName"), Loc.Get("Toast_YouAreDemoing"));
+                            // Phase 17.2 step 2 — OS toast removed; in-app
+                            // notification continues.
                             AddSystemNotification(Loc.Get("Toast_YouAreDemoing"), "🎤");
                             return;
                         }
@@ -1038,7 +1024,9 @@ public partial class MainWindow : Window
                             RemoteControlReceiver.ReleaseAll();
                         };
                         _remoteBanner.Show();
-                        App.Tray?.ShowBalloon(Loc.Get("Lbl_AppName"), Loc.Get("Banner_RemoteActive"));
+                        // Phase 17.2 step 2 — OS toast removed; the in-window
+                        // remote-control banner _remoteBanner already conveys
+                        // the same "you're being remotely controlled" UX.
                     }
                 });
                 break;
