@@ -42,22 +42,23 @@
                  chain kicks in. -->
             <Button Background="Transparent" BorderThickness="0"
                     Padding="0" Cursor="Hand"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Top"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch"
                     MinHeight="160" MinWidth="200"
-                    MaxHeight="376" MaxWidth="656"
                     Focusable="False" FocusVisualStyle="{x:Null}"
                     Command="{Binding DataContext.PinCommand,
                               RelativeSource={RelativeSource AncestorType=UserControl}}"
                     CommandParameter="{Binding}">
-                <!-- Phase 22.3-A: Center alignment + Max caps so a 2-3
-                     tile gallery on a wide window centres each tile
-                     within its UniformGrid cell instead of stretching
-                     to a banner.  Max values are 16 px wider/taller
-                     than the inner tile's Max (640x360) to account
-                     for the inner Border's 8 px margin on every side. -->
+                <!-- Phase 22.4-A: Stretch fills the slot horizontally;
+                     VerticalAlignment=Top lets the inner ConferenceTile's
+                     bound Height (16:9 of its ActualWidth) shrink the
+                     button to that natural height instead of leaving
+                     padding at the bottom of an over-tall slot.  Max
+                     caps from 22.3-A removed — the inner Border's
+                     MaxWidth=1200 + computed Height handle the cap
+                     story now. -->
                 <local:ConferenceTile/>
             </Button>
         </DataTemplate>

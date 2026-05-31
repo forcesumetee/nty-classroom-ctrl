@@ -16,6 +16,10 @@
              image (consistent with the picker, bypasses the Win11
              Thai-locale font shaping issue). -->
         <conv:EmojiToReactionImageConverter x:Key="EmojiToReactionImage"/>
+        <!-- Phase 22.4-A — multiply the OuterBorder's ActualWidth by
+             0.5625 (16:9) to drive Height.  Lets the tile fill its
+             UniformGrid slot horizontally while staying widescreen. -->
+        <conv:AspectRatioConverter x:Key="AspectRatio"/>
     </UserControl.Resources>
     <!-- Phase 22 — Zoom-style dark tile.
          Outer Border: dark slate background, rounded.  IsSpeaking flips
@@ -42,14 +46,19 @@
             ClipToBounds="True"
             Margin="8"
             MinHeight="160" MinWidth="200"
-            MaxHeight="360" MaxWidth="640"><!-- Phase 22.3-A: aspect cap.
-            Without MaxWidth, UniformGrid with 2 cols + a wide window
-            stretched tiles to ~700x200 banners (cell height was driven
-            by the 360 px content but width was unbounded).  640x360
-            is a clean 16:9 cap and keeps the gallery feeling like a
-            classroom (small tiles tiled across) rather than a billboard
-            row.  The MinHeight/MinWidth floor from 22.1-A still kicks
-            in on very narrow / cramped layouts. -->
+            MaxWidth="1200"
+            Height="{Binding ActualWidth,
+                     RelativeSource={RelativeSource Self},
+                     Converter={StaticResource AspectRatio},
+                     ConverterParameter=0.5625}"><!-- Phase 22.4-A:
+            aspect-ratio sizing replaces 22.3-A's fixed Max caps.
+            The OuterBorder fills its UniformGrid slot horizontally
+            (HCA/VCA on the wrapping Button = Stretch) and computes
+            its own Height = ActualWidth × 0.5625 = 16:9.  MaxWidth=1200
+            caps the 1-tile case so a single participant on a
+            1920×1080 window doesn't render at the full screen width.
+            22.1-A MinHeight=160 MinWidth=200 floor still active for
+            crowded galleries where the slot drops below that floor. -->
         <Border.Style>
             <Style TargetType="Border">
                 <Setter Property="Background" Value="{StaticResource ConfTileBgBrush}"/>
