@@ -6,175 +6,210 @@
              xmlns:conv="clr-namespace:ClassroomCtrl.Shared.Wpf.Converters"
              mc:Ignorable="d"
              Background="Transparent"
-             FontFamily="Segoe UI"
+             FontFamily="{StaticResource ConfFontFamily}"
              d:DesignWidth="340" d:DesignHeight="190">
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
     </UserControl.Resources>
-    <!-- Phase 15-C — single conference tile.
-         Outer Border carries the accent ring (active speaker / pinned).
-         Inner Border is the 16:9 surface; webcam frame OR placeholder fills it.
-         Bottom overlay: name + mic/cam state.
-         Top-right slot: hand-raise badge placeholder (Phase 15-E wires).
-         Click anywhere → PinCommand (forwarded by parent gallery DataTemplate).
-
-         Phase 16-B step 4 — moved from Teacher/Views/Conference/ to Shared.Wpf
-         so Student.Agent renders the same tile via its
-         StudentConferenceShellViewModel. -->
-    <!-- Phase 16-B+ step 3 — MinHeight prevents the tile from collapsing to
-         a thin label strip when the * row's measured height shrinks under
-         certain UniformGrid pages.  120 px keeps the avatar + "Camera off"
-         legible at the smallest packed layout (4-wide page). -->
+    <!-- Phase 22 — Zoom-style dark tile.
+         Outer Border: dark slate background, rounded.  IsSpeaking flips
+         to the yellow active-speaker ring (replacing 15-C's green
+         accent — yellow reads as "speaking" in the Meet / Zoom
+         convention and contrasts the green mic-active dot in the
+         status bar).  IsPinned keeps the purple ring (lower priority
+         than active-speaker by trigger order).
+         When a video frame is present, background dims further
+         (ConfTileLiveBgBrush) so transparent pixels around odd-shaped
+         frames don't read as panel breaks.
+         Layering (bottom-up):
+           1. Video frame Image                  (full-bleed)
+           2. Centered name placeholder          (when no frame)
+           3. Top-right badges                   (Host + Hand-raise)
+           4. Bottom-left status bar pill        (mic dot + name + icons)
+           5. Floating reaction emoji            (driven by code-behind)
+         Padding/Margin: 12 px breathing room on overlays so they don't
+         touch the tile edge at the smallest UniformGrid packing.
+         15-C ClickToPin handler removed for v1.1; tile is non-interactive
+         (host pins via sidebar in v1.2). -->
     <Border x:Name="OuterBorder"
-            CornerRadius="8" BorderThickness="2"
-            BorderBrush="Transparent"
-            Background="{DynamicResource Surface.Card}"
-            Padding="0" Margin="8" MinHeight="120">
-        <!-- Three style triggers in priority order:
-             1. IsPinned=true        → purple accent (visual lock indicator)
-             2. IsSpeaking=true      → green accent (active speaker)
-             3. otherwise            → transparent (no accent) -->
+            CornerRadius="{StaticResource ConfTileCornerRadius}"
+            ClipToBounds="True"
+            Margin="8" MinHeight="120">
         <Border.Style>
             <Style TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource ConfTileBgBrush}"/>
                 <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
                 <Style.Triggers>
-                    <DataTrigger Binding="{Binding IsSpeaking}" Value="True">
-                        <Setter Property="BorderBrush" Value="#10B981"/>
+                    <!-- Live video → dimmer plate so the frame pops. -->
+                    <DataTrigger Binding="{Binding JpegFrame, Converter={StaticResource NullToVisibility}}"
+                                 Value="Visible">
+                        <Setter Property="Background" Value="{StaticResource ConfTileLiveBgBrush}"/>
                     </DataTrigger>
+                    <!-- IsSpeaking flips on the active-speaker yellow ring. -->
+                    <DataTrigger Binding="{Binding IsSpeaking}" Value="True">
+                        <Setter Property="BorderBrush" Value="{StaticResource ConfBorderActiveBrush}"/>
+                        <Setter Property="BorderThickness" Value="3"/>
+                    </DataTrigger>
+                    <!-- Pinned (sidebar v1.2 wiring) keeps the prior purple
+                         accent so the affordance still has a unique color
+                         when both Pinned + Speaking land at once. -->
                     <DataTrigger Binding="{Binding IsPinned}" Value="True">
                         <Setter Property="BorderBrush" Value="#7C3AED"/>
+                        <Setter Property="BorderThickness" Value="3"/>
                     </DataTrigger>
                 </Style.Triggers>
             </Style>
         </Border.Style>
+
         <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+            <!-- Layer 1: video frame. -->
+            <Image Source="{Binding JpegFrame}" Stretch="Uniform"
+                   Visibility="{Binding JpegFrame, Converter={StaticResource NullToVisibility}}"/>
 
-            <!-- Webcam frame area.  Cam-off placeholder is a Zoom-style
-                 avatar circle (initial of display name) + "Camera off" label.
-                 Phase 16-B+ step 3 — replaced the 🚫 emoji + duplicate name
-                 placeholder (which collapsed visually with the bottom name
-                 strip) with a proper avatar surface so the tile reads as a
-                 real participant slot even when no cam frame is arriving. -->
-            <Border Grid.Row="0" Background="#1F2937" CornerRadius="6,6,0,0">
-                <Grid>
-                    <!-- Frame, visible whenever we have a BitmapSource. -->
-                    <Image Source="{Binding JpegFrame}" Stretch="Uniform"
-                           Visibility="{Binding JpegFrame, Converter={StaticResource NullToVisibility}}"/>
-                    <!-- Cam-off placeholder: avatar circle (initial) +
-                         camera-off indicator.  Visible when
-                         JpegFrame == null OR IsCamLive == false (the bound
-                         JpegFrame stays after a frame arrives even if the
-                         participant stops their cam, so we bind to the
-                         null-converter on JpegFrame for the simple cam-off
-                         signal that today's pipeline already exposes
-                         — JpegFrame is cleared when CamLive flips off in
-                         ConferenceGalleryViewModel routing). -->
-                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
-                          Visibility="{Binding JpegFrame, Converter={StaticResource NullToVisibility}, ConverterParameter=Inverted}">
-                        <StackPanel>
-                            <!-- Avatar circle with first letter of name.  Sized
-                                 to read as a tile-anchor even at smallest
-                                 page layout; matches Meet / Zoom proportions. -->
-                            <Grid Width="72" Height="72"
-                                  HorizontalAlignment="Center"
-                                  Margin="0,0,0,8">
-                                <Ellipse Fill="#4F46E5"/>
-                                <TextBlock Text="{Binding Initial}"
-                                           FontSize="32" FontWeight="SemiBold"
-                                           Foreground="White"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                            </Grid>
-                            <!-- Camera-off label below the avatar.  Small,
-                                 muted; "📷 Camera off" form to mirror the
-                                 conventional Zoom / Meet language. -->
-                            <TextBlock HorizontalAlignment="Center"
-                                       Foreground="#94A3B8" FontSize="12">
-                                <Run Text="📷"/>
-                                <Run Text=" "/>
-                                <Run Text="{DynamicResource Conf_CameraOff}"/>
-                            </TextBlock>
-                        </StackPanel>
-                    </Grid>
-                    <!-- Top-right: hand-raise badge slot.  15-E binds IsHandRaised. -->
-                    <Border HorizontalAlignment="Right" VerticalAlignment="Top"
-                            Margin="6" Padding="6,2"
-                            Background="#FBBF24" CornerRadius="999"
-                            Visibility="{Binding IsHandRaised, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Text="✋" FontSize="12"/>
-                    </Border>
+            <!-- Layer 2: name placeholder when no frame.  Large display
+                 name centered (Zoom-style "minimal" tile per the
+                 mockup).  No avatar circle, no Camera-off label
+                 — the cam-off state surfaces via the cam icon color
+                 in the bottom status bar instead. -->
+            <TextBlock Text="{Binding DisplayName}"
+                       Visibility="{Binding JpegFrame, Converter={StaticResource NullToVisibility}, ConverterParameter=Inverted}"
+                       Foreground="{StaticResource ConfTextPrimaryBrush}"
+                       FontFamily="{StaticResource ConfFontFamily}"
+                       FontSize="{StaticResource ConfFontSizeTileName}"
+                       FontWeight="Medium"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="20,0"/>
 
-                    <!-- Phase 15-E step 5 — floating reaction emoji.  Set by
-                         MainViewModel.ShowReactionOnTile via a DispatcherTimer.
-                         Float-up + fade-out Storyboard is started by the
-                         tile's code-behind on PropertyChanged when the
-                         emoji becomes non-empty.  RenderTransformOrigin
-                         keeps the translate centered so the float lifts
-                         straight up from the tile center. -->
-                    <TextBlock x:Name="ReactionFloater"
-                               Text="{Binding CurrentReactionEmoji}"
-                               FontSize="56"
-                               HorizontalAlignment="Center"
+            <!-- Layer 3: top-right badges (Host + Hand raise).  Stacked
+                 horizontally so multi-badge teacher tiles stay tidy. -->
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,12,12,0">
+
+                <!-- Host badge — semi-transparent blue background + bright
+                     blue stroke + pale-blue text.  Visibility binds to
+                     IsHost (added as ObservableProperty stub in this
+                     phase; populator lands in v1.2). -->
+                <Border Visibility="{Binding IsHost, Converter={StaticResource BoolToVisibility}}"
+                        CornerRadius="{StaticResource ConfBadgeCornerRadius}"
+                        Background="{StaticResource ConfHostBadgeBgBrush}"
+                        BorderBrush="{StaticResource ConfAccentBlueBrush}"
+                        BorderThickness="1"
+                        Padding="10,3"
+                        Margin="0,0,6,0">
+                    <TextBlock Text="HOST"
+                               Foreground="{StaticResource ConfAccentBluePale}"
+                               FontFamily="{StaticResource ConfFontFamily}"
+                               FontSize="{StaticResource ConfFontSizeBadge}"
+                               FontWeight="Medium"/>
+                </Border>
+
+                <!-- Hand-raise badge: amber fill, dark-text emoji.
+                     Single-glyph for v1.1 (the localized "Hand raised"
+                     label is in the participants sidebar already; the
+                     tile badge just signals presence). -->
+                <Border Visibility="{Binding IsHandRaised, Converter={StaticResource BoolToVisibility}}"
+                        CornerRadius="14"
+                        Background="{StaticResource ConfAccentYellowBrush}"
+                        Padding="10,4">
+                    <TextBlock Text="✋"
+                               FontFamily="Segoe UI Emoji, Segoe UI Symbol"
+                               FontSize="13"
+                               Foreground="#1F1F23"
+                               VerticalAlignment="Center"/>
+                </Border>
+            </StackPanel>
+
+            <!-- Layer 4: bottom-left status pill.  Dark translucent
+                 background so it floats over either video or the name
+                 placeholder.  Order: mic-active green dot (visible
+                 only when IsMicLive), display name, mic icon, cam icon. -->
+            <Border CornerRadius="{StaticResource ConfStatusBarRadius}"
+                    Background="{StaticResource ConfStatusBarBgBrush}"
+                    Padding="{StaticResource ConfStatusBarPadding}"
+                    HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                    Margin="12,0,0,12">
+                <StackPanel Orientation="Horizontal">
+                    <!-- Speaking indicator: tiny green dot. -->
+                    <Ellipse Width="6" Height="6"
+                             Fill="{StaticResource ConfAccentGreenBrush}"
+                             VerticalAlignment="Center"
+                             Margin="0,0,8,0"
+                             Visibility="{Binding IsMicLive, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <!-- Name (+ "(You)" suffix from code-behind via
+                         SelfSuffix DependencyProperty). -->
+                    <TextBlock Foreground="{StaticResource ConfTextPrimaryBrush}"
+                               FontFamily="{StaticResource ConfFontFamily}"
+                               FontSize="{StaticResource ConfFontSizeStatus}"
+                               FontWeight="Medium"
                                VerticalAlignment="Center"
-                               IsHitTestVisible="False"
-                               Opacity="0">
-                        <TextBlock.RenderTransform>
-                            <TranslateTransform x:Name="ReactionFloaterTransform" Y="0"/>
-                        </TextBlock.RenderTransform>
-                    </TextBlock>
-                </Grid>
-            </Border>
-
-            <!-- Name + indicators strip. -->
-            <Border Grid.Row="1" Background="{DynamicResource Surface.Elevated}"
-                    Padding="10,5" CornerRadius="0,0,6,6">
-                <DockPanel>
-                    <!-- Right cluster: mic + cam indicators. -->
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
-                                VerticalAlignment="Center">
-                        <!-- Mic icon: green if live, grey otherwise. -->
-                        <TextBlock Text="🎙" FontSize="13" Margin="6,0,0,0">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Opacity" Value="0.35"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsMicLive}" Value="True">
-                                            <Setter Property="Opacity" Value="1.0"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                        <!-- Cam icon: full opacity if cam live, dim otherwise. -->
-                        <TextBlock Text="📷" FontSize="13" Margin="6,0,0,0">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Opacity" Value="0.35"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsCamLive}" Value="True">
-                                            <Setter Property="Opacity" Value="1.0"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </StackPanel>
-                    <!-- Name (with "(You)" suffix for self-tile). -->
-                    <TextBlock VerticalAlignment="Center"
-                               Foreground="{DynamicResource Text.Primary}"
-                               FontSize="12" FontWeight="SemiBold"
-                               TextTrimming="CharacterEllipsis">
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="180">
                         <Run Text="{Binding DisplayName, Mode=OneWay}"/>
                         <Run Text=" "/>
-                        <Run Text="{Binding SelfSuffix, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWay}"/>
+                        <Run Text="{Binding SelfSuffix, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWay}"
+                             Foreground="{StaticResource ConfTextSecondaryBrush}"/>
                     </TextBlock>
-                </DockPanel>
+
+                    <!-- Mic icon: white when live, red when muted. -->
+                    <TextBlock Text="🎙"
+                               FontFamily="Segoe UI Emoji, Segoe UI Symbol"
+                               FontSize="13"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource ConfAccentRedBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsMicLive}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Cam icon: white when on, red when off. -->
+                    <TextBlock Text="📷"
+                               FontFamily="Segoe UI Emoji, Segoe UI Symbol"
+                               FontSize="13"
+                               Margin="6,0,0,0"
+                               VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource ConfAccentRedBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsCamLive}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
             </Border>
+
+            <!-- Layer 5: floating reaction emoji.  Code-behind starts
+                 the float-up Storyboard when CurrentReactionEmoji
+                 becomes non-empty (Phase 15-E step 5).  RenderTransform
+                 + Opacity 0 default match the existing animation
+                 expectations — DO NOT rename these elements. -->
+            <TextBlock x:Name="ReactionFloater"
+                       Text="{Binding CurrentReactionEmoji}"
+                       FontSize="56"
+                       FontFamily="Segoe UI Emoji, Segoe UI Symbol"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       IsHitTestVisible="False"
+                       Opacity="0">
+                <TextBlock.RenderTransform>
+                    <TranslateTransform x:Name="ReactionFloaterTransform" Y="0"/>
+                </TextBlock.RenderTransform>
+            </TextBlock>
         </Grid>
     </Border>
 </UserControl>

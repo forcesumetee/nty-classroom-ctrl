@@ -58,6 +58,14 @@ public partial class ConferenceTileViewModel : ObservableObject
     [ObservableProperty] private bool isCamLive;
     [ObservableProperty] private bool isHandRaised;
 
+    /// <summary>Phase 22 (v1.1) — stub for the dark-theme "HOST" badge
+    /// rendered top-right on the teacher tile.  Today nobody sets this;
+    /// the badge stays hidden so no visual regression.  v1.2 will
+    /// populate from the shell VM's <c>Role</c> when the gallery
+    /// rebuilds (Phase 16-D added Role to the shell VM but didn't
+    /// carry it down to per-tile state).</summary>
+    [ObservableProperty] private bool isHost;
+
     /// <summary>Set by <see cref="ConferenceGalleryViewModel"/> when this tile
     /// is the active pin.  Drives a border accent + governs whether the
     /// layout switches to filmstrip mode.</summary>
