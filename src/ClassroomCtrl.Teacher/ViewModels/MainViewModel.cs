@@ -1300,7 +1300,14 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             // signaling envelope (ConferenceShareStart vs ScreenStreamStart).
             if (IsInConference)
             {
-                var sourceName = Loc.Get("Conf_TeacherDisplayName", "Teacher");
+                // Phase 22.2-A — match the host-identity convention used in
+                // ConferenceStartMessage (MachineName, fall back to the
+                // localized "Teacher" only if the env var is somehow blank).
+                // Receivers display this in the "X is sharing" banner of
+                // ConferenceShareView.
+                var sourceName = !string.IsNullOrWhiteSpace(System.Environment.MachineName)
+                    ? System.Environment.MachineName
+                    : Loc.Get("Conf_TeacherDisplayName", "Teacher");
                 App.ScreenBroadcaster.IsConferenceShare = true;
                 App.ScreenBroadcaster.ConferenceShareSourceName = sourceName;
                 // Set local gallery state so the teacher's own view flips to
@@ -2546,7 +2553,13 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             {
                 App.Camera.Routing = ClassroomCtrl.Teacher.Services.CamRouting.Conference;
                 App.Camera.ConferenceSessionId = ConferenceSessionId;
-                App.Camera.ConferenceSourceName = Loc.Get("Conf_TeacherDisplayName", "Teacher");
+                // Phase 22.2-A — same MachineName convention used by
+                // ConferenceStartMessage.HostName + ScreenBroadcaster
+                // .ConferenceShareSourceName so a student peer renders the
+                // teacher cam tile with the same label as the title bar.
+                App.Camera.ConferenceSourceName = !string.IsNullOrWhiteSpace(System.Environment.MachineName)
+                    ? System.Environment.MachineName
+                    : Loc.Get("Conf_TeacherDisplayName", "Teacher");
             }
             else
             {
@@ -2649,10 +2662,22 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         {
             try
             {
+                // Phase 22.2-A — broadcast the teacher's machine name as the
+                // host identity (matches 22.1-E which made the same swap on
+                // the local self-tile).  Without this, students render the
+                // teacher's title-bar host line + the gallery tile that
+                // belongs to the teacher as the BrandingService organization
+                // label (typically the school / company name) which fights
+                // the "machines in the room" tile language.  Falls back to
+                // OrganizationSubtitle then "Teacher" so a missing
+                // MachineName env var doesn't break the broadcast.
+                var hostName = !string.IsNullOrWhiteSpace(System.Environment.MachineName)
+                    ? System.Environment.MachineName
+                    : (string.IsNullOrWhiteSpace(OrganizationSubtitle) ? "Teacher" : OrganizationSubtitle);
                 var payload = new ConferenceStartMessage
                 {
                     SessionId = ConferenceSessionId,
-                    HostName = OrganizationSubtitle ?? "",
+                    HostName = hostName,
                     StartedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 };
                 await App.Server.BroadcastConferenceStartAsync(payload, System.Threading.CancellationToken.None);
