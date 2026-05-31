@@ -167,7 +167,7 @@
                                     HorizontalAlignment="Left"
                                     ToolTip="{DynamicResource Chat_AttachFile_Tooltip}">
                                 <TextBlock Text="📎" FontSize="16"
-                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                                           FontFamily="Segoe UI Emoji"/>
                             </Button>
                             <TextBox Grid.Column="0"
                                      Margin="40,0,0,0"
@@ -300,7 +300,7 @@
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding AttachmentIcon}"
                                                                    FontSize="18"
-                                                                   FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                                                   FontFamily="Segoe UI Emoji"
                                                                    VerticalAlignment="Center"
                                                                    Margin="0,0,8,0"/>
                                                         <StackPanel VerticalAlignment="Center">
@@ -459,7 +459,7 @@
                                                      dim used in 15-C — explicit color
                                                      reads better on the dark surface. -->
                                                 <TextBlock Text="🎙" FontSize="14" Margin="4,0"
-                                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                                           FontFamily="Segoe UI Emoji">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Setter Property="Foreground"
@@ -474,7 +474,7 @@
                                                     </TextBlock.Style>
                                                 </TextBlock>
                                                 <TextBlock Text="📷" FontSize="14" Margin="4,0,0,0"
-                                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                                                           FontFamily="Segoe UI Emoji">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Setter Property="Foreground"

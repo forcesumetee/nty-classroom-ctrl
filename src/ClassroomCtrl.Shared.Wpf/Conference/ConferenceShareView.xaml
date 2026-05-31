@@ -43,7 +43,7 @@
                             Visibility="{Binding ActiveShareFrame, Converter={StaticResource NullToVisibility}, ConverterParameter=Inverted}">
                     <TextBlock Text="🖥" FontSize="56"
                                HorizontalAlignment="Center"
-                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                               FontFamily="Segoe UI Emoji"
                                Foreground="{StaticResource ConfTextSecondaryBrush}"/>
                     <TextBlock HorizontalAlignment="Center" Margin="0,8,0,0"
                                FontSize="14"
@@ -63,7 +63,7 @@
                         CornerRadius="{StaticResource ConfStatusBarRadius}">
                     <TextBlock FontSize="12" FontWeight="Medium">
                         <Run Text="🖥"
-                             FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                             FontFamily="Segoe UI Emoji"
                              Foreground="{StaticResource ConfTextPrimaryBrush}"/>
                         <Run Text=" "/>
                         <Run Text="{Binding ActiveShareSourceName, Mode=OneWay}"

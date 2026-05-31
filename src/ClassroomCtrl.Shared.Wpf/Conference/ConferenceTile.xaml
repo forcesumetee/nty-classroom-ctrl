@@ -126,7 +126,7 @@
                         Background="{StaticResource ConfAccentYellowBrush}"
                         Padding="10,4">
                     <TextBlock Text="✋"
-                               FontFamily="Segoe UI Emoji, Segoe UI Symbol"
+                               FontFamily="Segoe UI Emoji"
                                FontSize="13"
                                Foreground="#1F1F23"
                                VerticalAlignment="Center"/>
@@ -167,7 +167,7 @@
 
                     <!-- Mic icon: white when live, red when muted. -->
                     <TextBlock Text="🎙"
-                               FontFamily="Segoe UI Emoji, Segoe UI Symbol"
+                               FontFamily="Segoe UI Emoji"
                                FontSize="13"
                                Margin="12,0,0,0"
                                VerticalAlignment="Center">
@@ -185,7 +185,7 @@
 
                     <!-- Cam icon: white when on, red when off. -->
                     <TextBlock Text="📷"
-                               FontFamily="Segoe UI Emoji, Segoe UI Symbol"
+                               FontFamily="Segoe UI Emoji"
                                FontSize="13"
                                Margin="6,0,0,0"
                                VerticalAlignment="Center">
@@ -211,7 +211,7 @@
             <TextBlock x:Name="ReactionFloater"
                        Text="{Binding CurrentReactionEmoji}"
                        FontSize="56"
-                       FontFamily="Segoe UI Emoji, Segoe UI Symbol"
+                       FontFamily="Segoe UI Emoji"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        IsHitTestVisible="False"

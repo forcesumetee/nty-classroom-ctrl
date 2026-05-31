@@ -98,7 +98,7 @@
                                            Foreground="{StaticResource ConfTextPrimaryBrush}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
-                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                                           FontFamily="Segoe UI Emoji"/>
                             </Border>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="{Binding SenderName}"

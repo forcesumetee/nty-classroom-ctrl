@@ -206,7 +206,7 @@
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <TextBlock Text="💼" FontSize="16" Margin="0,0,6,0"
-                                   FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                                   FontFamily="Segoe UI Emoji"
                                    VerticalAlignment="Center"/>
                         <TextBlock x:Name="RejoinBannerTitle"
                                    Text="{DynamicResource Rejoin_BannerTitle}"

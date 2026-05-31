@@ -190,7 +190,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="📚" FontSize="12" Margin="0,0,6,0"
                                            VerticalAlignment="Center"
-                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                                           FontFamily="Segoe UI Emoji"/>
                                 <TextBlock Text="{DynamicResource Conf_ModeClassroom}"
                                            FontSize="12"
                                            VerticalAlignment="Center"/>
@@ -240,7 +240,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="📹" FontSize="12" Margin="0,0,6,0"
                                            VerticalAlignment="Center"
-                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
+                                           FontFamily="Segoe UI Emoji"/>
                                 <TextBlock Text="{DynamicResource Conf_ModeConference}"
                                            FontSize="12"
                                            VerticalAlignment="Center"/>

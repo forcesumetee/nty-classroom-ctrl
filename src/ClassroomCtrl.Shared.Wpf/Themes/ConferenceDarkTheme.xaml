@@ -51,7 +51,16 @@
     <SolidColorBrush x:Key="ConfBorderActiveBrush" Color="#FBBC04"/>  <!-- Speaking ring on tile -->
 
     <!-- ============ TYPOGRAPHY ============ -->
-    <FontFamily x:Key="ConfFontFamily">Segoe UI, Segoe UI Emoji, Segoe UI Symbol</FontFamily>
+    <!-- Phase 22.2-D — dropped "Segoe UI Symbol" from the fallback chain.
+         On Win11 + Thai locale the WPF font resolver was picking the
+         monochrome Symbol font over the color "Segoe UI Emoji" for the
+         reaction picker glyphs.  Symbol is the OLDER monochrome
+         emoji-shaped dingbat font; on every supported OS (Win10+)
+         "Segoe UI Emoji" is present and carries the color glyph,
+         so dropping Symbol from the fallback can only improve
+         consistency.  Text primary = Segoe UI; emoji fallback = the
+         color font; nothing falls through to monochrome anymore. -->
+    <FontFamily x:Key="ConfFontFamily">Segoe UI, Segoe UI Emoji</FontFamily>
 
     <sys:Double x:Key="ConfFontSizeTileName">36</sys:Double>
     <sys:Double x:Key="ConfFontSizeStatus">12</sys:Double>
