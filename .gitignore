@@ -36,6 +36,7 @@ Desktop.ini
 
 # Logs
 *.log
+layout_log.txt
 
 # MSI build
 *.msi
