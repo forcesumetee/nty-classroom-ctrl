@@ -666,7 +666,30 @@ key namespaces differ: `Conf*` (Conference dark) vs `Surface.*`/`Border.*`/`Acce
 - Runtime light/dark swap (the WPF `DynamicResource` + Colors.Light/Dark pair) is a
   separate feature (theme manager) — not required just to *consume* the tokens.
 
-## 16. Reference links
+## 16. Light-surface views in a dark-default app — `ThemeVariantScope`
+_(Phase 25.6 — porting a Classroom light dialog while the app root is Dark)_
+
+If the app sets `RequestedThemeVariant="Dark"` (for our Conference tabs) but a view
+is a **light** surface (Classroom dialogs), Fluent's **variant-aware standard controls**
+(`CheckBox`/`ComboBox`/`TextBox`/`ScrollBar`) render in *dark* mode → light text on your
+light surface = unreadable. Wrap the light view in a **`ThemeVariantScope`**:
+```xml
+<ThemeVariantScope RequestedThemeVariant="Light">
+  <Border Background="{StaticResource Surface.Elevated}"> … light dialog … </Border>
+</ThemeVariantScope>
+```
+Now Fluent controls inside render their **light** variant (dark text, light fills),
+congruent with the Classroom surface. Your explicit `{StaticResource Surface.*/Text.*}`
+brushes are variant-agnostic and unaffected. (Exact accent-color match of Fluent
+controls to the Classroom palette is a separate "control theming" polish.)
+
+**Design-system reuse (this port applied, didn't invent):** WPF keyed button `Style`s →
+Avalonia **`ControlTheme`s** applied via `Theme="{StaticResource Button.X}"` (§3e); WPF
+keyed `TextBlock` `Style`s (`Text.H*`) → **style classes** `Classes="h1"` (§3). Both live
+in `Themes/ClassroomControls.axaml` (a `<Styles>` file: ControlThemes in `Styles.Resources`
++ the text-class `Style`s), included via `StyleInclude`.
+
+## 17. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
 - WPF → Avalonia migration: https://docs.avaloniaui.net/docs/get-started/wpf/
@@ -677,7 +700,7 @@ key namespaces differ: `Conf*` (Conference dark) vs `Surface.*`/`Border.*`/`Acce
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 
 ---
-_Living document (16 sections) — extend as later ports surface new patterns. Covered:
+_Living document (17 sections) — extend as later ports surface new patterns. Covered:
 triggers→classes, converters, DP→StyledProperty, precedence, compiled bindings,
 keyed-Style→ControlTheme + ControlTemplate/pseudo-classes (§3e), animations (§10),
 popups/flyouts + ContextMenu + dynamic ItemsSource submenu / ItemContainerTheme (§11),
