@@ -352,7 +352,16 @@ var win = new MainWindow(); win.Show();
 Dispatcher.UIThread.RunJobs();
 win.CaptureRenderedFrame()!.Save("out.png");   // needs Avalonia.Headless + Avalonia.Skia
 ```
-Keep this as a committed tool for per-view visual checks.
+This is now a committed, reusable tool — **`tools/HeadlessCapture/`** (Phase 25.2):
+```bash
+dotnet run --project tools/HeadlessCapture -- --list                    # scenarios
+dotnet run --project tools/HeadlessCapture -- --scenario theme --output x.png
+dotnet run --project tools/HeadlessCapture -- --view-type <FQN> --output x.png   # ad-hoc
+```
+Add a scenario per future port in `tools/HeadlessCapture/Scenarios.cs`. Caveats:
+static scenarios are content-deterministic (but PNG/AA cause small byte diffs — diff
+**visually**, not by hash); animated captures are timing-variant (headless clock uses
+real time) — illustrative, not a pixel-diff gate. See the tool's README.
 
 **Debug tips**
 - Binding not showing? First check the **build log** — with `x:DataType` a bad path
