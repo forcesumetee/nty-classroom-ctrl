@@ -27,7 +27,7 @@ using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false, streamTest = false, streamTestH264 = false;
+bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -36,11 +36,13 @@ for (int i = 0; i < args.Length; i++)
         case "--selftest": selfTest = true; break;
         case "--streamtest": streamTest = true; break;
         case "--streamtest-h264": streamTestH264 = true; break;
+        case "--cameratest": cameraTest = true; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (cameraTest) return await CameraTest.RunAsync(teacherId);
 if (streamTestH264) return await StreamTest.RunAsync(teacherId, VideoCodec.H264);
 if (streamTest) return await StreamTest.RunAsync(teacherId, VideoCodec.Mjpeg);
 return selfTest ? await SelfTest.RunAsync(port == 7777 ? 0 : port, teacherId)
@@ -87,6 +89,14 @@ static class Frame
 
     public static byte[] StreamStartPayload(VideoCodec codec = VideoCodec.Mjpeg) =>
         MessagePackSerializer.Serialize(new StudentStreamStartRequest { Codec = codec });
+
+    public static byte[] ConferenceStartPayload(Guid sessionId) =>
+        MessagePackSerializer.Serialize(new ConferenceStartMessage
+        {
+            SessionId = sessionId,
+            HostName = "MockTeacher (mock)",
+            StartedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        });
 
     public static byte[] PolicyPayload() => MessagePackSerializer.Serialize(new PolicyApplyMessage
     {
@@ -426,5 +436,140 @@ static class StreamTest
         for (int i = 0; i + 4 < b.Length; i++)
             if (b[i] == 0 && b[i + 1] == 0 && b[i + 2] == 0 && b[i + 3] == 1) { t.Add(b[i + 4] & 0x1F); i += 4; }
         return t;
+    }
+}
+
+
+// ───────────────────────────── camera peer-cam self-test ─────────────────────────────
+// Drives the REAL WireClient + CameraStreamer (from the Sandbox assembly) against an
+// in-process mock Teacher acting as a Conference host: server sends ConferenceStart →
+// the Mac starts its camera → sends ConferenceCameraStart + ConferenceCameraFrame(JPEG)
+// → server validates. After ≥12 frames the server sends ConferenceEnd and confirms the
+// Mac replies with ConferenceCameraStop (clean stop). Proves the whole 28-B→E chain
+// emits decodable peer-cam frames, no Windows box needed.
+//
+// NOTE: this captures the PHYSICAL camera, so the running process needs Camera
+// permission (macOS TCC). The .app bundle grant (28-C) is bound to the bundle id, not
+// the `dotnet` CLI host — so a bare `dotnet run` may need its own one-time grant.
+static class CameraTest
+{
+    public static async Task<int> RunAsync(Guid teacherId)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var sessionId = Guid.NewGuid();
+        Console.WriteLine($"=== MockTeacher --cameratest (loopback:{port}, session {sessionId.ToString()[..8]}) ===");
+
+        int received = 0, valid = 0, endpointOk = 0; long totalBytes = 0;
+        Guid helloEndpoint = Guid.Empty, startEndpoint = Guid.Empty;
+        bool gotStart = false, gotStop = false;
+        var gotFrames = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var endRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var serverTask = Task.Run(async () =>
+        {
+            var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            while (true)
+            {
+                var env = await Frame.ReadAsync(stream);
+                if (env == null) return;
+                switch (env.Type)
+                {
+                    case MessageType.Hello:
+                        helloEndpoint = MessagePackSerializer.Deserialize<HelloMessage>(env.Payload).EndpointId;
+                        Console.WriteLine($"  [Hello] ep={helloEndpoint.ToString()[..8]} → sending ConferenceStart");
+                        await Frame.SendAsync(stream, MessageType.ConferenceStart, Frame.ConferenceStartPayload(sessionId), teacherId);
+                        break;
+                    case MessageType.Ping:
+                        await Frame.SendAsync(stream, MessageType.Pong, Array.Empty<byte>(), teacherId);
+                        break;
+                    case MessageType.ConferenceCameraStart:
+                    {
+                        var s = MessagePackSerializer.Deserialize<ConferenceCameraStartMessage>(env.Payload);
+                        gotStart = true; startEndpoint = s.SourceEndpointId;
+                        Console.WriteLine($"  [ConferenceCameraStart] src={s.SourceEndpointId.ToString()[..8]} name='{s.SourceName}' {s.Width}x{s.Height}@{s.Fps} session={s.SessionId.ToString()[..8]}");
+                        break;
+                    }
+                    case MessageType.ConferenceCameraFrame:
+                    {
+                        var f = MessagePackSerializer.Deserialize<ConferenceCameraFrameMessage>(env.Payload);
+                        received++;
+                        totalBytes += f.JpegData.Length;
+                        bool jpeg = f.JpegData.Length > 3 && f.JpegData[0] == 0xFF && f.JpegData[1] == 0xD8
+                                    && f.JpegData[^2] == 0xFF && f.JpegData[^1] == 0xD9;
+                        if (jpeg) valid++;
+                        // SourceEndpointId must equal the sender (== Hello EndpointId == Envelope.SenderId).
+                        if (f.SourceEndpointId == helloEndpoint && env.SenderId == helloEndpoint) endpointOk++;
+                        if (received == 1) { Directory.CreateDirectory("mockteacher-frames"); File.WriteAllBytes("mockteacher-frames/cameratest-001.jpg", f.JpegData); }
+                        if (received <= 3 || received % 10 == 0)
+                            Console.WriteLine($"  [CamFrame] #{received} src={f.SourceEndpointId.ToString()[..8]} {f.JpegData.Length}B jpeg={jpeg} ts={f.TimestampMs}");
+                        if (received >= 12) gotFrames.TrySetResult();
+                        break;
+                    }
+                    case MessageType.ConferenceCameraStop:
+                    {
+                        var s = MessagePackSerializer.Deserialize<ConferenceCameraStopMessage>(env.Payload);
+                        gotStop = true;
+                        Console.WriteLine($"  [ConferenceCameraStop] src={s.SourceEndpointId.ToString()[..8]}");
+                        stopSeen.TrySetResult();
+                        break;
+                    }
+                }
+
+                // Drive the shutdown once we have enough frames: send ConferenceEnd and
+                // expect the Mac to reply with ConferenceCameraStop.
+                if (received >= 12 && !endRequested.Task.IsCompleted)
+                {
+                    endRequested.TrySetResult();
+                    Console.WriteLine("  → 12 frames reached; sending ConferenceEnd");
+                    await Frame.SendAsync(stream, MessageType.ConferenceEnd, Array.Empty<byte>(), teacherId);
+                }
+            }
+        });
+
+        // Mac student: real WireClient + CameraStreamer; on ConferenceStart start the
+        // peer cam (mirrors ConnectionViewModel), on ConferenceEnd stop it.
+        var wire = new WireClient();
+        var camera = new CameraStreamer();
+        wire.EnvelopeReceived += env =>
+        {
+            if (env.Type == MessageType.ConferenceStart)
+            {
+                var sid = Guid.Empty;
+                try { if (env.Payload.Length > 0) sid = MessagePackSerializer.Deserialize<ConferenceStartMessage>(env.Payload).SessionId; } catch { }
+                _ = camera.StartAsync(wire, wire.EndpointId, sid, "CameraTest Mac");
+            }
+            else if (env.Type == MessageType.ConferenceEnd) _ = camera.StopAsync();
+        };
+        using var cts = new CancellationTokenSource();
+        var run = wire.RunAsync("127.0.0.1", port, "CameraTest Mac", cts.Token);
+
+        int failures = 0;
+        var done = await Task.WhenAny(gotFrames.Task, Task.Delay(20000));
+        if (done != gotFrames.Task) { Console.WriteLine("  ❌ timed out waiting for 12 camera frames (camera permission for this process?)"); failures++; }
+
+        // Wait for the clean stop after ConferenceEnd.
+        var stopDone = await Task.WhenAny(stopSeen.Task, Task.Delay(5000));
+        if (stopDone != stopSeen.Task) Console.WriteLine("  ⚠ ConferenceCameraStop not observed within 5s");
+
+        await camera.StopAsync();
+        cts.Cancel();
+        try { await run; } catch { }
+        listener.Stop();
+
+        Console.WriteLine($"\n  frames received: {received} · valid JPEG (FFD8..FFD9): {valid}/{received} · "
+                        + $"correct SourceEndpointId: {endpointOk}/{received} · avg {(received > 0 ? totalBytes / received : 0)} B/frame");
+        Console.WriteLine($"  ConferenceCameraStart seen: {gotStart} (src match: {startEndpoint == helloEndpoint}) · ConferenceCameraStop seen: {gotStop}");
+        Console.WriteLine($"  sample → mockteacher-frames/cameratest-001.jpg");
+
+        bool ok = failures == 0 && received >= 12 && valid == received && endpointOk == received
+                  && gotStart && startEndpoint == helloEndpoint && gotStop;
+        Console.WriteLine(ok
+            ? "\n=== CAMERATEST PASS ✅ — Mac emits well-formed ConferenceCameraFrames + clean start/stop ==="
+            : "\n=== CAMERATEST FAIL ❌ ===");
+        return ok ? 0 : 1;
     }
 }

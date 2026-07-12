@@ -124,6 +124,26 @@ func encodeJpeg(_ pixelBuffer: CVPixelBuffer, quality: Double) -> Data? {
     return out as Data
 }
 
+/// Encode a BGRA CVPixelBuffer to JPEG, aspect-preserving downscaled to FIT within
+/// maxW×maxH (never upscales). Returns (jpeg, outW, outH). Reuses the shared
+/// CIContext. Internal so the camera path (Camera.swift, 28-B) can downscale to the
+/// exact target regardless of what capture resolution the device actually delivers
+/// (AVCaptureSession presets are unreliable — some cams ignore qvga and deliver 1080p).
+func encodeJpegFitted(_ pixelBuffer: CVPixelBuffer, maxW: Int, maxH: Int, quality: Double) -> (Data, Int, Int)? {
+    let srcW = CVPixelBufferGetWidth(pixelBuffer)
+    let srcH = CVPixelBufferGetHeight(pixelBuffer)
+    let scale = min(Double(maxW) / Double(srcW), Double(maxH) / Double(srcH), 1.0)
+    var ci = CIImage(cvPixelBuffer: pixelBuffer)
+    if scale < 1.0 { ci = ci.transformed(by: CGAffineTransform(scaleX: CGFloat(scale), y: CGFloat(scale))) }
+    guard let cg = NtyState.ciContext.createCGImage(ci, from: ci.extent) else { return nil }
+    let out = NSMutableData()
+    guard let dest = CGImageDestinationCreateWithData(out as CFMutableData, "public.jpeg" as CFString, 1, nil)
+    else { return nil }
+    CGImageDestinationAddImage(dest, cg, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+    guard CGImageDestinationFinalize(dest) else { return nil }
+    return (out as Data, cg.width, cg.height)
+}
+
 private enum NtyState {
     static let lock = NSLock()
     static var session: CaptureSession?

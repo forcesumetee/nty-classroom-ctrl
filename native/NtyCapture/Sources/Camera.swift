@@ -84,15 +84,20 @@ private final class CamSession: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     let jpegCallback: NtyJpegCallback
     let quality: Double
     let minInterval: Double      // seconds between delivered frames (fps throttle)
+    let targetW: Int             // JPEG downscale target (fit within, aspect-preserving)
+    let targetH: Int
     let session = AVCaptureSession()
     let queue = DispatchQueue(label: "com.nty.classroom.camera", qos: .userInitiated)
     var lastPts: Double = -1
 
-    init(ctx: UnsafeMutableRawPointer?, cb: @escaping NtyJpegCallback, quality: Double, fps: Int32) {
+    init(ctx: UnsafeMutableRawPointer?, cb: @escaping NtyJpegCallback, quality: Double,
+         fps: Int32, targetW: Int, targetH: Int) {
         self.ctx = ctx
         self.jpegCallback = cb
         self.quality = quality
         self.minInterval = fps > 0 ? (1.0 / Double(fps)) * 0.9 : 0  // 0.9 → tolerate jitter
+        self.targetW = targetW
+        self.targetH = targetH
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
@@ -105,16 +110,17 @@ private final class CamSession: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         if lastPts >= 0, pts - lastPts < minInterval { return }
         lastPts = pts
 
-        let width = Int32(CVPixelBufferGetWidth(pb))
-        let height = Int32(CVPixelBufferGetHeight(pb))
-        CamState.lastWidth = width
-        CamState.lastHeight = height
+        // Downscale to the exact peer-cam target regardless of the device's actual
+        // capture resolution (presets are unreliable — this cam ignores qvga and
+        // delivers 1080p). Aspect-preserving fit → e.g. 320×180 for a 16:9 cam.
+        guard let (data, ow, oh) = encodeJpegFitted(pb, maxW: targetW, maxH: targetH, quality: quality) else { return }
+        CamState.lastWidth = Int32(ow)
+        CamState.lastHeight = Int32(oh)
         CamState.frameCount += 1
 
-        guard let data = encodeJpeg(pb, quality: quality) else { return }
         data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
             guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return }
-            jpegCallback(ctx, base, Int32(data.count), width, height)
+            jpegCallback(ctx, base, Int32(data.count), Int32(ow), Int32(oh))
         }
     }
 }
@@ -127,12 +133,12 @@ private enum CamState {
     static var frameCount: Int64 = 0
 }
 
-/// Map a requested WxH to the closest standard AVCaptureSession preset. The
-/// shipped Windows student uses 320x240 (peer cam), which is an exact preset.
+/// Native capture preset — a cheap-to-scale hint, NOT the delivered size (the
+/// encoder downscales to the exact target regardless). `.medium` is broadly
+/// supported (~480p) and far cheaper to scale each frame than 1080p; larger
+/// targets ask for 720p.
 private func cameraPreset(_ w: Int, _ h: Int) -> AVCaptureSession.Preset {
-    if w == 320 && h == 240 { return .qvga320x240 }
-    if w == 640 && h == 480 { return .vga640x480 }
-    if w >= 1280 { return .hd1280x720 }
+    if w >= 1280 || h >= 720 { return .hd1280x720 }
     return .medium
 }
 
@@ -154,7 +160,8 @@ public func nty_camera_start_jpeg(_ deviceIndex: Int32, _ width: Int32, _ height
     guard let input = try? AVCaptureDeviceInput(device: devices[idx]) else { return -5 }
 
     let q = min(1.0, max(0.05, Double(quality) / 100.0))
-    let cam = CamSession(ctx: ctx, cb: cb, quality: q, fps: fps)
+    let cam = CamSession(ctx: ctx, cb: cb, quality: q, fps: fps,
+                         targetW: Int(max(1, width)), targetH: Int(max(1, height)))
     let s = cam.session
     s.beginConfiguration()
     s.sessionPreset = cameraPreset(Int(width), Int(height))
