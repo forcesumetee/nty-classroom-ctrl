@@ -620,7 +620,53 @@ but cannot escape the popup outward to the host window's tree** (that outward ho
 what returns null). Reaching a *parent menu item* = OK; reaching the *hosting
 ItemsControl/Window* = use `Host`.
 
-## 14. Reference links
+## 14. Icon strategy: NONE NEEDED
+_(Phase 25.5 — established by repo research, not assumption)_
+
+The shipped Windows codebase already uses **cross-platform icons** — **emoji +
+Unicode symbols**, **not** Segoe MDL2 or an icon font/library. (`MaterialDesignThemes`
+is referenced for the *theme*, not icons; `PackIcon`/Segoe-MDL2 usages = **0**.) These
+render **natively on macOS** via Apple Color Emoji + system fonts. **No icon system,
+font, or library is needed.**
+
+Verified across Phase 24.3–25.5 captures: 👑 🎤 👁 ✓ ✕ ⋮ ➤ 📎 🎙 🔒 🛡 ⚙ all render
+correctly on macOS out-of-the-box. Unicode symbols also accept a `Foreground` tint
+(e.g. ✓ green, ✕ red, ➤ blue); color emoji ignore `Foreground` (they carry their own).
+
+**IF future custom glyphs are ever needed:**
+- **SVG** via `PathIcon`/`Image` — for one-off bespoke designs.
+- **`Material.Icons.Avalonia`** — for a comprehensive set.
+
+But adopting either **now would be unwarranted** — save the dependency.
+
+**Historical note:** the WPF codebase had a PNG reaction-emoji fallback for a
+**Windows-11-Thai-locale font-shaping bug**. macOS doesn't have that issue — the PNG
+assets should **NOT** be ported.
+
+## 15. Multiple theme dictionaries coexisting
+_(Phase 25.5 — ConferenceDarkTheme + ClassroomLightTheme side by side)_
+
+Two ported token sets live in `App.axaml` at once with **no collision** because their
+key namespaces differ: `Conf*` (Conference dark) vs `Surface.*`/`Border.*`/`Accent.*`/
+`Text.*`/`Status.*` (Classroom light). Merge both:
+```xml
+<Application.Resources>
+  <ResourceDictionary>
+    <ResourceDictionary.MergedDictionaries>
+      <ResourceInclude Source="avares://Asm/Themes/ConferenceDarkTheme.axaml"/>
+      <ResourceInclude Source="avares://Asm/Themes/ClassroomLightTheme.axaml"/>
+    </ResourceDictionary.MergedDictionaries>
+  </ResourceDictionary>
+</Application.Resources>
+```
+- Port the WPF **color-token dicts** (`<Color>` + `<SolidColorBrush Color="{StaticResource X.Color}">`) ~1:1; keep key names verbatim for cross-repo search + DynamicResource-swap parity.
+- **Don't** port WPF `Style`s that override **MaterialDesign controls** (Buttons/Inputs/
+  DataDisplay) — Avalonia re-themes controls via its own `ControlTheme`s/`FluentTheme`;
+  that's a separate re-authoring effort, not a resource-copy.
+- Runtime light/dark swap (the WPF `DynamicResource` + Colors.Light/Dark pair) is a
+  separate feature (theme manager) — not required just to *consume* the tokens.
+
+## 16. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
 - WPF → Avalonia migration: https://docs.avaloniaui.net/docs/get-started/wpf/
@@ -631,10 +677,11 @@ ItemsControl/Window* = use `Host`.
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 
 ---
-_Living document (14 sections) — extend as later ports surface new patterns. Covered:
+_Living document (16 sections) — extend as later ports surface new patterns. Covered:
 triggers→classes, converters, DP→StyledProperty, precedence, compiled bindings,
-keyed-Style→ControlTheme + basic ControlTemplate/pseudo-classes (§3e), animations
-(§10), popups/flyouts (§11), manual-tabs vs TabControl (§12), advanced binding
-scopes / $parent + compiled-binding cast + popup-boundary routing (§13), ContextMenu
-+ cascading submenus (§11). Still uncovered: complex ControlTemplates, dynamic
-ItemsSource submenus, DynamicResource theme-swap, an icon/font system._
+keyed-Style→ControlTheme + ControlTemplate/pseudo-classes (§3e), animations (§10),
+popups/flyouts + ContextMenu + dynamic ItemsSource submenu / ItemContainerTheme (§11),
+manual-tabs vs TabControl (§12), advanced binding scopes / $parent + compiled-binding
+cast + popup-boundary routing (§13), icon strategy = none-needed (§14), multiple theme
+dictionaries coexisting (§15). Still uncovered: complex ControlTemplates re-authoring
+(MaterialDesign control styles → Avalonia ControlThemes), DynamicResource theme-swap._
