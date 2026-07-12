@@ -2,10 +2,12 @@
 
 Continuation of the macOS/Avalonia port. Session 1 (2026-07-12) reached **Milestone 15**
 (LIVE cross-platform interop) — see `SESSION-2026-07-12-SUMMARY.md`. This day added the
-**first native-macOS-API work** (Phase 27) across two focused sessions:
+**first native-macOS-API work** (Phase 27) across three focused sessions:
 - **Session 3 — Phase 27-A:** ScreenCaptureKit basic capture (**Milestone 16**).
 - **Session 4 — Phase 27-C:** wire captured frames to the Windows Teacher (**Milestone 17,
-  LIVE-CONFIRMED**).
+  LIVE-CONFIRMED** — MJPEG).
+- **Session 5 — Phase 27-B:** VideoToolbox H.264 encoding (**Milestone 18, LIVE-CONFIRMED** —
+  ~10× bandwidth win).
 
 > The other 2026-07-13 track — **v1.2.1 Windows bulk-lock patch** — lives in the shipped repo
 > `~/Dev/nty-classroom-macos/docs/SESSION-2026-07-13-SUMMARY.md`. Separate branch, separate
@@ -41,8 +43,37 @@ no wire change**.
 - **LIVE (2026-07-13):** Windows Teacher v1.2 → *View Screen* → **the Mac's actual desktop
   appears live**. See `docs/PHASE-27-C-LIVE-CONFIRMATION.md` + `docs/live-test-milestone-17/`.
 
-## Commits (Sessions 3–4) — 10
+## Milestone 18 — Phase 27-B: H.264 encoding (~10× bandwidth) ✅ LIVE-CONFIRMED
+VideoToolbox hardware H.264, byte-matching the shipped OpenH264 Annex-B format — same wire,
+zero shipped-repo change.
+- Investigation: Teacher decodes via **H264Sharp/OpenH264** (Annex-B, in-band SPS/PPS per IDR);
+  `Codec=H264` + `IsKeyframe` already exist in `Shared.Wire`.
+- **27-B-2** native `VTCompressionSession` (Baseline, no-reorder, CBR, IDR every fps×2) → output
+  handler **converts AVCC→Annex-B + prepends SPS/PPS on keyframes** → `nty_capture_start_h264`.
+- **27-B-3/4** service `StartH264Async` + `H264FrameReceived`; `ScreenStreamer` picks codec from
+  `StudentStreamStartRequest.Codec` (H264 or MJPEG — backward compatible).
+- **27-B-5** `MockTeacher --streamtest-h264`: NAL-structure check → **12/12 well-formed** (first
+  keyframe, all Annex-B, keyframes SPS+PPS+IDR, deltas slice).
+- **LIVE (2026-07-13):** Teacher → *View Screen* → **Mac desktop via `RenderH264`** at **~1.16
+  Mbit/s @ 1080p** vs M17 MJPEG ~6.5 Mbit/s @ 720p → **~10× per-pixel**. See
+  `docs/PHASE-27-B-LIVE-CONFIRMATION.md`. Cheat sheet **§20** VideoToolbox addendum.
+
+### Bandwidth: M17 MJPEG vs M18 H.264
+| | M17 MJPEG | **M18 H.264** |
+|---|---|---|
+| Resolution | 1107×720 | **1920×1080** |
+| Per-frame | ~124–137 KB | **~16 KB** |
+| Sustained | ~6.5 Mbit/s | **~1.16 Mbit/s** |
+| Net | baseline | **~10× per-pixel** |
+
+## Commits (Sessions 3–5) — 16
 ```
+3a350c7  27-B-7: findings + cheat sheet §20 addendum (VideoToolbox) + screenshot
+7cfc1ed  27-B-5: MockTeacher --streamtest-h264 (NAL-structure verification)
+8ce9201  27-B-4: codec-aware wire integration (H.264 or MJPEG per request)
+8dd2df6  27-B-3: ScreenCaptureService H.264 API
+8f95051  27-B-2: native VideoToolbox H.264 encoder (Annex-B, matches shipped)
+7e71739  Milestone 17 LIVE-CONFIRMED (close-out)
 0c9156a  27-C-4: findings + streaming screenshot (Milestone 17 Mac-side)
 9eeb1cc  27-C-3: MockTeacher --streamtest + viewscreen
 9ca1a18  27-C-2: wire integration — StudentStreamStart → JPEG → StudentStreamFrame
@@ -61,36 +92,49 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | Solution build | ✅ 0 errors |
 | T1–T26 wire compat | ✅ PASS (no wire change) |
 | ScreenCaptureService (headless) | ✅ real frames, stride stripped |
-| `MockTeacher --streamtest` | ✅ 8/8 valid JPEG frames |
-| `--selftest` (regression) | ✅ PASS |
+| `MockTeacher` — `--selftest` / `--streamtest` / `--streamtest-h264` | ✅ all PASS |
 | Shipped Windows repo | ✅ untouched |
-| LIVE Windows *View Screen* | ✅ Mac desktop displayed |
+| LIVE Windows *View Screen* (MJPEG + **H.264**) | ✅ Mac desktop displayed |
 
 ## Combined day (2026-07-13) — both tracks
 | Track | Repo / branch | Outcome |
 |---|---|---|
 | **Windows patch** | `nty-classroom-macos` / `v1.2-multiselect` | **v1.2.1** bulk-lock fix SHIP-READY (tag `v1.2.1`) |
-| **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–17** — screen capture + **LIVE screen streaming to the Windows Teacher** |
+| **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–18** — screen capture + **LIVE MJPEG & H.264 streaming to the Windows Teacher (~10× bandwidth)** |
 
 ## Tooling / docs state (macOS track)
-- Cheat sheet: **21 sections** (§20 native interop added).
-- HeadlessCapture: **13 scenarios** (+ `screencapture`, `streaming`).
-- MockTeacher: `--selftest` + **`--streamtest`** + interactive `viewscreen`.
-- New: `native/NtyCapture/` (Swift dylib), `scripts/package-app.sh` (.app bundle).
-- Sandbox: **13 tabs** (+ Screen Capture).
+- Cheat sheet: **21 sections** (§20 native interop + VideoToolbox addendum).
+- HeadlessCapture: scenarios incl. `screencapture`, `streaming`.
+- MockTeacher: `--selftest` + `--streamtest` + **`--streamtest-h264`** + interactive
+  `viewscreen` / `viewscreen-h264`.
+- Native: `native/NtyCapture/` (Swift dylib — ScreenCaptureKit + ImageIO + **VideoToolbox**),
+  `scripts/package-app.sh` (.app bundle).
+- **Codec support: MJPEG + H.264** (chosen per `StudentStreamStartRequest.Codec`).
+
+## Milestones (macOS track)
+| # | Phase | Outcome |
+|---|---|---|
+| 15 | 26.0 | LIVE wire interop (lock/policy/chat/hand) |
+| 16 | 27-A | ScreenCaptureKit capture (native foundation) |
+| 17 | 27-C | **LIVE** MJPEG screen streaming → Windows Teacher |
+| **18** | **27-B** | **LIVE** H.264 streaming (~10× bandwidth), **MJPEG + H.264** |
 
 ## Next-session priority queue
-1. **Phase 27-B — VideoToolbox H.264 encode** (~3–5 h, Mac): ~10× bandwidth cut vs MJPEG; the
-   Teacher already decodes H.264 (`RenderH264`). Extends the §20 template + the existing
-   `StudentStreamFrame` path (Codec=H264). Highest-leverage next.
-2. **Phase 27-D — remaining native subsystems** (camera / audio / lock-screen enforcement /
-   input hooks) on the proven Swift-dylib template.
-3. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
-4. Progressive UI ports + runtime light/dark theme swap.
+1. **Phase 27-D — Camera streaming (AVCaptureSession)** — next native API; reuses the §20
+   Swift-dylib template + the wire path already exists (`CameraStart/Frame/Stop` /
+   Conference cam). **Recommended next.**
+2. **Audio (AVFoundation)** — mic capture + the audio wire frames.
+3. **Screen-lock enforcement** (overlay + Accessibility) · **Input hooks** (CGEventTap).
+4. **System integration** — permissions bundle, auto-start, packaging/signing for distribution.
+5. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
+6. Progressive UI ports + runtime light/dark theme swap.
 
 ## Team handoff
-- **Cross-platform demo circle is COMPLETE** — a macOS student's screen streams live into the
-  shipped Windows Teacher, over unchanged wire.
-- Native-interop template proven twice (capture + JPEG stream); §20 + `MockTeacher --streamtest`
-  are the reuse + de-risk patterns for every remaining subsystem.
+- **Cross-platform demo circle COMPLETE + optimized:** M15 wire compat · M17 MJPEG LIVE ·
+  **M18 H.264 LIVE (~10× bandwidth)**. A macOS student streams its screen, production-grade,
+  into the shipped Windows Teacher over unchanged wire.
+- **Native-APIs progression:** ✓ 27-A capture · ✓ 27-C JPEG · ✓ 27-B H.264 · ⏳ 27-D
+  camera/audio/lock/input · ⏳ 27-E system integration.
+- Native-interop template (**§20**, incl. VideoToolbox) proven three times; `MockTeacher`
+  `--streamtest*` is the reuse + de-risk pattern for every remaining subsystem.
 - Both tracks green, synced with origin, independently documented.
