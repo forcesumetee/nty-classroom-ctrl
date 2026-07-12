@@ -1,35 +1,47 @@
 # Session Summary — 2026-07-12
 
-macOS/Avalonia port of NTY ClassroomCtrl. This session built the **foundation**:
-extracted the wire protocol, proved cross-platform interop (client-side), ported
-the first view, and produced reusable porting tooling (cheat sheet + full theme).
+macOS/Avalonia port of NTY ClassroomCtrl. This session built the **foundation and
+first UI**: extracted the wire protocol, **proved cross-platform interop on real
+Windows hardware (byte-perfect)**, ported the ConferenceTile + ConferenceToolbar
+(the Conference bottom bar), introduced the Avalonia Animations subsystem, and
+produced reusable porting tooling (cheat sheet + full theme).
 
 **Repo:** `~/Dev/nty-classroom-avalonia/` (separate from the shipped Windows repo
 `~/Dev/nty-classroom-macos/`, which was **never modified** — verified clean after
-every phase). Branch: `main`.
+every phase). Branch: `avalonia-experiment` (remote `origin`:
+github.com/forcesumetee/nty-classroom-ctrl).
 
 ---
 
-## Phases completed (24.1 → 25.0-B)
+## Phases completed (24.1 → 25.1)
 
 | Phase | Deliverable | Outcome |
 |---|---|---|
 | **24.1** | Extract wire protocol as `ClassroomCtrl.Shared.Wire` | Carved the pure protocol out of the Windows-locked `Shared` assembly. net10.0, MessagePack **2.5.187 pinned**. **T1–T26 all pass on macOS.** |
-| **24.2** | Cross-platform interop client (`tools/CrossPlatformInteropTest`) | macOS console app: UDP beacon decode + TCP Hello/Ping→Pong handshake. **Proven end-to-end against a loopback mock** (exit 0). Real Windows-Teacher run pending (user hardware). |
+| **24.2** | Cross-platform interop client (`tools/CrossPlatformInteropTest`) | macOS console app: UDP beacon decode + TCP Hello/Ping→Pong handshake. Loopback-proven, then **✅ PROVEN on REAL Windows Teacher hardware today** — beacon decoded (ChannelId 1234, 172.20.10.7:7777), Hello(215B)+Ping(103B)→Pong(102B), byte-identical, <1 s round-trip. |
 | **24.3** | First view port — `ConferenceTile` (Avalonia Sandbox app) | Renders on macOS; all state paths verified. Found + codified the "local value beats style setter" trap. |
 | **25.0-A** | `docs/WPF-TO-AVALONIA-CHEATSHEET.md` | Reusable porting reference grounded in the real port; unverified claims tagged. |
 | **25.0-B** | Full `ConferenceDarkTheme` port (36 keys) + theme showcase | All 36 keys, names preserved verbatim; keyed `Style`→`ControlTheme` pattern learned + added to cheat sheet §3e. |
+| **25.1-A** | ConferenceToolbar — layout + active states | 7 buttons via the ControlThemes; per-button `DataTrigger`→`.active`/`.pending` classes; mic-green / End-red verified. |
+| **25.1-B** | Reaction picker Flyout | WPF `Popup` → Avalonia `Button.Flyout`; 5 emoji reactions → `SendReactionCommand`. |
+| **25.1-C** | Reaction float animation on ConferenceTile | **Fulfils the Phase 24.3 `TODO`** — WPF Storyboard → Avalonia `Animation`. |
+| **25.1-D** | Conference bottom-bar demo + docs | Toolbar + tiles; picked reaction floats over a tile — full chain proven mid-float (`docs/phase-25.1-bottombar.png`). |
 
 ## Commit list (this session)
 
 ```
+3acfe2c  Phase 25.1-D: Conference bottom-bar demo + docs
+6f9abf9  Phase 25.1-C: reaction float animation on ConferenceTile
+798771d  Phase 25.1-B: reaction picker Flyout on the More button
+5bcad62  Phase 25.1-A: ConferenceToolbar port — layout + active states
+a241642  Phase 25.0-B closeout: session summary + push
 4d9c52b  Phase 25.0-B: Full ConferenceDarkTheme port (36 keys)
 ba414c4  Phase 25.0-A: WPF->Avalonia cheat sheet
 4c27199  Phase 24.3: First view port — ConferenceTile
 5d79569  Phase 24.2: Cross-platform interop test (macOS -> Windows Teacher)
 97e1051  Phase 24.1: Extract wire protocol as ClassroomCtrl.Shared.Wire
 ```
-(plus this closeout commit)
+(plus the Phase 25.1 closeout commit)
 
 ## Empirical findings (the durable value)
 
@@ -60,31 +72,50 @@ Teacher 28, Student.Agent 16):
 - ViewModels port with **zero logic changes** (CommunityToolkit.Mvvm unchanged);
   only WPF *types* swap (e.g. `BitmapSource`→`Bitmap`).
 - Adopt `x:DataType` compiled bindings from day one (binding typos → build errors).
+- Keyed `Style`+`ControlTemplate` → `ControlTheme` (`Theme="{StaticResource}"`,
+  `:pointerover /template/` pseudo-class selectors). WPF `Popup` → `Button.Flyout`.
+
+### Animation gotchas (Phase 25.1 — cheat sheet §10) — worth hours per person
+WPF `Storyboard` → Avalonia `Animation` (`KeyFrame`/`Cue`/`Setter`/`RunAsync`). Two
+code-created-animation traps cost real debug time and are now documented:
+1. **`Animation.RunAsync` targets a `Visual`** — running it on a bare
+   `TranslateTransform` throws `InvalidCastException`.
+2. **`RenderTransform`/`translateY` keyframes are XAML-only from code** — the
+   `TransformOperationsAnimator` is `internal` and only auto-registers via XAML;
+   `Animation.Animators` isn't public. **Fix:** animate a default-registered
+   property (`Margin`/`ThicknessAnimator`, or a `double` like `Canvas.Top`). The
+   reaction float uses `Margin.Top` `+20→-80` on a centered glyph.
+
+### Cheat sheet growth (living doc)
+Grew to **12 numbered sections** with real, tested examples: added §3e
+(keyed-Style→ControlTheme, 25.0-B), **§10 Animations** and **§11 Popups/Flyouts**
+(25.1); references renumbered to §12. Unverified rows still explicitly tagged.
 
 ### Tools built (reusable)
 - **T1–T26 wire compat harness** (`tools/EnvelopeWireCompatTest`) — runs on macOS.
 - **Cross-platform interop client** (`tools/CrossPlatformInteropTest`).
 - **Headless-Skia screenshot recipe** — off-screen render to PNG, no display /
   screen-recording permission needed (used for all baselines). Lives in scratchpad
-  as `CaptureTile`; worth promoting to a committed tool next session.
-- **WPF→Avalonia cheat sheet** — living document.
+  as `CaptureTile`; now supports **tab selection + reaction trigger + animation-clock
+  stepping** (captures mid-animation frames). Worth promoting to `tools/` (Option 1).
+- **WPF→Avalonia cheat sheet** — living document (12 sections).
 - **Full ConferenceDarkTheme** + theme showcase baseline.
+- **ConferenceTile + ConferenceToolbar** ported (Conference bottom bar) with a
+  working reaction float animation.
 
 ### Constraints (verified honored)
 - MessagePack pinned exactly `2.5.187` for byte-compat (NU1902/NU1903 advisories
   are expected and must NOT be "fixed" by upgrading — see memory note).
 - Shipped Windows repo untouched throughout.
 
-## Pending items
+## Status of prior pending items
 
-1. **Real Windows-Teacher interop verification (Phase 24.2 closeout).** Run on the
-   Windows PC: `dotnet run --project tools/CrossPlatformInteropTest` (auto-discover)
-   or `-- --teacher-ip <IP>`. Expect `RESULT: interop PROVEN ✅`; Teacher log should
-   show `Student joined: MacInteropTest (...)`. Loopback proof gives ~95% confidence.
-2. **Phase 25.1 direction** — recommended: **ConferenceToolbar** (see planning note
-   below).
-3. **v1.2.1 bulk lock fix** — Windows product, **separate track**, not part of the
-   macOS port. Tracked here only so it isn't forgotten.
+- [x] **Real Windows-Teacher interop verification** — ✅ **DONE today**, byte-perfect
+  on real hardware (see Phase 24.2 row). Cross-platform product line VALIDATED
+  end-to-end.
+- [x] **Phase 25.1 (ConferenceToolbar)** — ✅ done (25.1-A…D).
+- [ ] **v1.2.1 bulk lock fix** — Windows product, **separate track**, not part of the
+  macOS port. Tracked here only so it isn't forgotten.
 
 ## Next-session preparation notes
 
@@ -101,30 +132,25 @@ Teacher 28, Student.Agent 16):
 
 ---
 
-## Phase 25.1 planning note (NOT started — next session)
+## Next session — pick ONE (not started)
 
-**Target: `ConferenceToolbar`** (Shared.Wpf/Conference/ConferenceToolbar.xaml, 345 lines).
+**Option 1 — Promote the headless-Skia capture harness to `tools/`** (~1 h)
+Move scratchpad `CaptureTile` → a committed tool (tab-select + reaction-trigger +
+animation-clock stepping already built). Value: reusable visual-regression infra
+that pays back on every future port. Lowest risk, highest leverage per hour.
 
-**Why it's the right next step**
-- Both button `ControlTheme`s (`ConfToolbarButtonStyle`, `ConfToolbarEndButtonStyle`)
-  are already ported and proven — the toolbar is their primary consumer.
-- Continues the Conference Mode learning arc (tile → theme → toolbar → sidebar).
-- Introduces the **Avalonia Animations subsystem** (the toolbar/reaction popup +
-  the deferred `ConferenceTile` reaction float — see `TODO(Phase 25 or later)` in
-  `ConferenceTile.axaml.cs`). First real animation port; batch the learning.
-- Medium tier (~1.5–3 h per the effort matrix), consistent with ConferenceTile.
+**Option 2 — Phase 25.2 `ConferenceSidebar`** (~2–3 h)
+Continue the Conference arc (tile → theme → toolbar → **sidebar**). Introduces
+`TabControl` (participants/chat) + chat-list virtualization. 558 lines (Complex
+tier). Value: completes the Conference surface (bottom + side).
 
-**Pre-read before starting**
-- `src/ClassroomCtrl.Shared.Wpf/Conference/ConferenceToolbar.xaml` (+ `.xaml.cs`)
-  in the shipped repo — expect: toolbar buttons, active-state toggles (mic/cam/
-  share on), possibly a "more" popup/menu, and any Storyboard animations.
-- Its ViewModel dependency footprint (likely `StudentConferenceShellViewModel` /
-  toolbar commands) — assess portability as we did for ConferenceTile.
+**Option 3 — Phase 25.2 `StudentCard` ContextMenu** (~3–4 h)
+Tackle the large `ContextMenu` → `MenuFlyout`/`ContextFlyout` while cheat-sheet §11
+is fresh; redesign the WPF `PlacementTarget.Tag` command routing. 242 lines but the
+hardest pattern flagged in the 24.3 findings. Value: unlocks Classroom Mode UI.
 
-**Expected new patterns to capture in the cheat sheet**
-- Avalonia **Animations / Transitions** (vs WPF Storyboards) — the big new subsystem.
-- Possibly **Popup / Flyout** (if the toolbar has a "more" menu) — WPF Popup/
-  ContextMenu → Avalonia `Flyout`/`MenuFlyout`.
+**Pre-read for any option:** the cheat sheet (`docs/WPF-TO-AVALONIA-CHEATSHEET.md`)
+— §10/§11 are the newest and most relevant to Options 2/3.
 
-**Alternatives considered (deferred):** simple views (TeacherIPDialog) — too trivial
-to learn from now; Student.Agent shell — bigger, better after more view experience.
+**Also queued (separate track):** v1.2.1 Windows bulk-lock fix; customer conversation
+on the macOS timeline (use the §"Timeline data" numbers).
