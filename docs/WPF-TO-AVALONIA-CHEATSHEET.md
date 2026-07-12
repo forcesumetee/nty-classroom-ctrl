@@ -770,7 +770,7 @@ inline cell editing** (e.g. a future editable Attendance grid). It costs a **new
 package + a `<StyleInclude>` for its theme**, so a read-only roster does *not* justify it.
 Rule of thumb: **display-only → templated `ListBox`; interactive grid → `DataGrid`.**
 
-## 19. Background services + `Dispatcher` marshalling (long-lived async in an Avalonia app)
+## 18. Background services + `Dispatcher` marshalling (long-lived async in an Avalonia app)
 _(Phase 26.0 — the WireClient service: a socket that runs for the app's lifetime and pushes events from background threads into the UI.)_
 
 Every phase before this ported **static views**. Phase 26.0 added a **long-lived
@@ -815,7 +815,7 @@ equivalent of WPF `ICommand.CanExecuteChanged`. Link child token sources
 **Takeaway:** service = pure async + events (no Avalonia); VM = `Dispatcher.UIThread.Post`
 + a `CancellationTokenSource`. Same discipline as WPF, same `Dispatcher` mental model.
 
-## 20. Reference links
+## 19. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
 - Threading / Dispatcher: https://docs.avaloniaui.net/docs/guides/development-guides/accessing-the-ui-thread
@@ -827,7 +827,7 @@ equivalent of WPF `ICommand.CanExecuteChanged`. Link child token sources
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 
 ---
-_Living document (20 sections) — extend as later ports surface new patterns. Covered:
+_Living document (19 sections) — extend as later ports surface new patterns. Covered:
 triggers→classes, converters, DP→StyledProperty, precedence, compiled bindings,
 keyed-Style→ControlTheme + ControlTemplate/pseudo-classes (§3e), animations (§10),
 popups/flyouts + ContextMenu + dynamic ItemsSource submenu / ItemContainerTheme (§11),
@@ -835,6 +835,6 @@ manual-tabs vs TabControl (§12), advanced binding scopes / $parent + compiled-b
 cast + popup-boundary routing (§13), icon strategy = none-needed (§14), multiple theme
 dictionaries coexisting (§15), ThemeVariantScope for light views in a dark app (§16),
 ListView/GridView → templated ListBox + when-to-DataGrid (§17), background services +
-Dispatcher marshalling / CancellationTokenSource lifetime (§19). Still uncovered: complex
+Dispatcher marshalling / CancellationTokenSource lifetime (§18). Still uncovered: complex
 ControlTemplates re-authoring (MaterialDesign control styles → Avalonia ControlThemes),
 DynamicResource theme-swap._

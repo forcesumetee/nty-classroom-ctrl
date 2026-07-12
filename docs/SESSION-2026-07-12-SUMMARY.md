@@ -52,7 +52,7 @@ github.com/forcesumetee/nty-classroom-ctrl).
 | **26.0-A** | `WireClient` service + connection UI | Promotes the 24.2 transport into a persistent student: Hello + 5 s Ping heartbeat + read loop + reconnect (2s→×2→30s), UI-agnostic. `ConnectionViewModel` marshals to the UI thread. `docs/phase-26.0-connection.png`. |
 | **26.0-B** | **MockTeacher** (`tools/MockTeacher`) + `--selftest` | Local Teacher stand-in; `--selftest` drives the REAL `WireClient` through the full loop → **PASS** (exit 0). De-risked the live test; reusable regression harness. |
 | **26.0-C** | Command reception + debug display | `Dispatch` decodes inbound envelopes → decoded traffic log + self-tile reflection (lock/policy/chat/hand); capture-class commands noted **deferred (Phase 27+)**. Bonus S→T Raise Hand. |
-| **26.0-D** | Cheat sheet §19 (background services + Dispatcher) + findings + live-test staging | `docs/LIVE-TEST-26.0.md` one-shot procedure. Cheat sheet 18 → **20 sections**. |
+| **26.0-D** | Cheat sheet §18 (background services + Dispatcher) + findings + live-test staging | `docs/LIVE-TEST-26.0.md` one-shot procedure. Cheat sheet 18 → **19 sections**. |
 | **26.0 LIVE** | **Real Windows Teacher interop test** | **Milestone 15 — LIVE-CONFIRMED, 4/4 PASS** (Lock · Policy · Chat · Raise Hand bidirectional; screen view correctly deferred). Byte-perfect vs production code. `docs/PHASE-26.0-LIVE-CONFIRMATION.md`, screenshot, commit `efb3c5e`. |
 
 ## Commit list (this session) — 39 commits + this closeout
@@ -164,9 +164,9 @@ Grew to **20 numbered sections** (deepened, not just extended): §3e keyed-Style
 §13 Advanced binding scopes (25.3) · §11/§13 ContextMenu + popup-boundary routing + dynamic
 `ItemsSource` submenu (25.4) · §14 icon-strategy=none-needed + §15 multiple theme dictionaries
 coexisting (25.5) · §16 `ThemeVariantScope` for light views in a dark app (25.6) · §17
-`ListView`/`GridView` → templated `ListBox` + when-to-`DataGrid` (25.7) · §19 background
+`ListView`/`GridView` → templated `ListBox` + when-to-`DataGrid` (25.7) · §18 background
 services + `Dispatcher` marshalling / `CancellationTokenSource` lifetime (26.0); references
-at §20. Unverified rows still explicitly tagged. Still uncovered: complex ControlTemplate
+at §19. Unverified rows still explicitly tagged. Still uncovered: complex ControlTemplate
 re-authoring, DynamicResource theme-swap.
 
 ### Tools built (reusable)
@@ -182,7 +182,7 @@ re-authoring, DynamicResource theme-swap.
   `WireClient` through the full loop (exit 0=PASS). De-risks live tests; regression harness.
 - **`WireClient` service** (Phase 26.0) — UI-agnostic student-side transport (Hello +
   5 s heartbeat + read loop + reconnect); byte-confirmed against the real Windows Teacher.
-- **WPF→Avalonia cheat sheet** — living document (**20 sections**).
+- **WPF→Avalonia cheat sheet** — living document (**19 sections**).
 - **Both theme palettes** — ConferenceDarkTheme (36 keys) + ClassroomLightTheme (36 keys),
   coexisting — plus the **Classroom design system** (`ClassroomControls.axaml`).
 - **Complete Conference Mode UI** (Tile + Toolbar + Sidebar, composed) + **Classroom
@@ -209,7 +209,7 @@ re-authoring, DynamicResource theme-swap.
 ## Next-session preparation notes
 
 - Open the cheat sheet (`docs/WPF-TO-AVALONIA-CHEATSHEET.md`) first — the porting playbook
-  (**20 sections**; §11/§13 ContextMenu+routing, §16 ThemeVariantScope, §17 lists, §19
+  (**19 sections**; §11/§13 ContextMenu+routing, §16 ThemeVariantScope, §17 lists, §18
   background services + Dispatcher).
 - Sandbox app: `dotnet run --project src/ClassroomCtrl.Avalonia.Sandbox` — MainWindow is a
   **12-tab** TabControl: Theme tokens · ConferenceTile · Bottom bar · Sidebar · Conference
@@ -220,7 +220,7 @@ re-authoring, DynamicResource theme-swap.
 - **Method is fully validated end-to-end on real hardware.** Idioms to remember:
   base-values-in-a-style (§6), `Host` back-reference for popup/menu commands (§13),
   `ThemeVariantScope=Light` for light dialogs (§16), and service=async+events / VM=Dispatcher
-  (§19). Live-test procedure: `docs/LIVE-TEST-26.0.md`.
+  (§18). Live-test procedure: `docs/LIVE-TEST-26.0.md`.
 
 ---
 

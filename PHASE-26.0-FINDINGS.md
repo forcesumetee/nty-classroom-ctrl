@@ -23,7 +23,7 @@ proper service and added only what a *persistent* student needs. The shipped Stu
 `Services/WireClient.cs` is **UI-agnostic** (no Avalonia): connect + Hello + heartbeat +
 read loop + reconnect, raising plain events. Stable `EndpointId` across reconnects → one
 persistent tile. `ConnectionViewModel` marshals those background-thread events to the UI
-thread (§19). IP validation extracted to `Services/IpValidation.cs` and **reused** by the
+thread (§18). IP validation extracted to `Services/IpValidation.cs` and **reused** by the
 25.7-C TeacherIPDialog (single source of truth).
 
 ## 26.0-B — MockTeacher + self-test (the de-risker)
@@ -48,13 +48,13 @@ commands (screenshot / screen-stream / camera) are **logged + noted as deferred*
 native macOS APIs, Phase 27+) — no enforcement, per scope. Bonus S→T: a "Raise hand" button
 emits HandRaise/HandLower.
 
-## New pattern → cheat sheet §19
+## New pattern → cheat sheet §18
 **Background services + `Dispatcher` marshalling.** All prior phases were static views; this
 was the first long-lived async service. Rule: service = pure async + events (Avalonia-free,
 so it's headless-testable); VM = `Dispatcher.UIThread.CheckAccess()/Post()` +
 `CancellationTokenSource` lifetime; never `await` the run loop inside a command
 (fire-and-forget, cancel to stop). 1:1 with WPF `Dispatcher` habits. Cheat sheet 18 → **20
-sections** (§19 + Reference links → §20).
+sections** (§18 + Reference links → §19).
 
 ## Deferred (unchanged scope)
 Screen capture (ScreenCaptureKit), video/camera/audio (AVFoundation), actual Lock/Policy
@@ -65,7 +65,7 @@ enforcement (NSWorkspace/overlay + native policy), real chat send/receive UI —
 - HeadlessCapture: 10 → **11 scenarios** (`connection`, seeded connected session).
 - MainWindow tabs: 11 → **12** (tab 11 = Connection).
 - New tool: `tools/MockTeacher` (interactive + `--selftest`).
-- Cheat sheet: **20 sections**.
+- Cheat sheet: **19 sections**.
 
 ## Live Windows test — staged, see `docs/LIVE-TEST-26.0.md`
 The remaining step needs the Windows PC. Procedure documented; expected result = the Mac
