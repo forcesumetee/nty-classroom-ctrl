@@ -46,13 +46,36 @@
                 <views:ConferenceToolbar Grid.Row="1" DataContext="{Binding Toolbar}"/>
             </Grid>
         </TabItem>
-        <!-- Tab 3 (Phase 25.3): ConferenceSidebar (hosted at a fixed width; the
-             full-window Conference layout — tiles + toolbar + sidebar — is 25.3-C). -->
+        <!-- Tab 3 (Phase 25.3): ConferenceSidebar in isolation (fixed width). -->
         <TabItem Header="Sidebar">
             <Grid Background="{StaticResource ConfWindowBgBrush}">
                 <views:ConferenceSidebar DataContext="{Binding Sidebar}"
                                          Width="360" HorizontalAlignment="Right"/>
             </Grid>
+        </TabItem>
+        <!-- Tab 4 (Phase 25.3-C): full Conference composition — sidebar docked right
+             (full height), toolbar docked bottom of the main area, tile grid fills. -->
+        <TabItem Header="Conference Full">
+            <DockPanel Background="{StaticResource ConfWindowBgBrush}">
+                <views:ConferenceSidebar DockPanel.Dock="Right" Width="340"
+                                         DataContext="{Binding Sidebar}"/>
+                <DockPanel>
+                    <views:ConferenceToolbar DockPanel.Dock="Bottom"
+                                             DataContext="{Binding Toolbar}"/>
+                    <ScrollViewer Padding="12">
+                        <ItemsControl ItemsSource="{Binding Tiles}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:ConferenceTileViewModel">
+                                    <views:ConferenceTile Width="300" Height="169"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </DockPanel>
         </TabItem>
     </TabControl>
 </Window>

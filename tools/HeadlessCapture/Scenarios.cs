@@ -54,6 +54,17 @@ public static class Scenarios
             AfterShow = w => CaptureRunner.SelectTab(w, 1),
         },
 
+        ["sidebar"] = new()
+        {
+            Description = "Full Conference composition — tile grid + toolbar (bottom) + "
+                        + "sidebar (right) — Sandbox tab 4. Static → deterministic content.",
+            OriginalPhase = "25.3-C",
+            OriginalScreenshot = "docs/phase-25.3-conference-full.png",
+            Width = 1280, Height = 800,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w => CaptureRunner.SelectTab(w, 4),
+        },
+
         ["bottombar"] = new()
         {
             Description = "Conference bottom bar + reaction float over a tile — Sandbox tab 2. "
