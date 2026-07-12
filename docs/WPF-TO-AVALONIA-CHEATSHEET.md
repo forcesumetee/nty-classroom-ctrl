@@ -815,10 +815,68 @@ equivalent of WPF `ICommand.CanExecuteChanged`. Link child token sources
 **Takeaway:** service = pure async + events (no Avalonia); VM = `Dispatcher.UIThread.Post`
 + a `CancellationTokenSource`. Same discipline as WPF, same `Dispatcher` mental model.
 
-## 19. Reference links
+## 20. Native macOS interop — Swift dylib + P/Invoke + streamed callback
+_(Phase 27-A — ScreenCaptureKit; **the template for every Phase 27 subsystem**: camera, audio, screen-lock enforcement, input hooks.)_
+
+Avalonia stays on plain `net10.0` (no `net10.0-macos` workload retarget). All ObjC/Swift
+framework complexity lives behind a **tiny Swift dylib exposing a C ABI**; the managed side
+P/Invokes a handful of functions and receives streamed data via a callback. Same
+service-boundary discipline as §18 (`WireClient`), but the boundary is native↔managed.
+
+**Swift side** — export plain C symbols with `@_cdecl`, build with `swiftc -emit-library`:
+```swift
+@_cdecl("nty_check_permission") public func nty_check_permission() -> Int32 { ... }
+public typealias NtyFrameCallback = @convention(c)
+    (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int32, Int32, Int32) -> Void
+```
+```bash
+swiftc -emit-library -o libNtyCapture.dylib -target arm64-apple-macos12.3 \
+    -framework ScreenCaptureKit -framework CoreVideo Sources/*.swift
+```
+Bridge each framework's **async** API to the simple C ABI with a **bounded-wait semaphore**
+(`DispatchSemaphore` + `wait(timeout:)`) so a hung query can't deadlock the caller. Deliver
+callbacks on a **dedicated dispatch queue**, never the main thread.
+
+**Managed side** — `LibraryImport` (needs `<AllowUnsafeBlocks>true`), and a **static
+`[UnmanagedCallersOnly]` Cdecl callback** whose `ctx` is a `GCHandle` to the service
+instance (roots it + recovers `this`), so there's **no per-frame delegate marshalling**:
+```csharp
+[LibraryImport("NtyCapture")] private static partial int nty_capture_start(int fps, nint cb, nint ctx);
+
+[UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+private static void OnFrameStatic(nint ctx, nint bgra, int w, int h, int stride) {
+    if (GCHandle.FromIntPtr(ctx).Target is CaptureService s) s.OnFrame(bgra, w, h, stride);
+}
+// start:  var self = GCHandle.Alloc(this);
+//         delegate* unmanaged[Cdecl]<nint,nint,int,int,int,void> fp = &OnFrameStatic;
+//         nty_capture_start(fps, (nint)fp, GCHandle.ToIntPtr(self));   // Free() on stop
+```
+
+**The four rules that bite:**
+1. **Copy in the callback.** The native pixel buffer is valid *only during the call*
+   (`CVPixelBuffer` locked). Copy to managed memory before returning; never stash the pointer.
+2. **Honor `bytesPerRow` (stride).** It exceeds `width*4` due to row padding — measured
+   **5888 vs 5880** on a 1470-wide display. Copy **row-by-row** into a tightly-packed
+   `width*4` buffer (which `WriteableBitmap` `Bgra8888` ingests directly via `Marshal.Copy`).
+3. **Marshal to the UI thread.** Callbacks fire on the native queue → `Dispatcher.UIThread.Post`
+   (§18). Coalesce (render newest, count older-waiting as "dropped") so a slow UI can't back up.
+4. **TCC permission is bundle-scoped + relaunch-latched.** Screen Recording grants attach to
+   the *launching binary*; an unbundled `dotnet run` attributes it to the `dotnet` host and
+   won't persist. Ship a minimal **`.app`** (stable `CFBundleIdentifier`, ad-hoc `codesign`).
+   The grant only takes effect on the **next launch** (TCC caches at process start): request →
+   grant in System Settings → **relaunch** → poll `check`. (`NSScreenCaptureUsageDescription`
+   is cosmetic for Screen Recording — the prompt text is system-fixed.)
+
+**csproj**: copy the dylib next to managed output (`<None Include=…dylib><CopyToOutputDirectory>`,
+guarded by `Exists` so non-mac builds don't fail). Frames render fine under headless Skia, so
+the whole live pipeline is verifiable off-screen (the Phase 27-A `screencapture` scenario).
+
+## 21. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
 - Threading / Dispatcher: https://docs.avaloniaui.net/docs/guides/development-guides/accessing-the-ui-thread
+- ScreenCaptureKit: https://developer.apple.com/documentation/screencapturekit
+- .NET source-generated P/Invoke (`LibraryImport`): https://learn.microsoft.com/dotnet/standard/native-interop/pinvoke-source-generation
 - WPF → Avalonia migration: https://docs.avaloniaui.net/docs/get-started/wpf/
 - Styles & selectors: https://docs.avaloniaui.net/docs/styling/
 - Data binding / compiled bindings: https://docs.avaloniaui.net/docs/basics/data/data-binding/
@@ -827,7 +885,7 @@ equivalent of WPF `ICommand.CanExecuteChanged`. Link child token sources
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 
 ---
-_Living document (19 sections) — extend as later ports surface new patterns. Covered:
+_Living document (21 sections) — extend as later ports surface new patterns. Covered:
 triggers→classes, converters, DP→StyledProperty, precedence, compiled bindings,
 keyed-Style→ControlTheme + ControlTemplate/pseudo-classes (§3e), animations (§10),
 popups/flyouts + ContextMenu + dynamic ItemsSource submenu / ItemContainerTheme (§11),
@@ -835,6 +893,7 @@ manual-tabs vs TabControl (§12), advanced binding scopes / $parent + compiled-b
 cast + popup-boundary routing (§13), icon strategy = none-needed (§14), multiple theme
 dictionaries coexisting (§15), ThemeVariantScope for light views in a dark app (§16),
 ListView/GridView → templated ListBox + when-to-DataGrid (§17), background services +
-Dispatcher marshalling / CancellationTokenSource lifetime (§18). Still uncovered: complex
+Dispatcher marshalling / CancellationTokenSource lifetime (§18), native macOS interop —
+Swift dylib + P/Invoke + streamed callback + TCC/bundle (§20). Still uncovered: complex
 ControlTemplates re-authoring (MaterialDesign control styles → Avalonia ControlThemes),
 DynamicResource theme-swap._
