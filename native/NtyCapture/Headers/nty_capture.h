@@ -98,6 +98,50 @@ int nty_last_width(void);
 int nty_last_height(void);
 int64_t nty_frame_count(void);
 
+/* ==========================================================================
+ * Camera (webcam) capture — Phase 28-B (Sources/Camera.swift).
+ * AVCaptureSession → BGRA CVPixelBuffer → shared ImageIO JPEG encode. Camera
+ * frames are JPEG-only on the wire (ConferenceCameraFrame has no codec field),
+ * so there is no H.264 camera path. Independent session state from the screen
+ * path above (they can run concurrently).
+ * ==========================================================================*/
+
+/*
+ * Camera privacy permission (a DIFFERENT TCC bucket than Screen Recording; the
+ * grant is effective immediately — no relaunch — and the Info.plist
+ * NSCameraUsageDescription text IS shown to the user).
+ *   nty_camera_check_permission   — 1 authorized, 0 not-determined, -1 denied/restricted. Never prompts.
+ *   nty_camera_request_permission — prompts if undetermined, BLOCKS until the user decides, returns 1/0/-1.
+ */
+int nty_camera_check_permission(void);
+int nty_camera_request_permission(void);
+
+/*
+ * Device enumeration.
+ *   nty_camera_count — number of video devices (built-in + external).
+ *   nty_camera_name  — copy device[index].localizedName as UTF-8 (NUL-terminated)
+ *     into `buf` (capacity `bufLen`); returns bytes written (excl. NUL) or -1.
+ */
+int nty_camera_count(void);
+int nty_camera_name(int index, uint8_t *buf, int bufLen);
+
+/*
+ * nty_camera_start_jpeg — start capturing device[deviceIndex] at a preset chosen
+ *   from width x height (320x240 = the shipped peer-cam format), JPEG-encode each
+ *   frame at `quality` (0-100), throttled to ~fps, delivered via `cb` (reuses the
+ *   nty_jpeg_cb signature). Returns 0 on success, negative on error (-2 bad index,
+ *   -3 already running, -4 null cb, -5 input, -6 output).
+ * nty_camera_stop — stop the camera session. Safe to call when idle.
+ */
+int nty_camera_start_jpeg(int deviceIndex, int width, int height, int fps, int quality,
+                          nty_jpeg_cb cb, void *ctx);
+void nty_camera_stop(void);
+
+/* Camera stats (independent from the screen stats above). */
+int nty_camera_last_width(void);
+int nty_camera_last_height(void);
+int64_t nty_camera_frame_count(void);
+
 #ifdef __cplusplus
 }
 #endif

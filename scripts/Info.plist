@@ -26,5 +26,10 @@
          intent/documentation; harmless. See PHASE-27-A-FINDINGS. -->
     <key>NSScreenCaptureUsageDescription</key>
     <string>ClassroomCtrl needs to capture your screen to share it with the teacher.</string>
+    <!-- Camera (Phase 28-B): UNLIKE Screen Recording, this text IS shown to the
+         user in the system permission dialog, and the grant is effective
+         immediately (no relaunch). -->
+    <key>NSCameraUsageDescription</key>
+    <string>NTY ClassroomCtrl uses your camera for classroom video conferencing sessions with the teacher and other students.</string>
 </dict>
 </plist>

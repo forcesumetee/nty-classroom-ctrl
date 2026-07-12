@@ -13,6 +13,7 @@ swiftc -emit-library -o "$OUT" \
     -target "$DEPLOY_TARGET" \
     -O \
     -framework ScreenCaptureKit \
+    -framework AVFoundation \
     -framework VideoToolbox \
     -framework CoreMedia \
     -framework CoreVideo \

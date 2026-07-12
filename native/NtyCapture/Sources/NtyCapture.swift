@@ -110,7 +110,9 @@ private final class CaptureSession: NSObject, SCStreamOutput {
 }
 
 /// Encode a BGRA CVPixelBuffer to JPEG via ImageIO. Reuses a shared CIContext.
-private func encodeJpeg(_ pixelBuffer: CVPixelBuffer, quality: Double) -> Data? {
+/// Internal (not file-private) so the camera path (Camera.swift, 28-B) can reuse
+/// the exact same ImageIO encoder + shared CIContext. Same module → callable there.
+func encodeJpeg(_ pixelBuffer: CVPixelBuffer, quality: Double) -> Data? {
     let ci = CIImage(cvPixelBuffer: pixelBuffer)
     guard let cg = NtyState.ciContext.createCGImage(ci, from: ci.extent) else { return nil }
     let out = NSMutableData()
