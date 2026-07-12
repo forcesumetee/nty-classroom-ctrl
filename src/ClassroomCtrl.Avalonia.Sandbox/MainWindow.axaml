@@ -121,5 +121,12 @@
                                               HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
             </Grid>
         </TabItem>
+        <!-- Tab 9 (Phase 25.7-B): ported CameraSelectorDialog (form). -->
+        <TabItem Header="Camera">
+            <Grid Background="#1F1F23">
+                <views:CameraSelectorDialogView DataContext="{Binding CameraSelector}"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>

@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.CameraSelectorDialogView"
+             x:DataType="vm:CameraSelectorDemoViewModel">
+
+    <!-- PORTED from Teacher/CameraSelectorDialog.xaml (Phase 25.7-B).
+         Header/body/footer form dialog on ClassroomLightTheme + the design system.
+         Body = labelled device ComboBox (ItemsSource-bound) + a 2-column Grid of
+         resolution/fps combos. The shipped ComboBoxItems (fixed lists) stay inline;
+         only the device list is data-bound. ThemeVariantScope=Light so Fluent's
+         variant-aware ComboBox renders on the light surface. -->
+
+    <ThemeVariantScope RequestedThemeVariant="Light">
+        <Border Background="{StaticResource Surface.Background}">
+            <Grid RowDefinitions="Auto,*,Auto" Width="520">
+
+                <!-- Header -->
+                <Border Grid.Row="0" Padding="20,16"
+                        Background="{StaticResource Surface.Elevated}"
+                        BorderBrush="{StaticResource Border.Soft}" BorderThickness="0,0,0,1">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Left" Width="36" Height="36"
+                                Background="{StaticResource Accent.PrimarySubtle}"
+                                CornerRadius="8" Margin="0,0,12,0">
+                            <TextBlock Text="📷" FontSize="18"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Classes="h2" Text="Camera Selector"
+                                       Foreground="{StaticResource Text.Primary}"/>
+                            <TextBlock Text="Choose a capture device and its resolution / frame rate."
+                                       FontSize="12" Foreground="{StaticResource Text.Secondary}"
+                                       Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Body -->
+                <StackPanel Grid.Row="1" Margin="20,16">
+                    <TextBlock Text="Camera device"
+                               FontWeight="SemiBold" FontSize="12"
+                               Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                    <ComboBox ItemsSource="{Binding Devices}" SelectedIndex="{Binding DeviceIndex}"
+                              HorizontalAlignment="Stretch" Margin="0,0,0,16"/>
+
+                    <Grid ColumnDefinitions="*,*">
+                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                            <TextBlock Text="Resolution"
+                                       FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                            <ComboBox SelectedIndex="{Binding ResolutionIndex}" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="320 × 240"/>
+                                <ComboBoxItem Content="640 × 480"/>
+                                <ComboBoxItem Content="1280 × 720"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                            <TextBlock Text="Frame rate"
+                                       FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                            <ComboBox SelectedIndex="{Binding FpsIndex}" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="5"/>
+                                <ComboBoxItem Content="10"/>
+                                <ComboBoxItem Content="15"/>
+                                <ComboBoxItem Content="30"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="{Binding LastAction, StringFormat='Last action: {0}'}"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="{StaticResource Accent.Primary}" Margin="0,20,0,0"/>
+                </StackPanel>
+
+                <!-- Footer -->
+                <Border Grid.Row="2" Padding="20,12"
+                        Background="{StaticResource Surface.Elevated}"
+                        BorderBrush="{StaticResource Border.Soft}" BorderThickness="0,1,0,0">
+                    <DockPanel LastChildFill="False">
+                        <Button DockPanel.Dock="Right" Theme="{StaticResource Button.Primary}"
+                                Content="Start camera" Command="{Binding StartCommand}"/>
+                        <Button DockPanel.Dock="Right" Theme="{StaticResource Button.Ghost}"
+                                Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,8,0"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </ThemeVariantScope>
+</UserControl>

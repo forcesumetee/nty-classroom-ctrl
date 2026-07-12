@@ -77,6 +77,18 @@ public static class Scenarios
             AfterShow = w => CaptureRunner.SelectTab(w, 8),
         },
 
+        ["camera"] = new()
+        {
+            Description = "Ported CameraSelectorDialog — header/body/footer form, "
+                        + "ClassroomLightTheme + design system, device ComboBox + 2-col "
+                        + "resolution/fps grid — Sandbox tab 9.",
+            OriginalPhase = "25.7",
+            OriginalScreenshot = "docs/phase-25.7-camera.png",
+            Width = 620, Height = 460,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w => CaptureRunner.SelectTab(w, 9),
+        },
+
         ["classroom"] = new()
         {
             Description = "Classroom LIGHT theme tokens (36) + icon showcase — Sandbox tab 6. "
