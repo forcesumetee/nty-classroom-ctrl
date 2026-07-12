@@ -2,9 +2,11 @@
 
 **Goal:** stream the Mac's camera to the shipped Windows Teacher as a Conference
 Mode peer cam, over existing wire envelopes — no shipped-repo change, no wire change.
-**Result:** ✅ Mac-side complete + verified headless — `MockTeacher --cameratest`
-proves 12/12 well-formed `ConferenceCameraFrame`s with correct routing + clean
-start/stop. **LIVE Windows display = the one remaining human step (28-G).**
+**Result:** ✅ **LIVE-CONFIRMED (2026-07-13)** — the shipped Windows Teacher v1.2 displays
+the Mac's camera live in its Conference gallery. Mac-side verified headless
+(`MockTeacher --cameratest`: 12/12 well-formed `ConferenceCameraFrame`s, correct routing,
+clean start/stop) and confirmed LIVE on Windows by tester visual verification. See
+`docs/PHASE-28-LIVE-CONFIRMATION.md`.
 
 **Sub-phases:** 28-A investigation · 28-B native AVCaptureSession · 28-C .NET service +
 Camera tab · 28-D CameraStreamer wire · 28-E Connection wire-in · 28-F MockTeacher
@@ -130,11 +132,13 @@ seen (src match), `ConferenceCameraStop` seen after `ConferenceEnd`, 320×180 @ 
 JPEG + correct routing + clean lifecycle). **Definitive pixel display = the LIVE Windows
 test (28-G):** Teacher → Start Conference Mode → the Mac's gallery tile shows its camera.
 
-## LIVE Windows test (28-G — user-run) — awaiting result
-1. Windows: Teacher v1.2.  2. Mac: `./scripts/package-app.sh && open ./ClassroomCtrl.Sandbox.app` → Connect.
-3. Windows: **Start Conference Mode** (NOT a right-click "View Camera" — that doesn't exist).
-4. Expect: the Mac's tile in the Conference gallery shows its **live camera** (320×180 JPEG);
-   Mac self-tile shows "🔴 Camera live to teacher · N frames". 5. End Conference → clean stop.
+## LIVE Windows test (28-G) — ✅ CONFIRMED 2026-07-13
+Teacher v1.2 (unmodified) on Windows, Mac Sandbox on **borrowed hardware**, iPhone hotspot.
+Tester visual verification: Mac connected → tile in student grid → Teacher **Start Conference
+Mode** → **Mac camera appeared live in the Conference gallery** (320×180 JPEG) → self-tile
+"🔴 Camera live to teacher" → **End Conference → clean stop**. Screenshots not captured
+(borrowed Mac); structural proof = `--cameratest` (12/12 valid JPEG). Full writeup:
+`docs/PHASE-28-LIVE-CONFIRMATION.md`.
 
 ## Constraints honored
 Sandbox + `native/` + `tools/MockTeacher` only · `Shared.Wire` unchanged · shipped repo
