@@ -186,8 +186,23 @@ public class ControlServer : IDisposable
         return _tcp.BroadcastAsync(Envelope.Create(MessageType.ChatBroadcast, bytes, _teacherId), ct);
     }
 
+    /// <summary>
+    /// v1.2.1 — dispatch a targeted control envelope on the appropriate channel.
+    /// <paramref name="reliable"/>=false → lossy <c>_outbox</c> (cap 16, DropOldest)
+    /// as before (fine for a single frame). <paramref name="reliable"/>=true →
+    /// <c>BroadcastReliableAsync</c> (FullMode.Wait, cap 4), which back-pressures
+    /// the producer at TCP-drain rate so a BURST of per-student targeted frames
+    /// (bulk lock/policy/power over a big selection) can't overflow the lossy
+    /// queue and silently drop.  This is the root-cause fix for the "18/50 locked"
+    /// bug: targeted ops fan out to every peer + rely on IsForMe filtering, so N
+    /// selected students = N broadcast frames — enough to blow past the cap-16
+    /// DropOldest queue.  Reliable callers MUST await so the back-pressure applies.
+    /// </summary>
+    private Task SendTargetedAsync(Envelope env, CancellationToken ct, bool reliable)
+        => reliable ? _tcp.BroadcastReliableAsync(env, ct) : _tcp.BroadcastAsync(env, ct);
+
     /// <summary>Send a direct message to ONE student (Phase 3 — Direct Messages 1:1).</summary>
-    public Task SendDirectMessageAsync(Guid endpointId, string text, CancellationToken ct, FileAttachment? attachment = null)
+    public Task SendDirectMessageAsync(Guid endpointId, string text, CancellationToken ct, FileAttachment? attachment = null, bool reliable = false)
     {
         var msg = new ChatMessage
         {
@@ -201,7 +216,7 @@ public class ControlServer : IDisposable
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
         var env = Envelope.CreateTargeted(MessageType.ChatDirect, bytes, _teacherId, endpointId);
         _logger.LogInformation("DM → {Endpoint}: {Text}", endpointId, text);
-        return _tcp.BroadcastAsync(env, ct);
+        return SendTargetedAsync(env, ct, reliable);
     }
 
     public Task BroadcastLockAsync(bool locked, CancellationToken ct)
@@ -226,14 +241,14 @@ public class ControlServer : IDisposable
     }
 
     /// <summary>Send a force power command to a single student.</summary>
-    public Task PowerOneAsync(Guid endpointId, MessageType type, CancellationToken ct)
+    public Task PowerOneAsync(Guid endpointId, MessageType type, CancellationToken ct, bool reliable = false)
     {
         var env = Envelope.CreateTargeted(type, Array.Empty<byte>(), _teacherId, endpointId);
         _logger.LogWarning("Targeted {Type} -> {Endpoint}", type, endpointId);
-        return _tcp.BroadcastAsync(env, ct);
+        return SendTargetedAsync(env, ct, reliable);
     }
 
-    public Task LockOneAsync(Guid endpointId, bool locked, CancellationToken ct)
+    public Task LockOneAsync(Guid endpointId, bool locked, CancellationToken ct, bool reliable = false)
     {
         var env = Envelope.CreateTargeted(
             locked ? MessageType.LockScreen : MessageType.UnlockScreen,
@@ -243,7 +258,7 @@ public class ControlServer : IDisposable
 
         _logger.LogInformation("Targeted {Type} -> {Endpoint}",
             locked ? "LockScreen" : "UnlockScreen", endpointId);
-        return _tcp.BroadcastAsync(env, ct);
+        return SendTargetedAsync(env, ct, reliable);
     }
 
     public Task BroadcastPolicyAsync(PolicyApplyMessage policy, CancellationToken ct)
@@ -264,21 +279,21 @@ public class ControlServer : IDisposable
     }
 
     /// <summary>Per-student policy override (Spec §6.11).</summary>
-    public Task ApplyPolicyToOneAsync(Guid endpointId, PolicyApplyMessage policy, CancellationToken ct)
+    public Task ApplyPolicyToOneAsync(Guid endpointId, PolicyApplyMessage policy, CancellationToken ct, bool reliable = false)
     {
         var bytes = MessagePack.MessagePackSerializer.Serialize(policy);
         var env = Envelope.CreateTargeted(MessageType.PolicyApply, bytes, _teacherId, endpointId);
         _logger.LogInformation("Targeted policy → {Endpoint}: USB={Usb} CD={Cd} Print={Pr} Apps={Ac} Hosts={Hc}",
             endpointId, policy.BlockUsbStorage, policy.BlockOpticalDrive, policy.BlockPrinting,
             policy.BlockedProcessNames.Count, policy.BlockedHostnames.Count);
-        return _tcp.BroadcastAsync(env, ct);
+        return SendTargetedAsync(env, ct, reliable);
     }
 
-    public Task RevertPolicyForOneAsync(Guid endpointId, CancellationToken ct)
+    public Task RevertPolicyForOneAsync(Guid endpointId, CancellationToken ct, bool reliable = false)
     {
         var env = Envelope.CreateTargeted(MessageType.PolicyRevert, Array.Empty<byte>(), _teacherId, endpointId);
         _logger.LogInformation("Targeted policy revert → {Endpoint}", endpointId);
-        return _tcp.BroadcastAsync(env, ct);
+        return SendTargetedAsync(env, ct, reliable);
     }
 
     // ─────── Phase 4 Part 1: Teacher → all students screen broadcast ───────
@@ -619,12 +634,12 @@ public class ControlServer : IDisposable
     /// student.  Reliable channel.  The student-side Agent honors the request
     /// and emits an immediate MicStateUpdate so the teacher's per-student
     /// indicator (Step 7) confirms the new state within one round trip.</summary>
-    public Task SendMicMuteRequestAsync(Guid studentId, bool muted, string reason, CancellationToken ct)
+    public Task SendMicMuteRequestAsync(Guid studentId, bool muted, string reason, CancellationToken ct, bool reliable = false)
     {
         var msg = new MicMuteRequestMessage { TargetEndpointId = studentId, Muted = muted, Reason = reason ?? "" };
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
         var env = Envelope.CreateTargeted(MessageType.MicMuteRequest, bytes, _teacherId, studentId);
-        return _tcp.BroadcastAsync(env, ct);
+        return SendTargetedAsync(env, ct, reliable);
     }
 
     /// <summary>Phase 13-D (Tier 3) — switch one student between PTT and

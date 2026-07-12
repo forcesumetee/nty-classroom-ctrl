@@ -3769,7 +3769,9 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         {
             foreach (var s in targets)
             {
-                await App.Server.LockOneAsync(s.EndpointId, true, System.Threading.CancellationToken.None);
+                // v1.2.1 — reliable path: FullMode.Wait back-pressures the burst so
+                // a big selection can't overflow the lossy cap-16 DropOldest queue.
+                await App.Server.LockOneAsync(s.EndpointId, true, System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkLockedFmt", targets.Count));
         }
@@ -3786,7 +3788,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         {
             foreach (var s in targets)
             {
-                await App.Server.LockOneAsync(s.EndpointId, false, System.Threading.CancellationToken.None);
+                await App.Server.LockOneAsync(s.EndpointId, false, System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkUnlockedFmt", targets.Count));
         }
@@ -3798,7 +3800,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     /// per-student wire path (ApplyPolicyToOneAsync) so no broadcast goes
     /// out — only the selected subset is affected.</summary>
     [RelayCommand]
-    private void BulkApplyPolicy()
+    private async Task BulkApplyPolicy()
     {
         if (App.Server == null) return;
         var targets = GetSelectedSnapshot();
@@ -3823,7 +3825,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
 
         if (dlg.RevertRequested)
         {
-            BulkRevertPolicyInternal(targets);
+            await BulkRevertPolicyInternal(targets);
             return;
         }
 
@@ -3855,7 +3857,10 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             s.PerStudentPolicyBadgeVisibility = any
                 ? System.Windows.Visibility.Visible
                 : System.Windows.Visibility.Collapsed;
-            _ = App.Server.ApplyPolicyToOneAsync(s.EndpointId, msg, System.Threading.CancellationToken.None);
+            // v1.2.1 — was fire-and-forget (_ =), which swallowed failures AND rode
+            // the lossy queue.  Now awaited on the reliable path so the burst is
+            // back-pressured and every selected student actually receives the policy.
+            await App.Server.ApplyPolicyToOneAsync(s.EndpointId, msg, System.Threading.CancellationToken.None, reliable: true);
         }
 
         var summary = BuildPolicySummary(msg);
@@ -3863,14 +3868,14 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     }
 
     [RelayCommand]
-    private void BulkRevertPolicy()
+    private async Task BulkRevertPolicy()
     {
         var targets = GetSelectedSnapshot();
         if (targets.Count == 0) return;
-        BulkRevertPolicyInternal(targets);
+        await BulkRevertPolicyInternal(targets);
     }
 
-    private void BulkRevertPolicyInternal(List<StudentViewModel> targets)
+    private async Task BulkRevertPolicyInternal(List<StudentViewModel> targets)
     {
         if (App.Server == null) return;
         foreach (var s in targets)
@@ -3882,7 +3887,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             s.PerStudentBlockedHostnames = new List<string>();
             s.HasPerStudentPolicy = false;
             s.PerStudentPolicyBadgeVisibility = System.Windows.Visibility.Collapsed;
-            _ = App.Server.RevertPolicyForOneAsync(s.EndpointId, System.Threading.CancellationToken.None);
+            await App.Server.RevertPolicyForOneAsync(s.EndpointId, System.Threading.CancellationToken.None, reliable: true);
         }
         AppendSystemChat(Loc.Format("Chat_BulkPolicyRevertedFmt", targets.Count));
     }
@@ -3897,7 +3902,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         {
             foreach (var s in targets)
             {
-                await App.Server.SendMicMuteRequestAsync(s.EndpointId, true, "Bulk mute", System.Threading.CancellationToken.None);
+                await App.Server.SendMicMuteRequestAsync(s.EndpointId, true, "Bulk mute", System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkMicMutedFmt", targets.Count));
         }
@@ -3914,7 +3919,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         {
             foreach (var s in targets)
             {
-                await App.Server.SendMicMuteRequestAsync(s.EndpointId, false, "Bulk unmute", System.Threading.CancellationToken.None);
+                await App.Server.SendMicMuteRequestAsync(s.EndpointId, false, "Bulk unmute", System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkMicUnmutedFmt", targets.Count));
         }
@@ -3954,7 +3959,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
             };
             foreach (var s in targets)
             {
-                await App.Server.SendDirectMessageAsync(s.EndpointId, "", System.Threading.CancellationToken.None, attachment);
+                await App.Server.SendDirectMessageAsync(s.EndpointId, "", System.Threading.CancellationToken.None, attachment, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkFileSentFmt", attachment.FileName, targets.Count));
         }
@@ -3988,7 +3993,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         {
             foreach (var s in targets)
             {
-                await App.Server.PowerOneAsync(s.EndpointId, type, System.Threading.CancellationToken.None);
+                await App.Server.PowerOneAsync(s.EndpointId, type, System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format(GetIssuedChatKey(type), Loc.Format("Lbl_BulkTargetFmt", targets.Count)));
         }
