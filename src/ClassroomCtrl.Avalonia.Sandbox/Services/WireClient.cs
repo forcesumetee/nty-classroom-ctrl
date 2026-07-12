@@ -51,6 +51,10 @@ public sealed class WireClient
     /// <summary>Raised per decoded inbound envelope (for dispatch/reflection, 26.0-C).</summary>
     public event Action<Envelope>? EnvelopeReceived;
 
+    /// <summary>Full frame size (incl. 4-byte length prefix) of the most recent RX
+    /// envelope — lets the EnvelopeReceived subscriber log an accurate byte count.</summary>
+    public int LastRxSize { get; private set; }
+
     private NetworkStream? _stream;
     private readonly object _sendLock = new();
 
@@ -167,7 +171,9 @@ public sealed class WireClient
             try { env = Envelope.Deserialize(body); }
             catch (Exception ex) { Log(WireDirection.System, $"Undecodable frame ({len} B): {ex.Message}"); continue; }
 
-            Log(WireDirection.Rx, env.Type.ToString(), len + 4);
+            // RX frames are logged by the subscriber (with a decoded summary) via
+            // EnvelopeReceived; the transport doesn't double-log them here.
+            LastRxSize = len + 4;
             EnvelopeReceived?.Invoke(env);
         }
     }

@@ -36,7 +36,7 @@
 
     <ThemeVariantScope RequestedThemeVariant="Light">
         <Border Background="{StaticResource Surface.Background}">
-            <Grid RowDefinitions="Auto,Auto,*" Width="720">
+            <Grid RowDefinitions="Auto,Auto,Auto,*" Width="720">
 
                 <!-- Header -->
                 <Border Grid.Row="0" Padding="20,16"
@@ -107,8 +107,72 @@
                     </StackPanel>
                 </Border>
 
+                <!-- "How the Teacher sees me" — reflects inbound commands (26.0-C) -->
+                <Border Grid.Row="2" Margin="20,8"
+                        Background="{StaticResource Surface.Card}"
+                        BorderBrush="{StaticResource Border.Default}" BorderThickness="1"
+                        CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Theme="{StaticResource Button.Secondary}"
+                                    Content="✋ Raise hand" Command="{Binding RaiseHandCommand}"
+                                    Padding="10,6" MinHeight="0"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="9" Height="9" Margin="0,0,8,0"
+                                         VerticalAlignment="Center"
+                                         Fill="{StaticResource Accent.Success}"
+                                         IsVisible="{Binding SelfTile.IsOnline}"/>
+                                <TextBlock Text="🖥" FontSize="15" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding SelfTile.DisplayName}" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text.Primary}" VerticalAlignment="Center"/>
+                                <TextBlock Text="✋" FontSize="14" Margin="8,0,0,0" VerticalAlignment="Center"
+                                           IsVisible="{Binding SelfTile.IsHandRaised}"/>
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- Lock banner -->
+                        <Border Margin="0,12,0,0" CornerRadius="6" Padding="12,8"
+                                Background="#FEE2E2" IsVisible="{Binding SelfTile.IsLocked}">
+                            <TextBlock Text="🔒 Screen locked by teacher" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#991B1B"/>
+                        </Border>
+
+                        <!-- Policy chips -->
+                        <StackPanel Margin="0,12,0,0" IsVisible="{Binding SelfTile.PolicyActive}">
+                            <TextBlock Text="Active policy" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Text.Secondary}" Margin="0,0,0,6"/>
+                            <ItemsControl ItemsSource="{Binding SelfTile.PolicyChips}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{StaticResource Accent.PrimarySubtle}"
+                                                CornerRadius="10" Padding="10,4" Margin="0,0,6,6">
+                                            <TextBlock Text="{Binding}" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource Accent.Primary}"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Last chat -->
+                        <TextBlock Margin="0,10,0,0" FontSize="12"
+                                   Foreground="{StaticResource Text.Secondary}" TextWrapping="Wrap"
+                                   IsVisible="{Binding SelfTile.LastChat, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   Text="{Binding SelfTile.LastChat, StringFormat='💬 {0}'}"/>
+
+                        <!-- Deferred capture note -->
+                        <TextBlock Margin="0,8,0,0" FontSize="11"
+                                   Foreground="{StaticResource Text.Muted}" TextWrapping="Wrap"
+                                   IsVisible="{Binding SelfTile.LastDeferred, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   Text="{Binding SelfTile.LastDeferred}"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- Wire-traffic log -->
-                <Border Grid.Row="2" Margin="20,8,20,16"
+                <Border Grid.Row="3" Margin="20,8,20,16"
                         Background="{StaticResource Surface.Card}"
                         BorderBrush="{StaticResource Border.Default}" BorderThickness="1"
                         CornerRadius="8" ClipToBounds="True">

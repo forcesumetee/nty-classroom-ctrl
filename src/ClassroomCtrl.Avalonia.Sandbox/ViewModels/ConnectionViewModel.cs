@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using ClassroomCtrl.Avalonia.Sandbox.Services;
 using ClassroomCtrl.Shared.Protocol;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MessagePack;
 
 namespace ClassroomCtrl.Avalonia.Sandbox.ViewModels;
 
@@ -34,6 +36,9 @@ public partial class ConnectionViewModel : ObservableObject
     private const int MaxLogRows = 500;
 
     public WireClient Client { get; } = new();
+
+    /// <summary>Reflects the state Teacher commands drive onto this student.</summary>
+    public StudentSelfTileViewModel SelfTile { get; } = new();
 
     private CancellationTokenSource? _cts;
 
@@ -80,11 +85,100 @@ public partial class ConnectionViewModel : ObservableObject
         Client.StatusChanged += s => Post(() =>
         {
             Status = s;
+            SelfTile.IsOnline = s == WireStatus.Connected;
+            SelfTile.DisplayName = DisplayName;
+            if (s == WireStatus.Disconnected) SelfTile.Reset();
             ConnectCommand.NotifyCanExecuteChanged();
             DisconnectCommand.NotifyCanExecuteChanged();
+            RaiseHandCommand.NotifyCanExecuteChanged();
         });
         Client.Traffic += (dir, label, size) => Post(() => AddLog(dir, label, size));
-        // EnvelopeReceived reflection is wired in Phase 26.0-C.
+        Client.EnvelopeReceived += env => Post(() => Dispatch(env));
+    }
+
+    /// <summary>Decode an inbound envelope: enrich the traffic log with a summary
+    /// and reflect the command onto <see cref="SelfTile"/>. No enforcement.
+    /// Public so HeadlessCapture can seed a representative state deterministically.</summary>
+    public void Dispatch(Envelope env)
+    {
+        string detail;
+        switch (env.Type)
+        {
+            case MessageType.Pong:
+                detail = "keepalive ack";
+                break;
+            case MessageType.LockScreen:
+                SelfTile.IsLocked = true;
+                detail = "🔒 lock screen";
+                break;
+            case MessageType.UnlockScreen:
+                SelfTile.IsLocked = false;
+                detail = "🔓 unlock screen";
+                break;
+            case MessageType.PolicyApply:
+                detail = ApplyPolicy(env.Payload);
+                break;
+            case MessageType.PolicyRevert:
+                SelfTile.SetPolicy(Array.Empty<string>());
+                detail = "revert policy";
+                break;
+            case MessageType.ChatBroadcast:
+            case MessageType.ChatDirect:
+            case MessageType.ChatRoom:
+                detail = ApplyChat(env.Payload);
+                break;
+            case MessageType.HandRaise:
+                SelfTile.IsHandRaised = true;
+                detail = "hand raised";
+                break;
+            case MessageType.HandLower:
+                SelfTile.IsHandRaised = false;
+                detail = "hand lowered";
+                break;
+            // Capture-class commands: logged + noted, deferred until native macOS
+            // APIs land (Phase 27+). No frames are produced.
+            case MessageType.RequestScreenshot:
+            case MessageType.ScreenStreamStart:
+            case MessageType.StudentStreamStart:
+            case MessageType.CameraStart:
+            case MessageType.ConferenceStart:
+            case MessageType.MicMonitorStart:
+                detail = "deferred — needs native capture (Phase 27+)";
+                SelfTile.LastDeferred = $"{env.Type} · deferred (needs native APIs)";
+                break;
+            default:
+                detail = "";
+                break;
+        }
+        AddLog(WireDirection.Rx, env.Type.ToString(), Client.LastRxSize, detail);
+    }
+
+    private string ApplyPolicy(byte[] payload)
+    {
+        try
+        {
+            var p = MessagePackSerializer.Deserialize<PolicyApplyMessage>(payload);
+            var chips = new List<string>();
+            if (p.BlockUsbStorage) chips.Add("USB");
+            if (p.BlockOpticalDrive) chips.Add("CD/DVD");
+            if (p.BlockPrinting) chips.Add("Print");
+            if (p.BlockedProcessNames.Count > 0) chips.Add($"{p.BlockedProcessNames.Count} apps");
+            if (p.BlockedHostnames.Count > 0) chips.Add($"{p.BlockedHostnames.Count} sites");
+            SelfTile.SetPolicy(chips);
+            return chips.Count == 0 ? "apply policy (none)" : "apply policy: " + string.Join(", ", chips);
+        }
+        catch (Exception ex) { return $"policy decode failed: {ex.Message}"; }
+    }
+
+    private string ApplyChat(byte[] payload)
+    {
+        try
+        {
+            var c = MessagePackSerializer.Deserialize<ClassroomCtrl.Shared.Protocol.ChatMessage>(payload);
+            SelfTile.LastChat = $"{c.SenderName}: {c.Text}";
+            return $"💬 {c.SenderName}: {c.Text}";
+        }
+        catch (Exception ex) { return $"chat decode failed: {ex.Message}"; }
     }
 
     private bool CanConnect() => Status == WireStatus.Disconnected;
@@ -113,6 +207,28 @@ public partial class ConnectionViewModel : ObservableObject
 
     [RelayCommand(CanExecute = nameof(CanDisconnect))]
     private void Disconnect() => _cts?.Cancel();
+
+    private bool CanRaiseHand() => Status == WireStatus.Connected;
+
+    /// <summary>Bonus S→T: toggle + send a HandRaise so the Teacher tile lights up.</summary>
+    [RelayCommand(CanExecute = nameof(CanRaiseHand))]
+    private async Task RaiseHand()
+    {
+        var raise = !SelfTile.IsHandRaised;
+        SelfTile.IsHandRaised = raise;
+        var msg = new HandRaiseMessage
+        {
+            StudentId = Client.EndpointId,
+            StudentName = DisplayName,
+            IsRaised = raise,
+        };
+        try
+        {
+            await Client.SendAsync(raise ? MessageType.HandRaise : MessageType.HandLower,
+                                   MessagePackSerializer.Serialize(msg), CancellationToken.None);
+        }
+        catch (Exception ex) { AddLog(WireDirection.System, $"hand-raise send failed: {ex.Message}", 0); }
+    }
 
     [RelayCommand]
     private void ClearLog() => Log.Clear();

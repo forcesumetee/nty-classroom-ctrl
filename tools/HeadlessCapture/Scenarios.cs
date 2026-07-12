@@ -1,7 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ClassroomCtrl.Avalonia.Sandbox;
+using ClassroomCtrl.Avalonia.Sandbox.Services;
 using ClassroomCtrl.Avalonia.Sandbox.ViewModels;
+using ClassroomCtrl.Shared.Protocol;
+using MessagePack;
 
 namespace HeadlessCapture;
 
@@ -114,13 +117,44 @@ public static class Scenarios
 
         ["connection"] = new()
         {
-            Description = "Phase 26.0 Connection tab — wire-connect form (IP/port/name) + status "
-                        + "pill + live wire-traffic log. ClassroomLightTheme + design system — Sandbox tab 11.",
+            Description = "Phase 26.0 Connection tab — wire-connect form + status pill + "
+                        + "'how the Teacher sees me' self-tile + live wire-traffic log. Seeded with "
+                        + "a representative connected session (Hello/Ping TX, Lock/Policy/Chat RX) so "
+                        + "the reflection + decoded log are visible — Sandbox tab 11.",
             OriginalPhase = "26.0",
             OriginalScreenshot = "docs/phase-26.0-connection.png",
-            Width = 820, Height = 720,
+            Width = 820, Height = 900,
             BuildWindow = () => new MainWindow(),
-            AfterShow = w => CaptureRunner.SelectTab(w, 11),
+            AfterShow = w =>
+            {
+                CaptureRunner.SelectTab(w, 11);
+                if (w.DataContext is not MainWindowViewModel mvm) return;
+                var c = mvm.Connection;
+                var teacher = System.Guid.NewGuid();
+
+                // Seed a representative CONNECTED session deterministically (no socket):
+                // status pill green + self-tile reflection + decoded traffic log.
+                c.Status = WireStatus.Connected;
+                c.SelfTile.IsOnline = true;
+                c.AddLog(WireDirection.System, "Connecting to 172.20.10.7:7777 …", 0);
+                c.AddLog(WireDirection.System, "TCP connected to 172.20.10.7:7777", 0);
+                c.AddLog(WireDirection.Tx, "Hello", 194);
+                c.AddLog(WireDirection.Tx, "Ping", 103);
+                c.Dispatch(Envelope.Create(MessageType.Pong, System.Array.Empty<byte>(), teacher));
+                c.Dispatch(Envelope.Create(MessageType.LockScreen, System.Array.Empty<byte>(), teacher));
+                var policy = new PolicyApplyMessage
+                {
+                    BlockUsbStorage = true, BlockPrinting = true,
+                    BlockedProcessNames = new() { "chrome.exe", "game.exe" },
+                    BlockedHostnames = new() { "facebook.com", "tiktok.com" },
+                };
+                c.Dispatch(Envelope.Create(MessageType.PolicyApply, MessagePackSerializer.Serialize(policy), teacher));
+                var chat = new ClassroomCtrl.Shared.Protocol.ChatMessage
+                { SenderName = "Teacher", Text = "Please open your workbooks.", TimestampUtcMs = 0 };
+                c.Dispatch(Envelope.Create(MessageType.ChatBroadcast, MessagePackSerializer.Serialize(chat), teacher));
+                c.Dispatch(Envelope.Create(MessageType.RequestScreenshot, System.Array.Empty<byte>(), teacher));
+                Dispatcher.UIThread.RunJobs();
+            },
         },
 
         ["classroom"] = new()

@@ -236,6 +236,7 @@ static class SelfTest
         client.EnvelopeReceived += env =>
         {
             received.Add(env.Type);
+            Console.WriteLine($"  [Rx] {env.Type} ({env.Payload.Length} B payload)");
             if (env.Type == MessageType.LockScreen) lockSeen.TrySetResult();
             if (env.Type == MessageType.PolicyApply) policySeen.TrySetResult();
             if (env.Type == MessageType.ChatBroadcast) chatSeen.TrySetResult();
