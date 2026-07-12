@@ -33,6 +33,11 @@ public partial class StudentSelfTileViewModel : ObservableObject
     /// <summary>Phase 27-B — active codec label ("H.264" / "MJPEG").</summary>
     [ObservableProperty] private string streamCodec = "";
 
+    /// <summary>Phase 28-E — true while streaming the camera to the teacher as a
+    /// Conference peer-cam (JPEG). Independent of the screen stream above.</summary>
+    [ObservableProperty] private bool isCameraLive;
+    [ObservableProperty] private int cameraFrames;
+
     public void Reset()
     {
         IsLocked = false;
@@ -43,6 +48,8 @@ public partial class StudentSelfTileViewModel : ObservableObject
         LastDeferred = "";
         IsStreaming = false;
         StreamedFrames = 0;
+        IsCameraLive = false;
+        CameraFrames = 0;
     }
 
     public void SetPolicy(System.Collections.Generic.IEnumerable<string> chips)

@@ -85,9 +85,16 @@ public sealed class CameraStreamer
 
         if (client != null)
         {
-            var stop = new ConferenceCameraStopMessage { SourceEndpointId = selfId };
-            await SendReliableAsync(MessageType.ConferenceCameraStop,
-                                    MessagePackSerializer.Serialize(stop), client);
+            // Best-effort: on a normal stop the Teacher clears the tile from this;
+            // on a disconnect the socket may already be dead (send throws) — the
+            // Teacher's PeerDisconnected handler fires an implicit stop anyway.
+            try
+            {
+                var stop = new ConferenceCameraStopMessage { SourceEndpointId = selfId };
+                await SendReliableAsync(MessageType.ConferenceCameraStop,
+                                        MessagePackSerializer.Serialize(stop), client);
+            }
+            catch { /* link already gone — implicit stop covers it */ }
         }
         _client = null;
     }

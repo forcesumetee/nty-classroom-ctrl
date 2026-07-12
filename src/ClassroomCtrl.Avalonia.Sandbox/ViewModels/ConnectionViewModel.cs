@@ -43,6 +43,13 @@ public partial class ConnectionViewModel : ObservableObject
     /// <summary>Phase 27-C — screen → JPEG → StudentStreamFrame streamer.</summary>
     private readonly ScreenStreamer _streamer = new();
 
+    /// <summary>Phase 28-E — camera → JPEG → ConferenceCameraFrame streamer (peer cam).</summary>
+    private readonly CameraStreamer _cameraStreamer = new();
+
+    /// <summary>Active Conference session (from the Teacher's ConferenceStart); Empty
+    /// when not in a Conference. Camera peer-cam frames are gated on this.</summary>
+    private Guid _conferenceSessionId;
+
     private CancellationTokenSource? _cts;
 
     [ObservableProperty] private string teacherIp = "172.20.10.7";  // Phase 24.2 hotspot subnet
@@ -90,7 +97,13 @@ public partial class ConnectionViewModel : ObservableObject
             Status = s;
             SelfTile.IsOnline = s == WireStatus.Connected;
             SelfTile.DisplayName = DisplayName;
-            if (s == WireStatus.Disconnected) { _ = _streamer.StopAsync(); SelfTile.Reset(); }
+            if (s == WireStatus.Disconnected)
+            {
+                _ = _streamer.StopAsync();
+                _ = _cameraStreamer.StopAsync();
+                _conferenceSessionId = Guid.Empty;
+                SelfTile.Reset();
+            }
             ConnectCommand.NotifyCanExecuteChanged();
             DisconnectCommand.NotifyCanExecuteChanged();
             RaiseHandCommand.NotifyCanExecuteChanged();
@@ -98,6 +111,7 @@ public partial class ConnectionViewModel : ObservableObject
         Client.Traffic += (dir, label, size) => Post(() => AddLog(dir, label, size));
         Client.EnvelopeReceived += env => Post(() => Dispatch(env));
         _streamer.FrameSent += seq => Post(() => SelfTile.StreamedFrames = seq);
+        _cameraStreamer.FrameSent += seq => Post(() => SelfTile.CameraFrames = seq);
     }
 
     /// <summary>Decode the requested codec from a StudentStreamStartRequest; default
@@ -134,6 +148,51 @@ public partial class ConnectionViewModel : ObservableObject
             AddLog(WireDirection.System, "screen streaming stopped", 0);
         });
     }
+
+    /// <summary>Decode the Conference SessionId from a ConferenceStartMessage; Empty
+    /// if the payload is absent/unreadable.</summary>
+    private static Guid DecodeConferenceSessionId(byte[] payload)
+    {
+        try
+        {
+            if (payload.Length == 0) return Guid.Empty;
+            return MessagePackSerializer.Deserialize<ConferenceStartMessage>(payload).SessionId;
+        }
+        catch { return Guid.Empty; }
+    }
+
+    /// <summary>28-E — start the peer-cam stream for the active Conference session.
+    /// Chosen default when the Camera Capture tab is already using the camera: the
+    /// native camera is a single session, so <see cref="CameraStreamer.StartAsync"/>
+    /// returns -3 (already running). We RESPECT the manual preview — log a clear note
+    /// and do NOT emit a Start (StartAsync only sends Start after rc==0, so nothing
+    /// spurious goes on the wire).</summary>
+    private async Task StartCameraStreamingAsync(Guid sessionId)
+    {
+        int rc = await _cameraStreamer.StartAsync(Client, Client.EndpointId, sessionId, DisplayName);
+        Post(() =>
+        {
+            SelfTile.IsCameraLive = rc == 0;
+            if (rc == 0)
+                AddLog(WireDirection.System, "camera peer-cam started", 0);
+            else if (rc == -3)
+                AddLog(WireDirection.System, "camera busy (Camera Capture tab active?) — peer-cam not started", 0);
+            else
+                AddLog(WireDirection.System, $"camera peer-cam start failed ({rc})", 0);
+        });
+    }
+
+    private async Task StopCameraStreamingAsync()
+    {
+        await _cameraStreamer.StopAsync();
+        Post(() =>
+        {
+            SelfTile.IsCameraLive = false;
+            AddLog(WireDirection.System, "camera peer-cam stopped", 0);
+        });
+    }
+
+    private static string Short(Guid id) => id == Guid.Empty ? "—" : id.ToString("N")[..8];
 
     /// <summary>Decode an inbound envelope: enrich the traffic log with a summary
     /// and reflect the command onto <see cref="SelfTile"/>. No enforcement.
@@ -185,12 +244,23 @@ public partial class ConnectionViewModel : ObservableObject
                 _ = StopStreamingAsync();
                 detail = "■ stream stopped";
                 break;
+            // Phase 28-E — the Teacher started Conference Mode. Capture the session id
+            // and start streaming this Mac's camera as a peer cam (JPEG, 320×240).
+            case MessageType.ConferenceStart:
+                _conferenceSessionId = DecodeConferenceSessionId(env.Payload);
+                _ = StartCameraStreamingAsync(_conferenceSessionId);
+                detail = $"▶ conference started — streaming camera ({Short(_conferenceSessionId)})";
+                break;
+            case MessageType.ConferenceEnd:
+                _ = StopCameraStreamingAsync();
+                _conferenceSessionId = Guid.Empty;
+                detail = "■ conference ended — camera stopped";
+                break;
             // Remaining capture-class commands: logged + noted, deferred until their
-            // native macOS APIs land (Phase 27-B+). No frames produced.
+            // native macOS APIs land. No frames produced.
             case MessageType.RequestScreenshot:
             case MessageType.ScreenStreamStart:
             case MessageType.CameraStart:
-            case MessageType.ConferenceStart:
             case MessageType.MicMonitorStart:
                 detail = "deferred — needs native capture (Phase 27+)";
                 SelfTile.LastDeferred = $"{env.Type} · deferred (needs native APIs)";
