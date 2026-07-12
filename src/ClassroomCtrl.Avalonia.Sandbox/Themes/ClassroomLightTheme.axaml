@@ -1,0 +1,81 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+    ═══════════════════════════════════════════════════════════════════════════
+    ClassroomLightTheme — PORT (core color tokens) of
+    ClassroomCtrl.Shared/Themes/Colors.Light.xaml (Phase 25.5-B).
+
+    The shipped "Classroom Material theme" is a SET of dictionaries (MaterialDesign
+    BundledTheme + MaterialDesign3.Defaults + Colors/Spacing/Typography/Effects/
+    Buttons/Inputs/DataDisplay). This file ports the CORE that views actually bind:
+    the 36 semantic color tokens (Surface / Border / Accent / Text / Status).
+    Deferred (not 1:1 to Avalonia): the MaterialDesign control-style dicts
+    (Buttons/Inputs/DataDisplay) — Avalonia re-themes controls via its own
+    ControlThemes/FluentTheme. Colors.Dark + value-token dicts also deferred.
+
+    Coexists with ConferenceDarkTheme (Conf* keys) — NO key collision: this file's
+    keys are Surface.* / Border.* / Accent.* / Text.* / Status.*.
+
+    WPF → Avalonia: `<Color x:Key>` + `<SolidColorBrush Color="{StaticResource X.Color}">`
+    both port 1:1 (same as the ConferenceDarkTheme port). Hex values verbatim.
+    Key names preserved verbatim for cross-repo search + DynamicResource swap parity.
+    ═══════════════════════════════════════════════════════════════════════════
+    -->
+
+    <!-- ============ SURFACE tier ============ -->
+    <!-- App background (page). -->
+    <Color x:Key="Surface.Background.Color">#F8FAFC</Color>
+    <!-- Elevated surface (panels above background). -->
+    <Color x:Key="Surface.Elevated.Color">#FFFFFF</Color>
+    <!-- Card surface (student tiles, dialog cards). -->
+    <Color x:Key="Surface.Card.Color">#FFFFFF</Color>
+    <!-- Hover surface tint. -->
+    <Color x:Key="Surface.Hover.Color">#F1F5F9</Color>
+
+    <SolidColorBrush x:Key="Surface.Background" Color="{StaticResource Surface.Background.Color}"/>
+    <SolidColorBrush x:Key="Surface.Elevated"   Color="{StaticResource Surface.Elevated.Color}"/>
+    <SolidColorBrush x:Key="Surface.Card"       Color="{StaticResource Surface.Card.Color}"/>
+    <SolidColorBrush x:Key="Surface.Hover"      Color="{StaticResource Surface.Hover.Color}"/>
+    <!-- Legacy alias (Phase 6-13 dialogs / Inputs). -->
+    <SolidColorBrush x:Key="Surface.Overlay"    Color="{StaticResource Surface.Hover.Color}"/>
+
+    <!-- ============ BORDER tier ============ -->
+    <Color x:Key="Border.Default.Color">#E2E8F0</Color>
+    <Color x:Key="Border.Soft.Color">#F1F5F9</Color>
+    <SolidColorBrush x:Key="Border.Default" Color="{StaticResource Border.Default.Color}"/>
+    <SolidColorBrush x:Key="Border.Soft"    Color="{StaticResource Border.Soft.Color}"/>
+    <!-- Legacy alias — Surface.Border was the original border key. -->
+    <SolidColorBrush x:Key="Surface.Border"      Color="{StaticResource Border.Default.Color}"/>
+    <SolidColorBrush x:Key="Surface.BorderFocus" Color="#3B82F6"/>
+
+    <!-- ============ ACCENT tier ============ (Primary runtime-overridden by BrandingService) -->
+    <SolidColorBrush x:Key="Accent.Primary"        Color="#3B82F6"/>
+    <SolidColorBrush x:Key="Accent.PrimaryHover"   Color="#2563EB"/>
+    <SolidColorBrush x:Key="Accent.PrimaryPressed" Color="#1D4ED8"/>
+    <!-- Subtle = pale blue tint readable on light surface (Dark theme uses navy). -->
+    <SolidColorBrush x:Key="Accent.PrimarySubtle"  Color="#DBEAFE"/>
+
+    <!-- ============ SEMANTIC tier ============ (vivid on both themes) -->
+    <SolidColorBrush x:Key="Accent.Success"      Color="#10B981"/>
+    <SolidColorBrush x:Key="Accent.SuccessHover" Color="#059669"/>
+    <SolidColorBrush x:Key="Accent.Warning"      Color="#F59E0B"/>
+    <SolidColorBrush x:Key="Accent.WarningHover" Color="#D97706"/>
+    <SolidColorBrush x:Key="Accent.Danger"       Color="#EF4444"/>
+    <SolidColorBrush x:Key="Accent.DangerHover"  Color="#DC2626"/>
+    <SolidColorBrush x:Key="Accent.Info"         Color="#3B82F6"/>
+
+    <!-- ============ TEXT tier ============ (dark-on-light for the light surface) -->
+    <SolidColorBrush x:Key="Text.Primary"   Color="#0F172A"/>
+    <SolidColorBrush x:Key="Text.Secondary" Color="#475569"/>
+    <SolidColorBrush x:Key="Text.Tertiary"  Color="#94A3B8"/>
+    <SolidColorBrush x:Key="Text.Muted"     Color="#94A3B8"/>
+    <SolidColorBrush x:Key="Text.OnAccent"  Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Text.Disabled"  Color="#CBD5E1"/>
+
+    <!-- ============ STATUS tier ============ -->
+    <SolidColorBrush x:Key="Status.Online"    Color="#10B981"/>
+    <SolidColorBrush x:Key="Status.Locked"    Color="#F59E0B"/>
+    <SolidColorBrush x:Key="Status.Offline"   Color="#94A3B8"/>
+    <SolidColorBrush x:Key="Status.Recording" Color="#EF4444"/>
+
+</ResourceDictionary>

@@ -3,13 +3,14 @@
              x:Class="ClassroomCtrl.Avalonia.Sandbox.App"
              RequestedThemeVariant="Dark">
 
-    <!-- Merge the ported Conference dark-theme tokens so ConferenceTile's
-         {StaticResource Conf*} lookups resolve app-wide (mirrors how the
-         shipped app merges ConferenceDarkTheme.xaml at the App level). -->
+    <!-- Merge both ported theme token sets app-wide. They coexist without collision:
+         Conf* (Conference dark) vs Surface.*/Text.*/Accent.*/Status.* (Classroom light).
+         Mirrors how the shipped Teacher app merges both dictionaries. -->
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://ClassroomCtrl.Avalonia.Sandbox/Themes/ConferenceDarkTheme.axaml"/>
+                <ResourceInclude Source="avares://ClassroomCtrl.Avalonia.Sandbox/Themes/ClassroomLightTheme.axaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
