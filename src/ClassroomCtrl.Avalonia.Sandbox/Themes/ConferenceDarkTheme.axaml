@@ -1,0 +1,51 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+    PORTED (subset) from ClassroomCtrl.Shared.Wpf/Themes/ConferenceDarkTheme.xaml
+    for the Phase 24.3 first-view-port experiment.  Only the ~15 tokens the
+    ConferenceTile actually consumes are ported here (the shipped dictionary has
+    36 keys shared across the whole Conference surface).
+
+    WPF → Avalonia resource-dictionary differences encountered:
+      • Root xmlns:  http://schemas.microsoft.com/winfx/2006/xaml/presentation
+                  →  https://github.com/avaloniaui
+      • SolidColorBrush + Opacity: identical syntax, ports 1:1.
+      • Scalar doubles: WPF <sys:Double> (mscorlib clr-namespace) → <x:Double>.
+      • CornerRadius / Thickness: element+content syntax works in both.
+      • FontFamily: "Segoe UI" is absent on macOS, so text falls back to the
+        Avalonia default UI font; emoji fall back to Apple Color Emoji.  Kept
+        the original string for fidelity — documented in PHASE-24.3-FINDINGS.md.
+    -->
+
+    <!-- Backgrounds -->
+    <SolidColorBrush x:Key="ConfTileBgBrush"       Color="#2D2D33"/>
+    <SolidColorBrush x:Key="ConfTileLiveBgBrush"   Color="#1A1A1E"/>
+    <SolidColorBrush x:Key="ConfStatusBarBgBrush"  Color="#000000" Opacity="0.6"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="ConfTextPrimaryBrush"   Color="#E8EAED"/>
+    <SolidColorBrush x:Key="ConfTextSecondaryBrush" Color="#9AA0A6"/>
+
+    <!-- Accents -->
+    <SolidColorBrush x:Key="ConfAccentYellowBrush" Color="#FBBC04"/>
+    <SolidColorBrush x:Key="ConfAccentGreenBrush"  Color="#34A853"/>
+    <SolidColorBrush x:Key="ConfAccentBlueBrush"   Color="#4285F4"/>
+    <SolidColorBrush x:Key="ConfAccentBluePale"    Color="#8AB4F8"/>
+    <SolidColorBrush x:Key="ConfAccentRedBrush"    Color="#EA4335"/>
+    <SolidColorBrush x:Key="ConfHostBadgeBgBrush"  Color="#4285F4" Opacity="0.2"/>
+
+    <!-- Borders -->
+    <SolidColorBrush x:Key="ConfBorderActiveBrush" Color="#FBBC04"/>
+
+    <!-- Typography -->
+    <FontFamily x:Key="ConfFontFamily">Segoe UI, Segoe UI Emoji</FontFamily>
+    <x:Double x:Key="ConfFontSizeTileName">36</x:Double>
+    <x:Double x:Key="ConfFontSizeStatus">12</x:Double>
+    <x:Double x:Key="ConfFontSizeBadge">11</x:Double>
+
+    <!-- Layout -->
+    <CornerRadius x:Key="ConfTileCornerRadius">10</CornerRadius>
+    <CornerRadius x:Key="ConfStatusBarRadius">13</CornerRadius>
+    <CornerRadius x:Key="ConfBadgeCornerRadius">11</CornerRadius>
+    <Thickness x:Key="ConfStatusBarPadding">12,5</Thickness>
+</ResourceDictionary>

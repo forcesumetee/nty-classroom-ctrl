@@ -1,0 +1,163 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.ConferenceTile"
+             x:Name="Root"
+             x:DataType="vm:ConferenceTileViewModel"
+             Background="Transparent"
+             FontFamily="{StaticResource ConfFontFamily}">
+
+    <!-- PORTED from Shared.Wpf/Conference/ConferenceTile.xaml (Phase 24.3).
+         Faithful re-creation of the Zoom-style dark tile; WPF→Avalonia notes
+         are inline.  Two intentional port simplifications (see FINDINGS §3):
+           1. Reaction float-up Storyboard is DEFERRED (static glyph only).
+           2. Code-behind SizeChanged aspect-ratio hack dropped — the sandbox
+              sizes tiles explicitly, so the 16:9 auto-fit isn't needed here. -->
+
+    <!-- WPF Style.Triggers/DataTrigger have NO Avalonia equivalent.  The
+         idiomatic replacement is conditional style classes (Classes.foo="{Binding Bar}")
+         selected by CSS-like selectors below.  Declaration order matters: a later
+         matching setter wins, so .pinned is placed after .speaking to mirror WPF's
+         "last DataTrigger wins" when a tile is both pinned and speaking. -->
+    <UserControl.Styles>
+        <!-- BASE values live in a style, NOT as local attributes on the Border.
+             Avalonia (like WPF) ranks a locally-set property ABOVE a style
+             setter, so if Background/BorderBrush/BorderThickness were set inline
+             the conditional-class setters below could never override them. This
+             is the same trap the shipped StudentCard.xaml documents for WPF. -->
+        <Style Selector="Border#OuterBorder">
+            <Setter Property="Background" Value="{StaticResource ConfTileBgBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <!-- Live video → dimmer plate so the frame pops. -->
+        <Style Selector="Border#OuterBorder.live">
+            <Setter Property="Background" Value="{StaticResource ConfTileLiveBgBrush}"/>
+        </Style>
+        <!-- Active-speaker yellow ring. -->
+        <Style Selector="Border#OuterBorder.speaking">
+            <Setter Property="BorderBrush" Value="{StaticResource ConfBorderActiveBrush}"/>
+            <Setter Property="BorderThickness" Value="3"/>
+        </Style>
+        <!-- Pinned purple ring (wins over speaking when both, per WPF order). -->
+        <Style Selector="Border#OuterBorder.pinned">
+            <Setter Property="BorderBrush" Value="#7C3AED"/>
+            <Setter Property="BorderThickness" Value="3"/>
+        </Style>
+        <!-- Mic/cam status icons: red by default, primary(white) when live.
+             (WPF per-TextBlock Style.Triggers → shared selector + .on class.) -->
+        <Style Selector="TextBlock.statusIcon">
+            <Setter Property="Foreground" Value="{StaticResource ConfAccentRedBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.statusIcon.on">
+            <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border x:Name="OuterBorder"
+            CornerRadius="{StaticResource ConfTileCornerRadius}"
+            ClipToBounds="True"
+            Margin="8"
+            Classes.live="{Binding JpegFrame, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+            Classes.speaking="{Binding IsSpeaking}"
+            Classes.pinned="{Binding IsPinned}">
+        <Grid>
+            <!-- Layer 1: video frame.  Avalonia Image.Source binds an
+                 Avalonia Bitmap directly (VM type ported from BitmapSource). -->
+            <Image Source="{Binding JpegFrame}" Stretch="Uniform"
+                   IsVisible="{Binding JpegFrame, Converter={x:Static conv:ObjectConverters.IsNotNull}}"/>
+
+            <!-- Layer 2: name placeholder when no frame.  WPF NullToVisibility
+                 +Inverted → ObjectConverters.IsNull. -->
+            <TextBlock Text="{Binding DisplayName}"
+                       IsVisible="{Binding JpegFrame, Converter={x:Static conv:ObjectConverters.IsNull}}"
+                       Foreground="{StaticResource ConfTextPrimaryBrush}"
+                       FontSize="{StaticResource ConfFontSizeTileName}"
+                       FontWeight="Medium"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="20,0"/>
+
+            <!-- Layer 3: top-right badges (Host + Hand raise).  WPF
+                 Visibility+BoolToVisibility → IsVisible bound to the bool directly. -->
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,12,12,0">
+                <Border IsVisible="{Binding IsHost}"
+                        CornerRadius="{StaticResource ConfBadgeCornerRadius}"
+                        Background="{StaticResource ConfHostBadgeBgBrush}"
+                        BorderBrush="{StaticResource ConfAccentBlueBrush}"
+                        BorderThickness="1"
+                        Padding="10,3"
+                        Margin="0,0,6,0">
+                    <TextBlock Text="HOST"
+                               Foreground="{StaticResource ConfAccentBluePale}"
+                               FontSize="{StaticResource ConfFontSizeBadge}"
+                               FontWeight="Medium"/>
+                </Border>
+                <Border IsVisible="{Binding IsHandRaised}"
+                        CornerRadius="14"
+                        Background="{StaticResource ConfAccentYellowBrush}"
+                        Padding="10,4">
+                    <!-- Emoji: dropped explicit "Segoe UI Emoji" (absent on macOS)
+                         so the color glyph resolves via Apple Color Emoji. -->
+                    <TextBlock Text="✋" FontSize="13" Foreground="#1F1F23"
+                               VerticalAlignment="Center"/>
+                </Border>
+            </StackPanel>
+
+            <!-- Layer 4: bottom-left status pill. -->
+            <Border CornerRadius="{StaticResource ConfStatusBarRadius}"
+                    Background="{StaticResource ConfStatusBarBgBrush}"
+                    Padding="{StaticResource ConfStatusBarPadding}"
+                    HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                    Margin="12,0,0,12">
+                <StackPanel Orientation="Horizontal">
+                    <!-- Speaking indicator: tiny green dot (shown when mic live). -->
+                    <Ellipse Width="6" Height="6"
+                             Fill="{StaticResource ConfAccentGreenBrush}"
+                             VerticalAlignment="Center"
+                             Margin="0,0,8,0"
+                             IsVisible="{Binding IsMicLive}"/>
+
+                    <!-- Name + "(You)" suffix.  SelfSuffix is a control property
+                         (WPF DependencyProperty → Avalonia StyledProperty); bound
+                         via element-name (#Root) since it lives on the control,
+                         not the VM.  Avalonia supports <Run> inlines + binding. -->
+                    <TextBlock Foreground="{StaticResource ConfTextPrimaryBrush}"
+                               FontSize="{StaticResource ConfFontSizeStatus}"
+                               FontWeight="Medium"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="180">
+                        <Run Text="{Binding DisplayName}"/>
+                        <Run Text=" "/>
+                        <Run Text="{Binding #Root.SelfSuffix}"
+                             Foreground="{StaticResource ConfTextSecondaryBrush}"/>
+                    </TextBlock>
+
+                    <!-- Mic icon: white when live, red when muted (via .on class). -->
+                    <TextBlock Text="🎙" Classes="statusIcon"
+                               Classes.on="{Binding IsMicLive}"
+                               FontSize="13" Margin="12,0,0,0" VerticalAlignment="Center"/>
+
+                    <!-- Cam icon: white when on, red when off. -->
+                    <TextBlock Text="📷" Classes="statusIcon"
+                               Classes.on="{Binding IsCamLive}"
+                               FontSize="13" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Layer 5: reaction glyph.  Float-up animation DEFERRED (see
+                 code-behind TODO).  Rendered as a static centered emoji, shown
+                 only while CurrentReactionEmoji is non-empty. -->
+            <TextBlock x:Name="ReactionFloater"
+                       Text="{Binding CurrentReactionEmoji}"
+                       IsVisible="{Binding CurrentReactionEmoji, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                       FontSize="48"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsHitTestVisible="False"/>
+        </Grid>
+    </Border>
+</UserControl>
