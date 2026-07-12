@@ -30,6 +30,8 @@ public partial class StudentSelfTileViewModel : ObservableObject
     /// <summary>Phase 27-C — true while streaming this screen to the teacher.</summary>
     [ObservableProperty] private bool isStreaming;
     [ObservableProperty] private int streamedFrames;
+    /// <summary>Phase 27-B — active codec label ("H.264" / "MJPEG").</summary>
+    [ObservableProperty] private string streamCodec = "";
 
     public void Reset()
     {

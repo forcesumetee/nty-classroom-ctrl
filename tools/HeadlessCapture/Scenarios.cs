@@ -155,14 +155,14 @@ public static class Scenarios
                 c.SelfTile.IsOnline = true;
                 c.AddLog(WireDirection.System, "TCP connected to 172.20.10.7:7777", 0);
                 c.AddLog(WireDirection.Tx, "Hello", 213);
-                c.Dispatch(Envelope.Create(MessageType.StudentStreamStart,
-                    MessagePackSerializer.Serialize(new StudentStreamStartRequest { Codec = VideoCodec.Mjpeg }), System.Guid.NewGuid()));
-                // Reflect a live-streaming self-tile (the real capture path is proven by
-                // MockTeacher --streamtest; here we show the UI state deterministically).
+                // Seed the UI state directly (dispatching a real StudentStreamStart would
+                // kick off actual capture; the live path is proven by MockTeacher tests).
+                c.AddLog(WireDirection.Rx, "StudentStreamStart", 24, "▶ streaming screen to teacher (H264)");
                 c.SelfTile.IsStreaming = true;
+                c.SelfTile.StreamCodec = "H.264";
                 c.SelfTile.StreamedFrames = 42;
                 for (int i = 40; i <= 42; i++)
-                    c.AddLog(WireDirection.Tx, "StudentStreamFrame", 137000);
+                    c.AddLog(WireDirection.Tx, "StudentStreamFrame", 16000);
                 Dispatcher.UIThread.RunJobs();
             },
         },

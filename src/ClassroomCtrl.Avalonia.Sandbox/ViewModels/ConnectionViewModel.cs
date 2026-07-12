@@ -100,15 +100,28 @@ public partial class ConnectionViewModel : ObservableObject
         _streamer.FrameSent += seq => Post(() => SelfTile.StreamedFrames = seq);
     }
 
-    private async Task StartStreamingAsync()
+    /// <summary>Decode the requested codec from a StudentStreamStartRequest; default
+    /// MJPEG if the payload is absent/unreadable (older Teacher builds send empty).</summary>
+    private static VideoCodec DecodeStreamCodec(byte[] payload)
     {
-        int rc = await _streamer.StartAsync(Client);
+        try
+        {
+            if (payload.Length == 0) return VideoCodec.Mjpeg;
+            return MessagePackSerializer.Deserialize<StudentStreamStartRequest>(payload).Codec;
+        }
+        catch { return VideoCodec.Mjpeg; }
+    }
+
+    private async Task StartStreamingAsync(VideoCodec codec)
+    {
+        int rc = await _streamer.StartAsync(Client, codec);
         Post(() =>
         {
             SelfTile.IsStreaming = rc == 0;
+            SelfTile.StreamCodec = codec == VideoCodec.H264 ? "H.264" : "MJPEG";
             if (rc == 0) SelfTile.LastDeferred = "";
             else SelfTile.LastDeferred = $"StudentStreamStart · capture failed (code {rc})";
-            AddLog(WireDirection.System, rc == 0 ? "screen streaming started" : $"stream start failed ({rc})", 0);
+            AddLog(WireDirection.System, rc == 0 ? $"screen streaming started ({codec})" : $"stream start failed ({rc})", 0);
         });
     }
 
@@ -164,8 +177,9 @@ public partial class ConnectionViewModel : ObservableObject
             // Phase 27-C — the Teacher's "View Screen" request. Start real
             // ScreenCaptureKit → JPEG → StudentStreamFrame streaming.
             case MessageType.StudentStreamStart:
-                _ = StartStreamingAsync();
-                detail = "▶ streaming screen to teacher";
+                var codec = DecodeStreamCodec(env.Payload);
+                _ = StartStreamingAsync(codec);
+                detail = $"▶ streaming screen to teacher ({codec})";
                 break;
             case MessageType.StudentStreamStop:
                 _ = StopStreamingAsync();
