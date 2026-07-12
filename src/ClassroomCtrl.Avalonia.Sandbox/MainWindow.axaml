@@ -4,24 +4,33 @@
         xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
         x:Class="ClassroomCtrl.Avalonia.Sandbox.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Width="760" Height="520"
+        Width="940" Height="1000"
         Background="#1F1F23"
-        Title="ClassroomCtrl.Avalonia.Sandbox — ConferenceTile port (Phase 24.3)">
+        Title="ClassroomCtrl.Avalonia.Sandbox — Phase 25.0-B ConferenceDarkTheme">
 
-    <ScrollViewer Padding="12">
-        <ItemsControl ItemsSource="{Binding Tiles}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <WrapPanel/>
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vm:ConferenceTileViewModel">
-                    <!-- Explicit size stands in for the gallery UniformGrid slot;
-                         the ported tile drops the WPF SizeChanged 16:9 auto-fit. -->
-                    <views:ConferenceTile Width="340" Height="191"/>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-    </ScrollViewer>
+    <TabControl Background="Transparent">
+        <!-- Tab 0 (default/captured): full 36-key theme baseline. -->
+        <TabItem Header="Theme tokens (36 keys)">
+            <ScrollViewer>
+                <views:ThemeShowcaseView/>
+            </ScrollViewer>
+        </TabItem>
+        <!-- Tab 1: the Phase 24.3 ported tile in its varied states. -->
+        <TabItem Header="ConferenceTile">
+            <ScrollViewer Padding="12">
+                <ItemsControl ItemsSource="{Binding Tiles}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:ConferenceTileViewModel">
+                            <views:ConferenceTile Width="340" Height="191"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </TabItem>
+    </TabControl>
 </Window>

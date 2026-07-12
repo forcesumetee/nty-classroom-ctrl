@@ -137,6 +137,59 @@ name string _(not yet needed in this codebase)_.
 | `Border > TextBlock` | direct child; `Border TextBlock` = any descendant |
 | `Button:pointerover` | pseudo-class (WPF `IsMouseOver`) |
 
+### 3e. Keyed `Style` (with `ControlTemplate`) → `ControlTheme`
+_(added Phase 25.0-B, from the ConferenceDarkTheme button styles)_
+
+A WPF **keyed** `<Style x:Key="X" TargetType="Button">` — applied via
+`Style="{StaticResource X}"` and often carrying a `ControlTemplate` + template
+triggers — has no `Style`-based equivalent in Avalonia. Use a **`ControlTheme`**,
+applied via **`Theme="{StaticResource X}"`**:
+
+```xml
+<!-- WPF: <Style x:Key="Btn" TargetType="Button"> ... ControlTemplate.Triggers ... -->
+<ControlTheme x:Key="Btn" TargetType="Button">
+  <Setter Property="BorderBrush" Value="{StaticResource Hover}"/>
+  <Setter Property="Cursor" Value="Hand"/>
+  <Setter Property="Template">
+    <ControlTemplate>
+      <Border x:Name="PART_Bg"
+              Background="{TemplateBinding Background}"          <!-- TemplateBinding: 1:1 -->
+              BorderBrush="{TemplateBinding BorderBrush}">
+        <ContentPresenter Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          Foreground="{TemplateBinding Foreground}"/>
+      </Border>
+    </ControlTemplate>
+  </Setter>
+  <!-- WPF <Trigger Property="IsMouseOver"> on PART_Bg → pseudo-class selector.
+       '^' = the templated control; '/template/' reaches into the template. -->
+  <Style Selector="^:pointerover /template/ Border#PART_Bg">
+    <Setter Property="Background" Value="{StaticResource HoverOverlay}"/>
+  </Style>
+</ControlTheme>
+
+<!-- Inheritance: BasedOn works the same. -->
+<ControlTheme x:Key="EndBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+  <Setter Property="Background" Value="{StaticResource Red}"/>
+</ControlTheme>
+
+<!-- Apply: WPF Style="{StaticResource Btn}"  →  Avalonia Theme="{StaticResource Btn}" -->
+<Button Theme="{StaticResource Btn}" Content="🎙"/>
+```
+
+| WPF | Avalonia |
+|---|---|
+| keyed `<Style TargetType>` | `<ControlTheme x:Key TargetType>` |
+| applied via `Style="{StaticResource}"` | applied via `Theme="{StaticResource}"` |
+| `<ControlTemplate.Triggers><Trigger IsMouseOver>` | nested `<Style Selector="^:pointerover /template/ …">` |
+| `{TemplateBinding X}` | **same** |
+| `BasedOn="{StaticResource}"` | **same** |
+| `ContentPresenter` (auto content) | be explicit: bind `Content` + `ContentTemplate` |
+
+> An *implicit* WPF style (`<Style TargetType="Button">` with no key) → an Avalonia
+> `ControlTheme` set as the type's default, or a plain `<Style Selector="Button">`
+> for non-template tweaks. _(implicit-default ControlTheme not yet exercised here)_
+
 ---
 
 ## 4. Converter translation
@@ -323,5 +376,7 @@ Keep this as a committed tool for per-view visual checks.
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 
 ---
-_Living document — extend as later ports surface new patterns (animations,
-ControlTemplates, ContextMenus, DynamicResource theming are not yet covered)._
+_Living document — extend as later ports surface new patterns. Covered so far
+incl. keyed-Style→ControlTheme + basic ControlTemplate/pseudo-classes (§3e). Still
+uncovered: animations, complex ControlTemplates, ContextMenus, DynamicResource
+theme-swap._

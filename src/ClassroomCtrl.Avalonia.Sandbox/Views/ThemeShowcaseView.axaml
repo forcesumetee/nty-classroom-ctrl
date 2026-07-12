@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.ThemeShowcaseView">
+    <!-- Phase 25.0-B visual baseline: exercises every ConferenceDarkTheme category
+         so a regression in any key is visible at a glance.  Static content only. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.h">
+            <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,10,0,4"/>
+        </Style>
+        <!-- Fill swatch: a colored box with a caption. -->
+        <Style Selector="Border.swatch">
+            <Setter Property="Width" Value="172"/>
+            <Setter Property="Height" Value="50"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style Selector="Border.swatch > TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Margin="16" Spacing="6">
+
+        <TextBlock Classes="h" Text="Backgrounds (9)"/>
+        <WrapPanel>
+            <Border Classes="swatch" Background="{StaticResource ConfWindowBgBrush}"><TextBlock Text="ConfWindowBgBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfTitleBarBgBrush}"><TextBlock Text="ConfTitleBarBgBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfTileBgBrush}"><TextBlock Text="ConfTileBgBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfTileLiveBgBrush}"><TextBlock Text="ConfTileLiveBgBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfToolbarBgBrush}"><TextBlock Text="ConfToolbarBgBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfSidebarBgBrush}"><TextBlock Text="ConfSidebarBgBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfChatOwnBubbleBrush}"><TextBlock Text="ConfChatOwnBubbleBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfChatOtherBubbleBrush}"><TextBlock Text="ConfChatOtherBubbleBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfChatInputBgBrush}"><TextBlock Text="ConfChatInputBgBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+        </WrapPanel>
+
+        <TextBlock Classes="h" Text="Overlays (2) — shown over a tile-bg plate to reveal translucency"/>
+        <WrapPanel>
+            <Border Classes="swatch" Background="{StaticResource ConfTileBgBrush}">
+                <Border Background="{StaticResource ConfStatusBarBgBrush}" CornerRadius="4">
+                    <TextBlock Text="ConfStatusBarBgBrush (α0.6)" Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+                </Border>
+            </Border>
+            <Border Classes="swatch" Background="{StaticResource ConfTileBgBrush}">
+                <Border Background="{StaticResource ConfHoverOverlayBrush}" CornerRadius="4">
+                    <TextBlock Text="ConfHoverOverlayBrush (α0.08)" Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+                </Border>
+            </Border>
+        </WrapPanel>
+
+        <TextBlock Classes="h" Text="Text (3)"/>
+        <StackPanel Orientation="Horizontal" Spacing="24">
+            <TextBlock Text="ConfTextPrimaryBrush" Foreground="{StaticResource ConfTextPrimaryBrush}" FontSize="14"/>
+            <TextBlock Text="ConfTextSecondaryBrush" Foreground="{StaticResource ConfTextSecondaryBrush}" FontSize="14"/>
+            <TextBlock Text="ConfTextDisabledBrush" Foreground="{StaticResource ConfTextDisabledBrush}" FontSize="14"/>
+        </StackPanel>
+
+        <TextBlock Classes="h" Text="Accents (6)"/>
+        <WrapPanel>
+            <Border Classes="swatch" Background="{StaticResource ConfAccentYellowBrush}"><TextBlock Text="ConfAccentYellowBrush" Foreground="#1F1F23"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfAccentGreenBrush}"><TextBlock Text="ConfAccentGreenBrush" Foreground="White"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfAccentBlueBrush}"><TextBlock Text="ConfAccentBlueBrush" Foreground="White"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfAccentBluePale}"><TextBlock Text="ConfAccentBluePale" Foreground="#1F1F23"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfAccentRedBrush}"><TextBlock Text="ConfAccentRedBrush" Foreground="White"/></Border>
+            <Border Classes="swatch" Background="{StaticResource ConfHostBadgeBgBrush}"><TextBlock Text="ConfHostBadgeBgBrush (α0.2)" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+        </WrapPanel>
+
+        <TextBlock Classes="h" Text="Borders (3)"/>
+        <WrapPanel>
+            <Border Classes="swatch" Background="Transparent" BorderThickness="2" BorderBrush="{StaticResource ConfBorderSubtleBrush}"><TextBlock Text="ConfBorderSubtleBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="Transparent" BorderThickness="2" BorderBrush="{StaticResource ConfBorderHoverBrush}"><TextBlock Text="ConfBorderHoverBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+            <Border Classes="swatch" Background="Transparent" BorderThickness="2" BorderBrush="{StaticResource ConfBorderActiveBrush}"><TextBlock Text="ConfBorderActiveBrush" Foreground="{StaticResource ConfTextPrimaryBrush}"/></Border>
+        </WrapPanel>
+
+        <TextBlock Classes="h" Text="Typography (font sizes 36 / 12 / 11) + ConfFontFamily"/>
+        <StackPanel Orientation="Horizontal" Spacing="20">
+            <TextBlock Text="Aa 36" Foreground="{StaticResource ConfTextPrimaryBrush}" FontFamily="{StaticResource ConfFontFamily}" FontSize="{StaticResource ConfFontSizeTileName}"/>
+            <TextBlock Text="Aa 12" Foreground="{StaticResource ConfTextPrimaryBrush}" FontFamily="{StaticResource ConfFontFamily}" FontSize="{StaticResource ConfFontSizeStatus}" VerticalAlignment="Bottom"/>
+            <TextBlock Text="Aa 11" Foreground="{StaticResource ConfTextPrimaryBrush}" FontFamily="{StaticResource ConfFontFamily}" FontSize="{StaticResource ConfFontSizeBadge}" VerticalAlignment="Bottom"/>
+        </StackPanel>
+
+        <TextBlock Classes="h" Text="Corner radii (10 / 13 / 24 / 11 / 20)"/>
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <Border Width="80" Height="44" Background="{StaticResource ConfTileBgBrush}" CornerRadius="{StaticResource ConfTileCornerRadius}"><TextBlock Text="Tile 10" Foreground="{StaticResource ConfTextSecondaryBrush}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <Border Width="80" Height="44" Background="{StaticResource ConfTileBgBrush}" CornerRadius="{StaticResource ConfStatusBarRadius}"><TextBlock Text="Status 13" Foreground="{StaticResource ConfTextSecondaryBrush}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <Border Width="80" Height="44" Background="{StaticResource ConfTileBgBrush}" CornerRadius="{StaticResource ConfToolbarCornerRadius}"><TextBlock Text="Toolbar 24" Foreground="{StaticResource ConfTextSecondaryBrush}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <Border Width="80" Height="44" Background="{StaticResource ConfTileBgBrush}" CornerRadius="{StaticResource ConfBadgeCornerRadius}"><TextBlock Text="Badge 11" Foreground="{StaticResource ConfTextSecondaryBrush}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <Border Width="80" Height="44" Background="{StaticResource ConfTileBgBrush}" CornerRadius="{StaticResource ConfButtonCornerRadius}"><TextBlock Text="Button 20" Foreground="{StaticResource ConfTextSecondaryBrush}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+        </StackPanel>
+
+        <TextBlock Classes="h" Text="Toolbar buttons (ControlTheme — hover changes bg via :pointerover)"/>
+        <StackPanel Orientation="Horizontal">
+            <Button Theme="{StaticResource ConfToolbarButtonStyle}" Content="🎙"/>
+            <Button Theme="{StaticResource ConfToolbarButtonStyle}" Content="📷"/>
+            <Button Theme="{StaticResource ConfToolbarButtonStyle}" Content="✋"/>
+            <Button Theme="{StaticResource ConfToolbarEndButtonStyle}" Content="End"/>
+        </StackPanel>
+
+    </StackPanel>
+</UserControl>
