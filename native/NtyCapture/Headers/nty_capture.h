@@ -60,6 +60,11 @@ typedef void (*nty_frame_cb)(void *ctx, const uint8_t *bgra,
 int nty_capture_start(int fps, nty_frame_cb cb, void *ctx);
 void nty_capture_stop(void);
 
+/* Optional stats (last delivered frame dimensions + cumulative frame count). */
+int nty_last_width(void);
+int nty_last_height(void);
+int64_t nty_frame_count(void);
+
 #ifdef __cplusplus
 }
 #endif
