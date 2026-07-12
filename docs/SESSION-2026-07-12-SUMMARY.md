@@ -1,10 +1,12 @@
 # Session Summary — 2026-07-12
 
-macOS/Avalonia port of NTY ClassroomCtrl. This session built the **foundation and
-first UI**: extracted the wire protocol, **proved cross-platform interop on real
-Windows hardware (byte-perfect)**, ported the ConferenceTile + ConferenceToolbar
-(the Conference bottom bar), introduced the Avalonia Animations subsystem, and
-produced reusable porting tooling (cheat sheet + full theme).
+macOS/Avalonia port of NTY ClassroomCtrl. This session took the port from nothing to
+a **validated method across every major WPF pattern** — 10 milestones. It: extracted
+the wire protocol, **proved cross-platform interop on real Windows hardware
+(byte-perfect)**, built the **complete Conference Mode UI** (Tile + Toolbar + Sidebar,
+composed), laid the **Classroom Mode foundation** (StudentCard + its ContextMenu), and
+produced reusable tooling (14-section cheat sheet, full theme, headless-capture tool).
+Phase 25.5+ is now **execution, not discovery**.
 
 **Repo:** `~/Dev/nty-classroom-avalonia/` (separate from the shipped Windows repo
 `~/Dev/nty-classroom-macos/`, which was **never modified** — verified clean after
@@ -13,7 +15,7 @@ github.com/forcesumetee/nty-classroom-ctrl).
 
 ---
 
-## Phases completed (24.1 → 25.1)
+## Phases completed (24.1 → 25.4) — 10 milestones
 
 | Phase | Deliverable | Outcome |
 |---|---|---|
@@ -27,10 +29,25 @@ github.com/forcesumetee/nty-classroom-ctrl).
 | **25.1-C** | Reaction float animation on ConferenceTile | **Fulfils the Phase 24.3 `TODO`** — WPF Storyboard → Avalonia `Animation`. |
 | **25.1-D** | Conference bottom-bar demo + docs | Toolbar + tiles; picked reaction floats over a tile — full chain proven mid-float (`docs/phase-25.1-bottombar.png`). |
 | **25.2** | Promote headless-Skia harness → `tools/HeadlessCapture/` | Reusable off-screen screenshot tool (no display/permission). Hybrid scenario-registry (`theme`/`tile`/`bottombar`, self-documenting metadata) + generic `--view-type` reflection + `--list`. Verified by re-capture; baselines preserved, differences explained. |
+| **25.3-A/B** | ConferenceSidebar — shell, tabs, chat + participants, input, raised-hands, role-gated Mute/Recognize | Manual tabs (source hand-rolls, not TabControl) → classes + `IsVisible`; `SidebarTabPill` = 3rd ControlTheme; reuses the **real ported `ChatMessage`** model; inert attachment card. |
+| **25.3-C** | Full Conference composition + `sidebar` scenario | **Milestone 9** — tile grid + toolbar (bottom) + sidebar (right) in one window (`docs/phase-25.3-conference-full.png`). |
+| **25.3-D** | Docs — cheat sheet §12 (manual tabs) + §13 (advanced binding scopes: `$parent` = FindAncestor + compiled-binding cast) | `PHASE-25.3-FINDINGS.md`. |
+| **25.4-A/B** | StudentCard — layout/badges/selection + ContextMenu (17 items + separators + static nested submenu) | `HexToBrushConverter` ported; Classroom Material theme keys mapped to `Conf*`. |
+| **25.4-C** | **ContextMenu command routing — the crux, verified empirically** | `$parent` resolves **null** across the popup boundary; **fix = `Host` back-reference on the item** (`{Binding Host.X}`). Flat + nested-submenu routing proven (correct param). |
+| **25.4-D** | `studentcard` scenario (menu open) + cheat sheet §11/§13 + findings | **Milestone 10** — hardest flagged pattern cracked (`docs/phase-25.4-studentcard-menu.png`). |
 
-## Commit list (this session)
+## Commit list (this session) — 21 commits + this closeout
 
 ```
+1039d7b  Phase 25.4-D: studentcard scenario + cheat sheet §11/§13 + findings
+e41b552  Phase 25.4-C: command routing verified — $parent fails in popup, Host works
+be8bab6  Phase 25.4-B: StudentCard ContextMenu → Avalonia ContextMenu
+e15457f  Phase 25.4-A: StudentCard port — layout, badges, selection ring
+883a9c9  Phase 25.3-D: docs — cheat sheet §12/§13 + PHASE-25.3-FINDINGS
+dbb2ff1  Phase 25.3-C: full Conference composition + 'sidebar' scenario
+bdb2f87  Phase 25.3-B: sidebar chat input, raised-hands, Mute/Recognize (role-gated)
+af34724  Phase 25.3-A: ConferenceSidebar port — shell, tabs, chat + participants
+8ec3c17  Phase 25.2 closeout: session summary update
 05dec39  Phase 25.2: Promote headless-Skia harness to tools/HeadlessCapture
 9054b39  Phase 25.1 closeout: session summary update + push
 3acfe2c  Phase 25.1-D: Conference bottom-bar demo + docs
@@ -44,7 +61,6 @@ ba414c4  Phase 25.0-A: WPF->Avalonia cheat sheet
 5d79569  Phase 24.2: Cross-platform interop test (macOS -> Windows Teacher)
 97e1051  Phase 24.1: Extract wire protocol as ClassroomCtrl.Shared.Wire
 ```
-(plus the Phase 25.1 closeout commit)
 
 ## Empirical findings (the durable value)
 
@@ -89,10 +105,27 @@ code-created-animation traps cost real debug time and are now documented:
    property (`Margin`/`ThicknessAnimator`, or a `double` like `Canvas.Top`). The
    reaction float uses `Margin.Top` `+20→-80` on a centered glyph.
 
+### ContextMenu routing — the hardest pattern (Phase 25.4, §11/§13) — the 4 answers
+1. **`$parent[…].((vm:Host)DataContext).Command` from a ContextMenu item → NO.** It
+   resolves **null** — `$parent` ancestor-walk stops at the popup root (separate visual
+   tree). **Fix: `Host` back-reference on the item** (`{Binding Host.X}`,
+   `CommandParameter={Binding}`), since the ContextMenu inherits the target's DataContext.
+   Verified firing (flat + nested submenu, correct param). WPF `PlacementTarget.Tag.X` → `Host.X`.
+2. **Cascading submenu → matches WPF** (nested `<MenuItem>`, ▸ chevron, hover-open, fires).
+3. **Segoe MDL2 → N/A here** (text headers; card emoji render via Apple Color Emoji);
+   icon system deferred to a dedicated phase.
+4. **Right-click gesture → simpler than WPF** — Avalonia opens ContextMenu/ContextFlyout
+   automatically; no code-behind Tag-stash.
+
+**Bonus:** Avalonia **`ContextMenu` popups DO render into headless `CaptureRenderedFrame`**
+(open via `contextMenu.Open(target)` first) — unlike a `Button.Flyout`. Extends visual-
+regression coverage to menu-open baselines.
+
 ### Cheat sheet growth (living doc)
-Grew to **12 numbered sections** with real, tested examples: added §3e
-(keyed-Style→ControlTheme, 25.0-B), **§10 Animations** and **§11 Popups/Flyouts**
-(25.1); references renumbered to §12. Unverified rows still explicitly tagged.
+Grew to **14 numbered sections** (deepened, not just extended): §3e keyed-Style→ControlTheme
+(25.0-B) · §10 Animations + §11 Popups/Flyouts (25.1) · §12 Manual-tabs-vs-TabControl +
+§13 Advanced binding scopes (25.3) · §11/§13 ContextMenu + popup-boundary routing (25.4);
+references at §14. Unverified rows still explicitly tagged.
 
 ### Tools built (reusable)
 - **T1–T26 wire compat harness** (`tools/EnvelopeWireCompatTest`) — runs on macOS.
@@ -101,10 +134,11 @@ Grew to **12 numbered sections** with real, tested examples: added §3e
   display / screen-recording permission. Scenario registry (`theme`/`tile`/`bottombar`,
   self-documenting) + generic `--view-type` reflection + `--list`. Add a scenario per
   future port. (Promoted from the scratchpad `CaptureTile` harness.)
-- **WPF→Avalonia cheat sheet** — living document (12 sections).
+- **WPF→Avalonia cheat sheet** — living document (14 sections).
 - **Full ConferenceDarkTheme** + theme showcase baseline.
-- **ConferenceTile + ConferenceToolbar** ported (Conference bottom bar) with a
-  working reaction float animation.
+- **Complete Conference Mode UI** (Tile + Toolbar + Sidebar, composed) + **Classroom
+  StudentCard + ContextMenu** — 5 HeadlessCapture scenarios
+  (`theme`/`tile`/`bottombar`/`sidebar`/`studentcard`).
 
 ### Constraints (verified honored)
 - MessagePack pinned exactly `2.5.187` for byte-compat (NU1902/NU1903 advisories
@@ -113,45 +147,46 @@ Grew to **12 numbered sections** with real, tested examples: added §3e
 
 ## Status of prior pending items
 
-- [x] **Real Windows-Teacher interop verification** — ✅ **DONE today**, byte-perfect
-  on real hardware (see Phase 24.2 row). Cross-platform product line VALIDATED
-  end-to-end.
-- [x] **Phase 25.1 (ConferenceToolbar)** — ✅ done (25.1-A…D).
-- [ ] **v1.2.1 bulk lock fix** — Windows product, **separate track**, not part of the
-  macOS port. Tracked here only so it isn't forgotten.
+- [x] **Real Windows-Teacher interop verification** — ✅ byte-perfect on real hardware.
+- [x] **Phase 25.1 ConferenceToolbar** · **25.3 ConferenceSidebar** · **25.4 StudentCard
+  ContextMenu** — ✅ all done.
+- [ ] **v1.2.1 bulk lock fix** — Windows product, **separate track** (see Option 4).
 
 ## Next-session preparation notes
 
-- Open the cheat sheet (`docs/WPF-TO-AVALONIA-CHEATSHEET.md`) first — it's the
-  porting playbook.
-- Sandbox app: `dotnet run --project src/ClassroomCtrl.Avalonia.Sandbox`
-  (MainWindow is a TabControl: theme tokens + tile).
-- Build the whole solution: `dotnet build ClassroomCtrl.Avalonia.slnx`.
-- Promote the headless-Skia capture harness from scratchpad into `tools/` so view
-  screenshots are reproducible in-repo.
-- The full `ConferenceDarkTheme` (incl. both toolbar button `ControlTheme`s) is
-  already available app-wide via `App.axaml` — ConferenceToolbar can consume it
-  directly.
+- Open the cheat sheet (`docs/WPF-TO-AVALONIA-CHEATSHEET.md`) first — the porting playbook
+  (14 sections; §11/§13 cover ContextMenu + popup-boundary routing).
+- Sandbox app: `dotnet run --project src/ClassroomCtrl.Avalonia.Sandbox` — MainWindow is
+  a TabControl: Theme tokens · ConferenceTile · Bottom bar · Sidebar · Conference Full ·
+  Student Grid.
+- Build: `dotnet build ClassroomCtrl.Avalonia.slnx`. Screenshots:
+  `dotnet run --project tools/HeadlessCapture -- --list` then `--scenario <name>`.
+- **Method is validated** — 25.5+ is execution. Two idioms to remember: base-values-in-a-
+  style (§6) and `Host` back-reference for popup/menu commands (§13).
 
 ---
 
-## Next session (Phase 25.3) — pick ONE (not started)
+## Next session — pick ONE (not started)
 
-_(The former Option 1 — promote the capture harness — was done as Phase 25.2.)_
+**Option 1 — Icon/font system** (~2–4 h)
+Real blocker for icon-heavy Teacher views (Segoe MDL2 → cross-platform font or vector
+set). Requires research + a design decision (icon font vs SVG resources vs per-glyph
+mapping). High leverage: unblocks most remaining Teacher UI. Pairs with porting the
+Classroom **Material theme** keys (`Surface.*`, `Text.*`, `Border.*`).
 
-**Option A — `ConferenceSidebar`** (~2–3 h)
-Continue the Conference arc (tile → theme → toolbar → **sidebar**). Introduces
-`TabControl` (participants/chat) + chat-list virtualization. 558 lines (Complex
-tier). Value: completes the Conference surface (bottom + side). Add a `sidebar`
-scenario to `tools/HeadlessCapture/Scenarios.cs` for its baseline.
+**Option 2 — Dynamic `ItemsSource` submenu** (~30–60 min)
+Finish the deferred StudentCard "Assign to Room" submenu (dynamic `ItemsSource=Rooms`
++ per-item routing via the `Host` pattern). Small quick-win that closes the ContextMenu
+story and proves dynamic nested menus.
 
-**Option B — `StudentCard` ContextMenu** (~3–4 h)
-Tackle the large `ContextMenu` → `MenuFlyout`/`ContextFlyout` while cheat-sheet §11
-is fresh; redesign the WPF `PlacementTarget.Tag` command routing. 242 lines but the
-hardest pattern flagged in the 24.3 findings. Value: unlocks Classroom Mode UI.
+**Option 3 — Next Classroom Mode view** (~3–5 h)
+Continue the UI port (e.g. a Teacher dialog or the main grid shell). **Needs the
+Classroom Material theme ported first** (currently mapped ad-hoc to `Conf*`). Larger;
+best after Option 1 lands the theme + icons.
 
-**Pre-read for either:** the cheat sheet (`docs/WPF-TO-AVALONIA-CHEATSHEET.md`) —
-§10/§11 are the newest and most relevant; use `tools/HeadlessCapture` for the baseline.
+**Option 4 (external track) — v1.2.1 Windows bulk-lock fix** (~2–3 h)
+Customer priority (bulk lock 18/50 issue). **Separate from the macOS port** — shipped
+Windows repo (`~/Dev/nty-classroom-macos/`), not this branch.
 
-**Also queued (separate track):** v1.2.1 Windows bulk-lock fix; customer conversation
-on the macOS timeline (use the §"Timeline data" numbers).
+**Recommended sequence:** Option 2 (quick close-out) → Option 1 (icons + Classroom
+theme, the real unblock) → Option 3. Option 4 is orthogonal, schedule by customer urgency.
