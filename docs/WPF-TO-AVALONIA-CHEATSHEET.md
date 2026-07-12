@@ -365,7 +365,95 @@ Keep this as a committed tool for per-view visual checks.
 
 ---
 
-## 10. Reference links
+## 10. Animations (WPF Storyboard → Avalonia Animation)
+_(added Phase 25.1-C, from the ConferenceTile reaction float-up port)_
+
+WPF `Storyboard` + `DoubleAnimation`/`...UsingKeyFrames` started via
+`BeginAnimation` → Avalonia **`Animation`** (`KeyFrame` / `Cue` / `Setter`) run via
+**`await anim.RunAsync(control)`** (or fire-and-forget). `Cue` is normalized time
+`0.0–1.0`; `FillMode.Forward` holds the final keyframe values.
+
+```csharp
+var fade = new Animation
+{
+    Duration = TimeSpan.FromSeconds(2.8),
+    FillMode = FillMode.Forward,
+    Children =
+    {
+        new KeyFrame { Cue = new Cue(0d),    Setters = { new Setter(Visual.OpacityProperty, 0d) } },
+        new KeyFrame { Cue = new Cue(0.15d), Setters = { new Setter(Visual.OpacityProperty, 1d) } },
+        new KeyFrame { Cue = new Cue(1d),    Setters = { new Setter(Visual.OpacityProperty, 0d) } },
+    },
+};
+_ = fade.RunAsync(myControl);
+```
+
+| WPF | Avalonia |
+|---|---|
+| `Storyboard` | `Animation` |
+| `DoubleAnimationUsingKeyFrames` + `LinearDoubleKeyFrame` | `Animation.Children` = `KeyFrame` list |
+| `KeyTime.FromPercent(0.15)` | `Cue = new Cue(0.15d)` |
+| `FillBehavior=HoldEnd` | `FillMode = FillMode.Forward` |
+| `BeginAnimation(prop, anim)` | `anim.RunAsync(control)` (returns a Task) |
+| `RepeatBehavior.Forever` | `IterationCount = IterationCount.Infinite` |
+
+**Two gotchas that cost real debug time (code-created animations):**
+1. **`RunAsync` targets a `Visual`, not any `Animatable`.** Running it on a bare
+   `TranslateTransform` throws `InvalidCastException`. Animate properties **on the
+   control**, not on a detached transform object.
+2. **`RenderTransform` (translate) needs the `TransformOperationsAnimator`, which is
+   `internal` and only auto-registers from the XAML path** — so
+   `Setter(RenderTransformProperty, TransformOperations.Parse("translateY(...)"))`
+   from code throws *"No animator registered for RenderTransform"* and you can't add
+   the animator (it's internal; `Animation.Animators` isn't public either). **Fix:**
+   animate a property whose animator is registered by default — e.g. **`Margin`**
+   (`ThicknessAnimator`) or a `double` like `Canvas.Top`. For a centered element, a
+   `Margin.Top` of `+20 → -80` produces a clean upward "rise" without transforms.
+   _(If you author the animation in XAML instead, `RenderTransform`/`translateY`
+   works — XAML registers the transform animator for you.)_
+
+> For simple state-driven animations (hover, show/hide), prefer **`Transitions`** on
+> a style (`<Style Selector="..."><Style.Animations>` or `Transitions`) over
+> code-behind `Animation` — closer to Avalonia's declarative grain. Code-behind
+> `RunAsync` fits one-shot, imperatively-triggered effects like this reaction float.
+
+## 11. Popups & flyouts (WPF Popup / ContextMenu → Avalonia Flyout)
+_(added Phase 25.1-B, from the ConferenceToolbar reaction picker)_
+
+A WPF `<Popup>` toggled from code-behind (`IsOpen`, `PlacementTarget`,
+`StaysOpen=False`, `AllowsTransparency`) → an Avalonia **`Button.Flyout`** /
+**`Flyout`**, which gives light-dismiss + placement for free (no code-behind toggle):
+
+```xml
+<Button Content="⋮">
+  <Button.Flyout>
+    <Flyout Placement="Top" ShowMode="Standard">
+      <Border ...><!-- content --></Border>
+    </Flyout>
+  </Button.Flyout>
+</Button>
+```
+
+| WPF Popup | Avalonia |
+|---|---|
+| `<Popup IsOpen=... PlacementTarget=...>` + code toggle | `Button.Flyout` (auto-toggles on click) or `FlyoutBase.AttachedFlyout` + `ShowAttachedFlyout` |
+| `StaysOpen="False"` (light dismiss) | default for `Flyout` (`ShowMode="Standard"`) |
+| `Placement="Top"` / `VerticalOffset` | `Placement="Top"` (+ `HorizontalOffset`/`VerticalOffset` if needed) |
+| `ContextMenu` | `MenuFlyout` (items) or `ContextFlyout` |
+| `AllowsTransparency="True"` | not needed — flyouts are transparent-capable |
+
+Notes / caveats:
+- Reaction buttons: WPF used `Click`+`Tag`+reflection to resolve the command off the
+  host DataContext; in Avalonia bind `Command` + `CommandParameter` directly.
+- Placement/offset/dismiss behavior renders in a **separate popup layer** that the
+  headless-Skia harness can't reliably screenshot — verify flyout positioning by
+  running the app interactively, not from a headless capture.
+- For `StudentCard`'s large `ContextMenu` (flagged complex in the 24.3 findings),
+  the target is `MenuFlyout`/`ContextFlyout` with `MenuItem`s; the WPF
+  `PlacementTarget.Tag`/`RelativeSource AncestorType=ContextMenu` command-routing
+  will need rethinking (Avalonia menu items bind against the flyout's DataContext).
+
+## 12. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
 - WPF → Avalonia migration: https://docs.avaloniaui.net/docs/get-started/wpf/
@@ -376,7 +464,8 @@ Keep this as a committed tool for per-view visual checks.
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 
 ---
-_Living document — extend as later ports surface new patterns. Covered so far
-incl. keyed-Style→ControlTheme + basic ControlTemplate/pseudo-classes (§3e). Still
-uncovered: animations, complex ControlTemplates, ContextMenus, DynamicResource
-theme-swap._
+_Living document — extend as later ports surface new patterns. Covered so far:
+triggers→classes, converters, DP→StyledProperty, precedence, compiled bindings,
+keyed-Style→ControlTheme + basic ControlTemplate/pseudo-classes (§3e), animations
+(§10), popups/flyouts (§11). Still uncovered: complex ControlTemplates, full
+ContextMenu→MenuFlyout command routing, DynamicResource theme-swap._

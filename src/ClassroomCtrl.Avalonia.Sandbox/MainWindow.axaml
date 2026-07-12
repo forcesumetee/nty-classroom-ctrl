@@ -32,12 +32,18 @@
                 </ItemsControl>
             </ScrollViewer>
         </TabItem>
-        <!-- Tab 2 (Phase 25.1): Conference bottom bar. Toolbar now; tiles +
-             reaction float added in 25.1-D. -->
+        <!-- Tab 2 (Phase 25.1-D): full Conference bottom bar — tiles above, the
+             ported toolbar docked below. Picking a reaction in the ⋮ Flyout floats
+             the emoji up over the first tile (fulfils the 24.3 float design). -->
         <TabItem Header="Bottom bar">
-            <Grid Background="{StaticResource ConfWindowBgBrush}">
-                <views:ConferenceToolbar DataContext="{Binding Toolbar}"
-                                         VerticalAlignment="Bottom"/>
+            <Grid Background="{StaticResource ConfWindowBgBrush}" RowDefinitions="*,Auto">
+                <ScrollViewer Grid.Row="0" Padding="16">
+                    <WrapPanel>
+                        <views:ConferenceTile DataContext="{Binding DemoTileA}" Width="340" Height="191"/>
+                        <views:ConferenceTile DataContext="{Binding DemoTileB}" Width="340" Height="191"/>
+                    </WrapPanel>
+                </ScrollViewer>
+                <views:ConferenceToolbar Grid.Row="1" DataContext="{Binding Toolbar}"/>
             </Grid>
         </TabItem>
     </TabControl>

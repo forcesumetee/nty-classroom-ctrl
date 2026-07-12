@@ -3,7 +3,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
-using Avalonia.Media;
+using Avalonia.Layout;
 using Avalonia.Styling;
 using ClassroomCtrl.Shared.Localization;
 using ClassroomCtrl.Avalonia.Sandbox.ViewModels;
@@ -34,14 +34,11 @@ public partial class ConferenceTile : UserControl
         set => SetValue(SelfSuffixProperty, value);
     }
 
-    // Reused across reaction plays; RenderTransform target for the Y rise.
-    private readonly TranslateTransform _reactionTransform = new();
     private ConferenceTileViewModel? _attached;
 
     public ConferenceTile()
     {
         InitializeComponent();
-        ReactionFloater.RenderTransform = _reactionTransform;
         DataContextChanged += (_, _) => { RefreshSelfSuffix(); AttachReactionListener(); };
         RefreshSelfSuffix();
         AttachReactionListener();
@@ -72,9 +69,16 @@ public partial class ConferenceTile : UserControl
     /// Phase 25.1-C — fulfils TODO(Phase 25 or later) from Phase 24.3.
     /// WPF original (ConferenceTile.xaml.cs StartReactionFloat): Opacity keyframes
     /// 0→1@15%→1@70%→0@100% + TranslateTransform.Y 20→-80, ~2.8s, via BeginAnimation.
-    /// Avalonia: two Animations run in parallel — Opacity on the TextBlock, Y on the
-    /// TranslateTransform (both Animatable). Cue = normalized 0..1 time; FillMode
-    /// .Forward holds the faded-out end state so the glyph settles invisible.
+    ///
+    /// Avalonia GOTCHAS learned here (both documented in the cheat sheet):
+    ///  1. Animation.RunAsync targets a Visual — running it on a bare
+    ///     TranslateTransform throws InvalidCastException.
+    ///  2. Animating RenderTransform via TransformOperations needs the
+    ///     TransformOperationsAnimator, which is INTERNAL and only auto-registers
+    ///     from the XAML path — unusable from a code-created Animation.
+    /// So the rise animates Margin.Top instead (ThicknessAnimator is registered by
+    /// default): the glyph is centered, so a +20→-80 top margin moves it up. Both
+    /// Animations run on the control; FillMode.Forward holds the faded-out end.
     /// </summary>
     private void StartReactionFloat()
     {
@@ -99,12 +103,12 @@ public partial class ConferenceTile : UserControl
             FillMode = FillMode.Forward,
             Children =
             {
-                new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(TranslateTransform.YProperty, 20d) } },
-                new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(TranslateTransform.YProperty, -80d) } },
+                new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(MarginProperty, new Thickness(0, 20, 0, 0)) } },
+                new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(MarginProperty, new Thickness(0, -80, 0, 0)) } },
             },
         };
 
         _ = fade.RunAsync(ReactionFloater);
-        _ = rise.RunAsync(_reactionTransform);
+        _ = rise.RunAsync(ReactionFloater);
     }
 }

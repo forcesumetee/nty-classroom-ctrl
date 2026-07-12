@@ -19,8 +19,23 @@ public class MainWindowViewModel
     /// <summary>Phase 25.1 — demo VM driving the ported ConferenceToolbar.</summary>
     public ConferenceToolbarDemoViewModel Toolbar { get; } = new();
 
+    /// <summary>Phase 25.1-D — tiles shown in the bottom-bar demo tab; a picked
+    /// reaction floats over DemoTileA (fulfils the 24.3 float-on-tile design).</summary>
+    public ConferenceTileViewModel DemoTileA { get; } =
+        new(Guid.NewGuid(), "Pim", isSelf: true) { IsHost = true, IsMicLive = true };
+    public ConferenceTileViewModel DemoTileB { get; } =
+        new(Guid.NewGuid(), "Nok") { IsSpeaking = true, IsMicLive = true, IsCamLive = true };
+
     public MainWindowViewModel()
     {
+        // Reaction picked in the toolbar Flyout → float it over DemoTileA. Clear
+        // first so re-picking the same emoji still raises PropertyChanged (and
+        // re-runs the animation).
+        Toolbar.ReactionPicked += emoji =>
+        {
+            DemoTileA.CurrentReactionEmoji = "";
+            DemoTileA.CurrentReactionEmoji = emoji;
+        };
         // 1) Teacher self — HOST badge, mic live (green dot + white mic), cam off (red).
         Tiles.Add(new ConferenceTileViewModel(Guid.NewGuid(), "Teacher", isSelf: true)
         {
