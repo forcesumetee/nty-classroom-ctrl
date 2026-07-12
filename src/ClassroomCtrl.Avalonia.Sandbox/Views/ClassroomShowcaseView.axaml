@@ -1,0 +1,136 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.ClassroomShowcaseView">
+    <!-- Phase 25.5-C — Classroom LIGHT theme baseline + icon showcase. Static content.
+         Proves the ported Colors.Light tokens render, AND that the app's emoji +
+         Unicode symbol icons render natively on macOS (no icon system needed). -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.h">
+            <Setter Property="Foreground" Value="{StaticResource Text.Primary}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,12,0,4"/>
+        </Style>
+        <Style Selector="Border.sw">
+            <Setter Property="Width" Value="150"/>
+            <Setter Property="Height" Value="46"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border.Default}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style Selector="Border.sw > TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+        </Style>
+        <Style Selector="Border.icon">
+            <Setter Property="Width" Value="74"/>
+            <Setter Property="Height" Value="56"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Background" Value="{StaticResource Surface.Card}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border.Default}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Light page surface. -->
+    <Border Background="{StaticResource Surface.Background}">
+        <ScrollViewer>
+            <StackPanel Margin="16" Spacing="6">
+
+                <TextBlock Text="Classroom Material theme (light) — 36 ported tokens"
+                           Foreground="{StaticResource Text.Primary}" FontSize="18" FontWeight="Bold"/>
+
+                <TextBlock Classes="h" Text="Surface tier"/>
+                <WrapPanel>
+                    <Border Classes="sw" Background="{StaticResource Surface.Background}"><TextBlock Text="Surface.Background" Foreground="{StaticResource Text.Primary}"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Surface.Elevated}"><TextBlock Text="Surface.Elevated" Foreground="{StaticResource Text.Primary}"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Surface.Card}"><TextBlock Text="Surface.Card" Foreground="{StaticResource Text.Primary}"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Surface.Hover}"><TextBlock Text="Surface.Hover" Foreground="{StaticResource Text.Primary}"/></Border>
+                </WrapPanel>
+
+                <TextBlock Classes="h" Text="Border tier"/>
+                <WrapPanel>
+                    <Border Classes="sw" Background="{StaticResource Surface.Card}" BorderBrush="{StaticResource Border.Default}" BorderThickness="2"><TextBlock Text="Border.Default" Foreground="{StaticResource Text.Primary}"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Surface.Card}" BorderBrush="{StaticResource Border.Soft}" BorderThickness="2"><TextBlock Text="Border.Soft" Foreground="{StaticResource Text.Primary}"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Surface.Card}" BorderBrush="{StaticResource Surface.BorderFocus}" BorderThickness="2"><TextBlock Text="Surface.BorderFocus" Foreground="{StaticResource Text.Primary}"/></Border>
+                </WrapPanel>
+
+                <TextBlock Classes="h" Text="Accent tier"/>
+                <WrapPanel>
+                    <Border Classes="sw" Background="{StaticResource Accent.Primary}"><TextBlock Text="Accent.Primary" Foreground="{StaticResource Text.OnAccent}"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Accent.PrimaryHover}"><TextBlock Text="Accent.PrimaryHover" Foreground="{StaticResource Text.OnAccent}"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Accent.PrimaryPressed}"><TextBlock Text="Accent.PrimaryPressed" Foreground="{StaticResource Text.OnAccent}"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Accent.PrimarySubtle}"><TextBlock Text="Accent.PrimarySubtle" Foreground="{StaticResource Text.Primary}"/></Border>
+                </WrapPanel>
+
+                <TextBlock Classes="h" Text="Semantic tier"/>
+                <WrapPanel>
+                    <Border Classes="sw" Background="{StaticResource Accent.Success}"><TextBlock Text="Accent.Success" Foreground="White"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Accent.Warning}"><TextBlock Text="Accent.Warning" Foreground="White"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Accent.Danger}"><TextBlock Text="Accent.Danger" Foreground="White"/></Border>
+                    <Border Classes="sw" Background="{StaticResource Accent.Info}"><TextBlock Text="Accent.Info" Foreground="White"/></Border>
+                </WrapPanel>
+
+                <TextBlock Classes="h" Text="Text tier"/>
+                <StackPanel Orientation="Horizontal" Spacing="18">
+                    <TextBlock Text="Text.Primary" Foreground="{StaticResource Text.Primary}" FontSize="14"/>
+                    <TextBlock Text="Text.Secondary" Foreground="{StaticResource Text.Secondary}" FontSize="14"/>
+                    <TextBlock Text="Text.Tertiary" Foreground="{StaticResource Text.Tertiary}" FontSize="14"/>
+                    <TextBlock Text="Text.Muted" Foreground="{StaticResource Text.Muted}" FontSize="14"/>
+                    <TextBlock Text="Text.Disabled" Foreground="{StaticResource Text.Disabled}" FontSize="14"/>
+                </StackPanel>
+
+                <TextBlock Classes="h" Text="Status tier"/>
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <StackPanel Orientation="Horizontal" Spacing="4"><Ellipse Width="12" Height="12" Fill="{StaticResource Status.Online}" VerticalAlignment="Center"/><TextBlock Text="Online" Foreground="{StaticResource Text.Secondary}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4"><Ellipse Width="12" Height="12" Fill="{StaticResource Status.Locked}" VerticalAlignment="Center"/><TextBlock Text="Locked" Foreground="{StaticResource Text.Secondary}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4"><Ellipse Width="12" Height="12" Fill="{StaticResource Status.Offline}" VerticalAlignment="Center"/><TextBlock Text="Offline" Foreground="{StaticResource Text.Secondary}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4"><Ellipse Width="12" Height="12" Fill="{StaticResource Status.Recording}" VerticalAlignment="Center"/><TextBlock Text="Recording" Foreground="{StaticResource Text.Secondary}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
+                </StackPanel>
+
+                <!-- Sample Classroom card built from the tokens. -->
+                <TextBlock Classes="h" Text="Sample card (Surface.Card + Border.Default + Text.* + Accent.Primary)"/>
+                <Border Background="{StaticResource Surface.Card}" BorderBrush="{StaticResource Border.Default}"
+                        BorderThickness="1" CornerRadius="10" Padding="14" Width="320" HorizontalAlignment="Left">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="10" Height="10" Fill="{StaticResource Status.Online}" VerticalAlignment="Center"/>
+                            <TextBlock Text="Somchai" Foreground="{StaticResource Text.Primary}" FontSize="15" FontWeight="SemiBold"/>
+                            <Border Background="{StaticResource Accent.PrimarySubtle}" CornerRadius="4" Padding="6,1">
+                                <TextBlock Text="Group A" Foreground="{StaticResource Accent.PrimaryPressed}" FontSize="10" FontWeight="Bold"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="LAB-01 · online" Foreground="{StaticResource Text.Secondary}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="🔒 Lock" Background="{StaticResource Accent.Primary}" Foreground="{StaticResource Text.OnAccent}" BorderThickness="0" Padding="10,5" CornerRadius="6"/>
+                            <Button Content="💬 Chat" Background="{StaticResource Surface.Hover}" Foreground="{StaticResource Text.Primary}" BorderBrush="{StaticResource Border.Default}" BorderThickness="1" Padding="10,5" CornerRadius="6"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Icon showcase — proves emoji + Unicode symbols render natively on macOS. -->
+                <TextBlock Classes="h" Text="Icons — emoji + Unicode (NO icon font/library; native on macOS)"/>
+                <WrapPanel>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="🎙" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="mic" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="📹" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="cam" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="🖥" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="share" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="💬" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="chat" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="🔔" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="bell" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="🔒" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="lock" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="🛡" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="policy" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="👑" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="host" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="✋" FontSize="22" HorizontalAlignment="Center"/><TextBlock Text="hand" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="⚙" FontSize="22" HorizontalAlignment="Center" Foreground="{StaticResource Text.Primary}"/><TextBlock Text="U+2699" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="✓" FontSize="22" HorizontalAlignment="Center" Foreground="{StaticResource Accent.Success}"/><TextBlock Text="U+2713" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="✕" FontSize="22" HorizontalAlignment="Center" Foreground="{StaticResource Accent.Danger}"/><TextBlock Text="U+2715" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="⋮" FontSize="22" HorizontalAlignment="Center" Foreground="{StaticResource Text.Primary}"/><TextBlock Text="U+22EE" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                    <Border Classes="icon"><StackPanel VerticalAlignment="Center"><TextBlock Text="➤" FontSize="22" HorizontalAlignment="Center" Foreground="{StaticResource Accent.Primary}"/><TextBlock Text="U+27A4" Foreground="{StaticResource Text.Tertiary}" FontSize="9" HorizontalAlignment="Center"/></StackPanel></Border>
+                </WrapPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>

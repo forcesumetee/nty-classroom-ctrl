@@ -103,5 +103,9 @@
                 </ScrollViewer>
             </Grid>
         </TabItem>
+        <!-- Tab 6 (Phase 25.5): Classroom light theme tokens + icon showcase. -->
+        <TabItem Header="Classroom">
+            <views:ClassroomShowcaseView/>
+        </TabItem>
     </TabControl>
 </Window>

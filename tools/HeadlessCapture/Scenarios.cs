@@ -54,6 +54,17 @@ public static class Scenarios
             AfterShow = w => CaptureRunner.SelectTab(w, 1),
         },
 
+        ["classroom"] = new()
+        {
+            Description = "Classroom LIGHT theme tokens (36) + icon showcase — Sandbox tab 6. "
+                        + "Proves the ported Colors.Light theme + native emoji/Unicode icons.",
+            OriginalPhase = "25.5",
+            OriginalScreenshot = "docs/phase-25.5-classroom-theme.png",
+            Width = 1000, Height = 1000,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w => CaptureRunner.SelectTab(w, 6),
+        },
+
         ["studentcard"] = new()
         {
             Description = "StudentCard grid with the ContextMenu + dynamic 'Assign to "
