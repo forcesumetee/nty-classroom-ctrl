@@ -65,6 +65,18 @@ public static class Scenarios
             AfterShow = w => CaptureRunner.SelectTab(w, 7),
         },
 
+        ["roster"] = new()
+        {
+            Description = "Ported ClassRosterManager — header/body/footer, ClassroomLightTheme "
+                        + "+ design system, ListBox+Grid template (4 columns + aligned header row, "
+                        + "cheat sheet §17) — Sandbox tab 8.",
+            OriginalPhase = "25.7",
+            OriginalScreenshot = "docs/phase-25.7-roster.png",
+            Width = 900, Height = 700,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w => CaptureRunner.SelectTab(w, 8),
+        },
+
         ["classroom"] = new()
         {
             Description = "Classroom LIGHT theme tokens (36) + icon showcase — Sandbox tab 6. "

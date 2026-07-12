@@ -28,6 +28,9 @@ public class MainWindowViewModel
     /// <summary>Phase 25.6 — VM for the ported ApplyPolicyDialog.</summary>
     public ApplyPolicyDemoViewModel ApplyPolicy { get; } = new();
 
+    /// <summary>Phase 25.7 — VM for the ported ClassRosterManager (list view).</summary>
+    public RosterManagerDemoViewModel Roster { get; } = new();
+
     /// <summary>Phase 25.1-D — tiles shown in the bottom-bar demo tab; a picked
     /// reaction floats over DemoTileA (fulfils the 24.3 float-on-tile design).</summary>
     public ConferenceTileViewModel DemoTileA { get; } =

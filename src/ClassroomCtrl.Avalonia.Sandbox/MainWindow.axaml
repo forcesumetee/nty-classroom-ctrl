@@ -114,5 +114,12 @@
                                              HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
             </Grid>
         </TabItem>
+        <!-- Tab 8 (Phase 25.7-A): ported ClassRosterManager (ListBox+Grid list). -->
+        <TabItem Header="Roster">
+            <Grid Background="#1F1F23">
+                <views:ClassRosterManagerView DataContext="{Binding Roster}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>
