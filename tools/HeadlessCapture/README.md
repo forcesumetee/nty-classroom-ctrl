@@ -87,6 +87,30 @@ Helpers available in [`CaptureRunner.cs`](CaptureRunner.cs): `SelectTab`,
     it legitimately differs from that historical image. The historical file is kept
     as an audit-trail artifact and intentionally **not** overwritten.
 
+## Common gotchas
+
+### Gotcha A — `--no-build` shows a stale UI after a Sandbox change
+- **Symptom:** you edit a Sandbox view/VM, re-capture, and the screenshot still
+  shows the OLD state.
+- **Root cause:** `dotnet run --no-build` skips the build, so the tool runs against
+  the **cached copy** of `ClassroomCtrl.Avalonia.Sandbox.dll` in its own output
+  folder. Rebuilding the *Sandbox* project alone does **not** refresh that copy —
+  only building the *tool* re-copies the dependency DLL.
+- **Fix:** after any Sandbox change, run **without** `--no-build`
+  (`dotnet run --project tools/HeadlessCapture -- --scenario …`), or explicitly
+  `dotnet build tools/HeadlessCapture` first.
+- **Detection tip:** if a capture "doesn't reflect my change," suspect this first.
+
+### Gotcha B — Debug vs Release path mismatch
+- **Symptom:** `--no-build` errors with *"No such file or directory"* / can't find
+  the binary; or a capture reflects a build from the other configuration.
+- **Root cause:** Debug and Release write to **different** output paths
+  (`bin/Debug/net10.0` vs `bin/Release/net10.0`). Building one config and running the
+  other with `--no-build` uses a stale/absent binary.
+- **Fix:** keep the config consistent — build and run with the **same** `-c`
+  (`dotnet run -c Release …`), and avoid mixing a bare `dotnet build` (Debug) with a
+  `-c Release --no-build` run.
+
 ## Requirements
 `net10.0`, `Avalonia.Headless` + `Avalonia.Skia` (12.1.0), a project reference to the
 assembly holding the views (currently `ClassroomCtrl.Avalonia.Sandbox`).
