@@ -27,6 +27,21 @@
             <Setter Property="BorderBrush" Value="{StaticResource ConfAccentYellowBrush}"/>
             <Setter Property="Foreground" Value="#1F1F23"/>
         </Style>
+        <!-- Reaction picker buttons: borderless, transparent, subtle hover. -->
+        <Style Selector="Button.reaction">
+            <Setter Property="Width" Value="44"/>
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.reaction:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ConfHoverOverlayBrush}"/>
+        </Style>
     </UserControl.Styles>
 
     <Border Background="{StaticResource ConfToolbarBgBrush}"
@@ -79,11 +94,35 @@
                 <TextBlock Text="✋" FontSize="18"/>
             </Button>
 
-            <!-- ⋮ More — reaction picker Flyout added in Phase 25.1-B. -->
+            <!-- ⋮ More — reaction picker.  WPF used a <Popup> (PlacementTarget +
+                 StaysOpen=False + AllowsTransparency) toggled from code-behind.
+                 Avalonia idiom: a Button.Flyout — light-dismiss + placement are
+                 built in, no code-behind toggle needed.  Reactions render as color
+                 emoji (Apple Color Emoji) instead of the WPF pack:// PNGs. -->
             <Button x:Name="MoreButton"
                     Theme="{StaticResource ConfToolbarButtonStyle}"
                     ToolTip.Tip="More">
                 <TextBlock Text="⋮" FontSize="20" FontWeight="Bold"/>
+                <Button.Flyout>
+                    <Flyout Placement="Top" ShowMode="Standard">
+                        <Border Background="{StaticResource ConfTitleBarBgBrush}"
+                                BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="6">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <!-- Click → SendReactionCommand(emoji); the shipped
+                                     code resolved the command via reflection on the
+                                     host DataContext, the sandbox binds it directly. -->
+                                <Button Classes="reaction" Command="{Binding SendReactionCommand}" CommandParameter="👍"><TextBlock Text="👍" FontSize="26"/></Button>
+                                <Button Classes="reaction" Command="{Binding SendReactionCommand}" CommandParameter="❤️"><TextBlock Text="❤️" FontSize="26"/></Button>
+                                <Button Classes="reaction" Command="{Binding SendReactionCommand}" CommandParameter="😂"><TextBlock Text="😂" FontSize="26"/></Button>
+                                <Button Classes="reaction" Command="{Binding SendReactionCommand}" CommandParameter="😮"><TextBlock Text="😮" FontSize="26"/></Button>
+                                <Button Classes="reaction" Command="{Binding SendReactionCommand}" CommandParameter="😢"><TextBlock Text="😢" FontSize="26"/></Button>
+                            </StackPanel>
+                        </Border>
+                    </Flyout>
+                </Button.Flyout>
             </Button>
 
             <!-- 📞 End / Leave — filled red pill. -->
