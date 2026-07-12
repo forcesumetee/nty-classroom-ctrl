@@ -14,6 +14,15 @@ public partial class StudentGridDemoViewModel : ObservableObject
 {
     public ObservableCollection<StudentCardDemoViewModel> Students { get; } = new();
 
+    /// <summary>Phase 25.4-E — rooms that drive the dynamic "Assign to room" submenu
+    /// (ItemsSource). Each RoomDemo carries a Host back-reference so its generated
+    /// MenuItem can route to AssignToRoomCommand without any $parent popup-crossing.</summary>
+    public ObservableCollection<RoomDemo> Rooms { get; } = new();
+
+    /// <summary>Drives the submenu's empty-state (IsEnabled) — WPF showed an empty
+    /// submenu; we disable the parent item when there are no rooms.</summary>
+    public bool HasRooms => Rooms.Count > 0;
+
     /// <summary>Last command that fired, e.g. "Lock → Somchai". Displayed in the grid
     /// tab so a menu click's effect is visible; asserted in the headless routing test.</summary>
     [ObservableProperty] private string lastAction = "(no action yet)";
@@ -46,6 +55,14 @@ public partial class StudentGridDemoViewModel : ObservableObject
             QualityDotColorHex = "#34A853", CanRecord = true, RecButtonText = "REC",
             RecButtonColorHex = "#EA4335", RecOpacity = 1.0,
         });
+
+        // Keep HasRooms (empty-state binding) in sync with the collection.
+        Rooms.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRooms));
+
+        // Rooms for the dynamic Assign-to-Room submenu.
+        Rooms.Add(new RoomDemo { RoomName = "Group A", Host = this });
+        Rooms.Add(new RoomDemo { RoomName = "Group B", Host = this });
+        Rooms.Add(new RoomDemo { RoomName = "Group C", Host = this });
     }
 
     /// <summary>Wire each item's Host back-reference so its ContextMenu can route
@@ -76,9 +93,22 @@ public partial class StudentGridDemoViewModel : ObservableObject
     [RelayCommand] private void RestartOne(StudentCardDemoViewModel? s) => Act("Restart", s);
     [RelayCommand] private void ShutdownOne(StudentCardDemoViewModel? s) => Act("Shutdown", s);
     [RelayCommand] private void ToggleStudentRecording(StudentCardDemoViewModel? s) => Act("Toggle REC", s);
-    // Static-submenu room assignment (Phase 25.4 scope: 2 hardcoded rooms).
-    [RelayCommand] private void AssignToRoomA(StudentCardDemoViewModel? s) => Act("Assign → Group A", s);
-    [RelayCommand] private void AssignToRoomB(StudentCardDemoViewModel? s) => Act("Assign → Group B", s);
+
+    /// <summary>Phase 25.4-E — dynamic room assignment. Parameter is the room (the
+    /// generated MenuItem's DataContext), routed via RoomDemo.Host (no $parent needed).</summary>
+    [RelayCommand]
+    private void AssignToRoom(RoomDemo? room)
+    {
+        if (room != null) LastAction = $"Assign → {room.RoomName}";
+    }
+}
+
+/// <summary>Room item for the dynamic Assign-to-Room submenu. Holds a Host
+/// back-reference (§13 pattern) so its generated MenuItem routes without $parent.</summary>
+public partial class RoomDemo : ObservableObject
+{
+    public string RoomName { get; init; } = "";
+    public StudentGridDemoViewModel? Host { get; set; }
 }
 
 /// <summary>Demo item VM. WPF exposed *Visibility (Visibility) members; Avalonia uses

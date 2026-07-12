@@ -74,15 +74,25 @@
                 <MenuItem Header="Stop demo"
                           Command="{Binding Host.StopDemoCommand}"/>
                 <Separator/>
-                <!-- Static nested submenu (Phase 25.4 scope: 2 hardcoded rooms;
-                     dynamic ItemsSource=Rooms deferred). Proves MenuFlyout nesting. -->
-                <MenuItem Header="Assign to room">
-                    <MenuItem Header="Group A"
-                              Command="{Binding Host.AssignToRoomACommand}"
-                              CommandParameter="{Binding}"/>
-                    <MenuItem Header="Group B"
-                              Command="{Binding Host.AssignToRoomBCommand}"
-                              CommandParameter="{Binding}"/>
+                <!-- Dynamic nested submenu (Phase 25.4-E). WPF used ItemsSource +
+                     ItemContainerStyle; Avalonia uses ItemsSource + ItemContainerTheme
+                     (a ControlTheme, not a Style). Each generated MenuItem's DataContext
+                     is a RoomDemo → routes via RoomDemo.Host (§13, popup-safe).
+                     IsEnabled binds Host.HasRooms for the empty-state.
+                     ToolTip.Tip is a BONUS probe: does $parent[MenuItem] reach the outer
+                     item's student DataContext across the submenu popup? (25.4-E finding.) -->
+                <MenuItem Header="Assign to room"
+                          ItemsSource="{Binding Host.Rooms}"
+                          IsEnabled="{Binding Host.HasRooms}">
+                    <MenuItem.ItemContainerTheme>
+                        <ControlTheme TargetType="MenuItem" x:DataType="vm:RoomDemo">
+                            <Setter Property="Header" Value="{Binding RoomName}"/>
+                            <Setter Property="Command" Value="{Binding Host.AssignToRoomCommand}"/>
+                            <Setter Property="CommandParameter" Value="{Binding}"/>
+                            <Setter Property="ToolTip.Tip"
+                                    Value="{Binding $parent[MenuItem].((vm:StudentCardDemoViewModel)DataContext).DisplayName}"/>
+                        </ControlTheme>
+                    </MenuItem.ItemContainerTheme>
                 </MenuItem>
                 <MenuItem Header="Remove from room"
                           Command="{Binding Host.RemoveFromRoomCommand}"
