@@ -54,6 +54,17 @@ public static class Scenarios
             AfterShow = w => CaptureRunner.SelectTab(w, 1),
         },
 
+        ["applypolicy"] = new()
+        {
+            Description = "Ported ApplyPolicyDialog — header/body/footer, ClassroomLightTheme "
+                        + "+ design system (Button.*/Text.h*), CheckBox/ComboBox/TextBox — Sandbox tab 7.",
+            OriginalPhase = "25.6",
+            OriginalScreenshot = "docs/phase-25.6-applypolicy.png",
+            Width = 620, Height = 760,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w => CaptureRunner.SelectTab(w, 7),
+        },
+
         ["classroom"] = new()
         {
             Description = "Classroom LIGHT theme tokens (36) + icon showcase — Sandbox tab 6. "

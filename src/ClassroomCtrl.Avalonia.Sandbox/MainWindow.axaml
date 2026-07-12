@@ -107,5 +107,12 @@
         <TabItem Header="Classroom">
             <views:ClassroomShowcaseView/>
         </TabItem>
+        <!-- Tab 7 (Phase 25.6): ported ApplyPolicyDialog. -->
+        <TabItem Header="Apply Policy">
+            <Grid Background="#1F1F23">
+                <views:ApplyPolicyDialogView DataContext="{Binding ApplyPolicy}"
+                                             HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>

@@ -1,0 +1,121 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.ApplyPolicyDialogView"
+             x:DataType="vm:ApplyPolicyDemoViewModel">
+
+    <!-- PORTED from Teacher/Dialogs/ApplyPolicyDialog.xaml (Phase 25.6-C).
+         Standard header/body/footer dialog shape. Uses ClassroomLightTheme tokens +
+         the Classroom design system (Button.* ControlThemes + Text.h* classes).
+         WPF Style="{DynamicResource Button.X}" → Theme="{StaticResource Button.X}";
+         Style="{DynamicResource Text.H2}" → Classes="h2"; Loc DynamicResource → literals.
+         CheckBox/ComboBox/TextBox = STANDARD Avalonia controls (MaterialDesign CheckBox
+         .Default / TextBox.Default / ComboBox.Default styles deferred). The whole view is
+         wrapped in a ThemeVariantScope=Light so Fluent's variant-aware controls render
+         legibly on the light Classroom surface (the app root defaults to Dark for the
+         Conference tabs). Exact accent-color match to Classroom = future polish. -->
+
+    <ThemeVariantScope RequestedThemeVariant="Light">
+        <Border Background="{StaticResource Surface.Elevated}">
+            <Grid RowDefinitions="Auto,*,Auto" Width="540">
+
+                <!-- Header -->
+                <Border Grid.Row="0" Padding="20,16"
+                        BorderBrush="{StaticResource Border.Soft}" BorderThickness="0,0,0,1">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Left" Width="36" Height="36"
+                                Background="{StaticResource Accent.PrimarySubtle}"
+                                CornerRadius="8" Margin="0,0,12,0">
+                            <TextBlock Text="🛡" FontSize="18"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Classes="h2" Text="Classroom Policy"
+                                       Foreground="{StaticResource Text.Primary}"/>
+                            <TextBlock Text="Apply device + app restrictions to selected students."
+                                       FontSize="12" Foreground="{StaticResource Text.Secondary}"
+                                       Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Body -->
+                <ScrollViewer Grid.Row="1" Padding="24,20" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <!-- Block USB -->
+                        <CheckBox Content="Block USB storage" IsChecked="{Binding BlockUsb}"
+                                  FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                        <TextBlock Text="Prevent students copying files to/from USB drives."
+                                   FontSize="11" Foreground="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="22,0,0,18"/>
+
+                        <!-- Block CD/DVD -->
+                        <CheckBox Content="Block CD/DVD" IsChecked="{Binding BlockOptical}"
+                                  FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                        <TextBlock Text="Disable optical-drive read/write during class."
+                                   FontSize="11" Foreground="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="22,0,0,18"/>
+
+                        <!-- Block Print -->
+                        <CheckBox Content="Block printing" IsChecked="{Binding BlockPrint}"
+                                  FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                        <TextBlock Text="Suspend the print spooler so nothing prints."
+                                   FontSize="11" Foreground="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="22,0,0,18"/>
+
+                        <!-- Block Apps -->
+                        <CheckBox Content="Block applications" IsChecked="{Binding BlockApps}"
+                                  FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                        <TextBlock Text="Kill + prevent launch of the listed executables."
+                                   FontSize="11" Foreground="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="22,0,0,6"/>
+                        <TextBox Text="{Binding AppsList}" Margin="22,0,0,20" FontSize="12" Height="60"
+                                 AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                 Watermark="chrome.exe, notepad.exe, game.exe"/>
+
+                        <!-- Block Sites -->
+                        <CheckBox Content="Block websites" IsChecked="{Binding BlockSites}"
+                                  FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                        <TextBlock Text="Redirect the listed hosts to localhost via the hosts file."
+                                   FontSize="11" Foreground="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="22,0,0,6"/>
+                        <TextBox Text="{Binding HostsList}" Margin="22,0,0,20" FontSize="12" Height="60"
+                                 AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                 Watermark="facebook.com, youtube.com, tiktok.com"/>
+
+                        <!-- Auto-revert duration card -->
+                        <Border Background="{StaticResource Surface.Background}"
+                                BorderBrush="{StaticResource Border.Default}" BorderThickness="1"
+                                CornerRadius="8" Padding="12" Margin="0,8,0,0">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Left" Text="Auto-revert after"
+                                           FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource Text.Primary}"
+                                           VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <ComboBox SelectedIndex="{Binding DurationIndex}"
+                                          HorizontalAlignment="Right" Width="200">
+                                    <ComboBoxItem Content="No limit"/>
+                                    <ComboBoxItem Content="15 minutes"/>
+                                    <ComboBoxItem Content="30 minutes"/>
+                                    <ComboBoxItem Content="1 hour"/>
+                                    <ComboBoxItem Content="2 hours"/>
+                                </ComboBox>
+                            </DockPanel>
+                        </Border>
+
+                        <TextBlock Text="{Binding LastAction, StringFormat='Last action: {0}'}"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Accent.Primary}" Margin="0,14,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Footer -->
+                <Border Grid.Row="2" Padding="20,12"
+                        BorderBrush="{StaticResource Border.Soft}" BorderThickness="0,1,0,0">
+                    <DockPanel LastChildFill="False">
+                        <Button DockPanel.Dock="Left" Theme="{StaticResource Button.Danger}"
+                                Content="Revert all" Command="{Binding RevertCommand}"/>
+                        <Button DockPanel.Dock="Right" Theme="{StaticResource Button.Primary}"
+                                Content="Apply" Command="{Binding ApplyCommand}"/>
+                        <Button DockPanel.Dock="Right" Theme="{StaticResource Button.Ghost}"
+                                Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,8,0"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </ThemeVariantScope>
+</UserControl>
