@@ -27,18 +27,20 @@ using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false;
+bool selfTest = false, streamTest = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
     {
         case "--port": port = int.Parse(args[++i]); break;
         case "--selftest": selfTest = true; break;
+        case "--streamtest": streamTest = true; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (streamTest) return await StreamTest.RunAsync(teacherId);
 return selfTest ? await SelfTest.RunAsync(port == 7777 ? 0 : port, teacherId)
                 : await Server.RunInteractiveAsync(port, teacherId);
 
@@ -81,6 +83,9 @@ static class Frame
 
     public static byte[] LockPayload() => Array.Empty<byte>();
 
+    public static byte[] StreamStartPayload() =>
+        MessagePackSerializer.Serialize(new StudentStreamStartRequest { Codec = VideoCodec.Mjpeg });
+
     public static byte[] PolicyPayload() => MessagePackSerializer.Serialize(new PolicyApplyMessage
     {
         BlockUsbStorage = true,
@@ -103,12 +108,14 @@ static class Frame
 // ───────────────────────────── interactive server ─────────────────────────────
 static class Server
 {
+    static int _streamFrames;
+
     public static async Task<int> RunInteractiveAsync(int port, Guid teacherId)
     {
         var listener = new TcpListener(IPAddress.Any, port);
         listener.Start();
         Console.WriteLine($"=== MockTeacher listening on TCP {port} (teacher {teacherId.ToString()[..8]}) ===");
-        Console.WriteLine("Commands once a student connects: lock | unlock | policy | revert | chat <text> | shot | quit");
+        Console.WriteLine("Commands once a student connects: lock | unlock | policy | revert | chat <text> | shot | viewscreen | stopscreen | quit");
         Console.WriteLine("Waiting for a student to connect …");
 
         NetworkStream? live = null;
@@ -144,6 +151,8 @@ static class Server
                 else if (line == "revert") { await Frame.SendAsync(live, MessageType.PolicyRevert, Array.Empty<byte>(), teacherId); Console.WriteLine("→ PolicyRevert"); }
                 else if (line == "shot") { await Frame.SendAsync(live, MessageType.RequestScreenshot, Array.Empty<byte>(), teacherId); Console.WriteLine("→ RequestScreenshot"); }
                 else if (line.StartsWith("chat ")) { await Frame.SendAsync(live, MessageType.ChatBroadcast, Frame.ChatPayload(teacherId, line[5..]), teacherId); Console.WriteLine("→ ChatBroadcast"); }
+                else if (line == "viewscreen") { await Frame.SendAsync(live, MessageType.StudentStreamStart, Frame.StreamStartPayload(), teacherId); Console.WriteLine("→ StudentStreamStart (MJPEG); incoming frames saved to mockteacher-frames/"); }
+                else if (line == "stopscreen") { await Frame.SendAsync(live, MessageType.StudentStreamStop, Array.Empty<byte>(), teacherId); Console.WriteLine("→ StudentStreamStop"); }
                 else Console.WriteLine("(unknown command)");
             }
             catch (Exception ex) { Console.WriteLine($"send failed: {ex.Message}"); }
@@ -171,6 +180,21 @@ static class Server
                 {
                     await Frame.SendAsync(stream, MessageType.Pong, Array.Empty<byte>(), teacherId);
                     Console.WriteLine("[Ping] → Pong");
+                }
+                else if (env.Type == MessageType.StudentStreamFrame)
+                {
+                    var f = MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(env.Payload);
+                    bool jpeg = f.FrameData.Length > 3 && f.FrameData[0] == 0xFF && f.FrameData[1] == 0xD8;
+                    _streamFrames++;
+                    if (_streamFrames <= 3 || _streamFrames % 10 == 0)
+                        Console.WriteLine($"[StreamFrame] seq={f.FrameSeq} codec={f.Codec} {f.Width}x{f.Height} {f.FrameData.Length}B jpeg={jpeg}");
+                    // Save the first frame so it can be eyeballed.
+                    if (_streamFrames == 1 && jpeg)
+                    {
+                        Directory.CreateDirectory("mockteacher-frames");
+                        File.WriteAllBytes("mockteacher-frames/frame-001.jpg", f.FrameData);
+                        Console.WriteLine("  saved mockteacher-frames/frame-001.jpg");
+                    }
                 }
                 else
                 {
@@ -277,5 +301,84 @@ static class SelfTest
         var t = await Task.WhenAny(done, Task.Delay(timeoutMs));
         if (t != done) throw new TimeoutException($"timed out: {name}");
         Console.WriteLine($"  ✅ {name}");
+    }
+}
+
+
+// ───────────────────────────── screen-stream self-test ─────────────────────────────
+// Drives the REAL WireClient + ScreenStreamer (from the Sandbox assembly) against an
+// in-process mock Teacher: server sends StudentStreamStart → the Mac captures its screen
+// as JPEG → sends StudentStreamFrame → server decodes + validates. Proves the whole
+// Mac-side send path emits decodable frames, no Windows box needed.
+static class StreamTest
+{
+    public static async Task<int> RunAsync(Guid teacherId)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        Console.WriteLine($"=== MockTeacher --streamtest (loopback:{port}) ===");
+
+        int received = 0, validJpeg = 0, lastW = 0, lastH = 0, lastLen = 0;
+        var gotFrames = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Server: accept, on Hello send StudentStreamStart(MJPEG), then receive frames.
+        var serverTask = Task.Run(async () =>
+        {
+            var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            while (true)
+            {
+                var env = await Frame.ReadAsync(stream);
+                if (env == null) return;
+                if (env.Type == MessageType.Hello)
+                    await Frame.SendAsync(stream, MessageType.StudentStreamStart, Frame.StreamStartPayload(), teacherId);
+                else if (env.Type == MessageType.Ping)
+                    await Frame.SendAsync(stream, MessageType.Pong, Array.Empty<byte>(), teacherId);
+                else if (env.Type == MessageType.StudentStreamFrame)
+                {
+                    var f = MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(env.Payload);
+                    received++;
+                    lastW = f.Width; lastH = f.Height; lastLen = f.FrameData.Length;
+                    if (f.FrameData.Length > 3 && f.FrameData[0] == 0xFF && f.FrameData[1] == 0xD8
+                        && f.FrameData[^2] == 0xFF && f.FrameData[^1] == 0xD9) validJpeg++;
+                    if (received == 1)
+                    {
+                        Directory.CreateDirectory("mockteacher-frames");
+                        File.WriteAllBytes("mockteacher-frames/streamtest-001.jpg", f.FrameData);
+                    }
+                    Console.WriteLine($"  [StreamFrame] seq={f.FrameSeq} codec={f.Codec} {f.Width}x{f.Height} {f.FrameData.Length}B");
+                    if (received >= 8) { gotFrames.TrySetResult(); }
+                }
+            }
+        });
+
+        // Mac student: real WireClient + ScreenStreamer, dispatch StudentStreamStart→stream.
+        var wire = new WireClient();
+        var streamer = new ScreenStreamer();
+        wire.EnvelopeReceived += env =>
+        {
+            if (env.Type == MessageType.StudentStreamStart) _ = streamer.StartAsync(wire);
+            else if (env.Type == MessageType.StudentStreamStop) _ = streamer.StopAsync();
+        };
+        using var cts = new CancellationTokenSource();
+        var run = wire.RunAsync("127.0.0.1", port, "StreamTest Mac", cts.Token);
+
+        int failures = 0;
+        var done = await Task.WhenAny(gotFrames.Task, Task.Delay(15000));
+        if (done != gotFrames.Task) { Console.WriteLine("  ❌ timed out waiting for 8 frames"); failures++; }
+
+        await streamer.StopAsync();
+        cts.Cancel();
+        try { await run; } catch { }
+        listener.Stop();
+
+        Console.WriteLine($"\n  frames received: {received} · valid JPEG (FFD8..FFD9): {validJpeg}/{received}");
+        Console.WriteLine($"  last frame: {lastW}x{lastH}, {lastLen}B · sample → mockteacher-frames/streamtest-001.jpg");
+        bool ok = failures == 0 && received >= 8 && validJpeg == received;
+        Console.WriteLine(ok
+            ? "\n=== STREAMTEST PASS ✅ — Mac emits decodable StudentStreamFrame JPEGs ==="
+            : "\n=== STREAMTEST FAIL ❌ ===");
+        return ok ? 0 : 1;
     }
 }

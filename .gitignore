@@ -22,3 +22,4 @@ native/NtyCapture/libNtyCapture.dylib
 *.dylib
 ## Packaged app bundle (rebuild via scripts/package-app.sh)
 /ClassroomCtrl.Sandbox.app/
+mockteacher-frames/
