@@ -1,12 +1,22 @@
 # Session Summary — 2026-07-12
 
-macOS/Avalonia port of NTY ClassroomCtrl. This session took the port from nothing to
-a **validated method across every major WPF pattern** — 10 milestones. It: extracted
-the wire protocol, **proved cross-platform interop on real Windows hardware
-(byte-perfect)**, built the **complete Conference Mode UI** (Tile + Toolbar + Sidebar,
-composed), laid the **Classroom Mode foundation** (StudentCard + its ContextMenu), and
-produced reusable tooling (14-section cheat sheet, full theme, headless-capture tool).
-Phase 25.5+ is now **execution, not discovery**.
+macOS/Avalonia port of NTY ClassroomCtrl. This session took the port from nothing to a
+**method fully validated end-to-end on real hardware** — **15 milestones**, capped by a
+**LIVE 4/4-PASS interop test against the shipped Windows Teacher v1.2**. It: extracted the
+wire protocol, **proved cross-platform interop on real Windows hardware (byte-perfect)**,
+built the **complete Conference Mode UI** (Tile + Toolbar + Sidebar, composed), ported the
+**Classroom Mode foundation** (StudentCard + ContextMenu, a reusable **design system**, and
+**four dialogs** incl. the first list + first Student-side views), and made the Sandbox a
+**functional wire student** (`WireClient` service) that **connects to, appears in, and
+reflects commands from a real Windows Teacher**. Produced reusable tooling (**20-section**
+cheat sheet, full theme, headless-capture harness, MockTeacher). Phases 25.5→26.0 were
+**execution, not discovery** — and that thesis is now **proven at scale**.
+
+**Milestone 15 — LIVE-CONFIRMED (2026-07-12):** Windows Teacher `172.20.10.7:7777` ↔ Mac
+Sandbox `172.20.10.2`. **4/4 PASS** — Lock ✅ · Apply Policy ✅ · Chat ✅ · Raise Hand ✅
+(bidirectional). Screen view **correctly deferred** (Phase 27+). Byte-perfect against
+production code. See `docs/PHASE-26.0-LIVE-CONFIRMATION.md` + screenshot
+`docs/live-test-2026-07-12/Screenshot 2569-07-12 at 23.45.42.png` (commit `efb3c5e`).
 
 **Repo:** `~/Dev/nty-classroom-avalonia/` (separate from the shipped Windows repo
 `~/Dev/nty-classroom-macos/`, which was **never modified** — verified clean after
@@ -15,7 +25,7 @@ github.com/forcesumetee/nty-classroom-ctrl).
 
 ---
 
-## Phases completed (24.1 → 25.4) — 10 milestones
+## Phases completed (24.1 → 26.0) — 15 milestones
 
 | Phase | Deliverable | Outcome |
 |---|---|---|
@@ -35,10 +45,37 @@ github.com/forcesumetee/nty-classroom-ctrl).
 | **25.4-A/B** | StudentCard — layout/badges/selection + ContextMenu (17 items + separators + static nested submenu) | `HexToBrushConverter` ported; Classroom Material theme keys mapped to `Conf*`. |
 | **25.4-C** | **ContextMenu command routing — the crux, verified empirically** | `$parent` resolves **null** across the popup boundary; **fix = `Host` back-reference on the item** (`{Binding Host.X}`). Flat + nested-submenu routing proven (correct param). |
 | **25.4-D** | `studentcard` scenario (menu open) + cheat sheet §11/§13 + findings | **Milestone 10** — hardest flagged pattern cracked (`docs/phase-25.4-studentcard-menu.png`). |
+| **25.4-E** | Dynamic `ItemsSource` "Assign to room" submenu + routing | Dynamic nested menu via `MenuItem.ItemsSource` + `ItemContainerTheme`; per-item `Host` routing. Closed the ContextMenu story. |
+| **25.5-B/C/D** | Classroom **light theme** (`ClassroomLightTheme.axaml`, 36 keys) + icon proof + `classroom` scenario + cheat sheet §14/§15 | **Milestone 12** — both palettes (Conference dark + Classroom light) coexist. Icon strategy = **NONE NEEDED** (emoji + Unicode render natively on macOS). `docs/phase-25.5-classroom-theme.png`. |
+| **25.6-B/C/D** | Classroom **design system** (`ClassroomControls.axaml` — Button ControlThemes + Text classes) + **ApplyPolicyDialog** + cheat sheet §16 | **Milestone 13** — design system unblocks all Teacher dialogs; flagship dialog ported mechanically. New idiom: `ThemeVariantScope=Light` for light views in a dark-default app (§16). `docs/phase-25.6-applypolicy.png`. |
+| **25.7-A/B/C/D** | **Three more dialogs** — ClassRosterManager (list), CameraSelectorDialog (form), TeacherIPDialog (input+validation, first **Student-side** view) + cheat sheet §17 | **Milestone 14** — design system proven at scale across 3 dialog shapes. `ListView`/`GridView` → **templated `ListBox`** decision codified (§17). 3 baselines. |
+| **26.0-A** | `WireClient` service + connection UI | Promotes the 24.2 transport into a persistent student: Hello + 5 s Ping heartbeat + read loop + reconnect (2s→×2→30s), UI-agnostic. `ConnectionViewModel` marshals to the UI thread. `docs/phase-26.0-connection.png`. |
+| **26.0-B** | **MockTeacher** (`tools/MockTeacher`) + `--selftest` | Local Teacher stand-in; `--selftest` drives the REAL `WireClient` through the full loop → **PASS** (exit 0). De-risked the live test; reusable regression harness. |
+| **26.0-C** | Command reception + debug display | `Dispatch` decodes inbound envelopes → decoded traffic log + self-tile reflection (lock/policy/chat/hand); capture-class commands noted **deferred (Phase 27+)**. Bonus S→T Raise Hand. |
+| **26.0-D** | Cheat sheet §19 (background services + Dispatcher) + findings + live-test staging | `docs/LIVE-TEST-26.0.md` one-shot procedure. Cheat sheet 18 → **20 sections**. |
+| **26.0 LIVE** | **Real Windows Teacher interop test** | **Milestone 15 — LIVE-CONFIRMED, 4/4 PASS** (Lock · Policy · Chat · Raise Hand bidirectional; screen view correctly deferred). Byte-perfect vs production code. `docs/PHASE-26.0-LIVE-CONFIRMATION.md`, screenshot, commit `efb3c5e`. |
 
-## Commit list (this session) — 21 commits + this closeout
+## Commit list (this session) — 39 commits + this closeout
 
 ```
+efb3c5e  Phase 26.0 LIVE: real Windows Teacher interop screenshots — all 4 tests PASS
+4f2c033  Phase 26.0-D: cheat sheet §19 + findings + live-test staging + push
+269cf69  Phase 26.0-C: command reception + debug display
+8153c75  Phase 26.0-B: MockTeacher (local Teacher stand-in + full-loop self-test)
+31e6da0  Phase 26.0-A: WireClient service + connection flow
+45536c6  Phase 25.7-D: cheat sheet §17 (list rendering) + findings + push
+a843c48  Phase 25.7-C: port TeacherIPDialog (first Student-side view + validation)
+010d92b  Phase 25.7-B: port CameraSelectorDialog (form + multi-combo)
+b390b79  Phase 25.7-A: port ClassRosterManager (ListBox+Grid list view)
+19d34d5  Phase 25.6-D: cheat sheet §16 (ThemeVariantScope) + findings + push
+bc645c6  Phase 25.6-C: port ApplyPolicyDialog (flagship Classroom dialog)
+5526524  Phase 25.6-B: Classroom design system — Button ControlThemes + Text classes
+9842ad8  Phase 25.5-D: cheat sheet §14/§15 + PHASE-25.5-FINDINGS + push
+d7a8d99  Phase 25.5-C: Classroom light-theme showcase + icon proof + 'classroom' scenario
+6f6e666  Phase 25.5-B: port Classroom Colors.Light → ClassroomLightTheme.axaml (36 keys)
+d372a72  Phase 25.4-E (3+4): submenu-open baseline + cheat sheet §11/§13 + findings
+324859f  Phase 25.4-E (1+2): dynamic ItemsSource submenu + routing + $parent finding
+925edb4  Session closeout: summary through Phase 25.4 (10 milestones)
 1039d7b  Phase 25.4-D: studentcard scenario + cheat sheet §11/§13 + findings
 e41b552  Phase 25.4-C: command routing verified — $parent fails in popup, Host works
 be8bab6  Phase 25.4-B: StudentCard ContextMenu → Avalonia ContextMenu
@@ -122,23 +159,35 @@ code-created-animation traps cost real debug time and are now documented:
 regression coverage to menu-open baselines.
 
 ### Cheat sheet growth (living doc)
-Grew to **14 numbered sections** (deepened, not just extended): §3e keyed-Style→ControlTheme
+Grew to **20 numbered sections** (deepened, not just extended): §3e keyed-Style→ControlTheme
 (25.0-B) · §10 Animations + §11 Popups/Flyouts (25.1) · §12 Manual-tabs-vs-TabControl +
-§13 Advanced binding scopes (25.3) · §11/§13 ContextMenu + popup-boundary routing (25.4);
-references at §14. Unverified rows still explicitly tagged.
+§13 Advanced binding scopes (25.3) · §11/§13 ContextMenu + popup-boundary routing + dynamic
+`ItemsSource` submenu (25.4) · §14 icon-strategy=none-needed + §15 multiple theme dictionaries
+coexisting (25.5) · §16 `ThemeVariantScope` for light views in a dark app (25.6) · §17
+`ListView`/`GridView` → templated `ListBox` + when-to-`DataGrid` (25.7) · §19 background
+services + `Dispatcher` marshalling / `CancellationTokenSource` lifetime (26.0); references
+at §20. Unverified rows still explicitly tagged. Still uncovered: complex ControlTemplate
+re-authoring, DynamicResource theme-swap.
 
 ### Tools built (reusable)
 - **T1–T26 wire compat harness** (`tools/EnvelopeWireCompatTest`) — runs on macOS.
 - **Cross-platform interop client** (`tools/CrossPlatformInteropTest`).
 - **`tools/HeadlessCapture`** (Phase 25.2) — reusable off-screen screenshot tool, no
-  display / screen-recording permission. Scenario registry (`theme`/`tile`/`bottombar`,
-  self-documenting) + generic `--view-type` reflection + `--list`. Add a scenario per
-  future port. (Promoted from the scratchpad `CaptureTile` harness.)
-- **WPF→Avalonia cheat sheet** — living document (14 sections).
-- **Full ConferenceDarkTheme** + theme showcase baseline.
+  display / screen-recording permission. Scenario registry + generic `--view-type`
+  reflection + `--list`. **11 scenarios** now registered (`theme`/`tile`/`bottombar`/
+  `sidebar`/`studentcard`/`classroom`/`applypolicy`/`roster`/`camera`/`teacherip`/
+  `connection`). Add one per future port.
+- **`tools/MockTeacher`** (Phase 26.0) — local Windows-Teacher stand-in; interactive
+  command mode (run alongside the Sandbox GUI) + `--selftest` that drives the real
+  `WireClient` through the full loop (exit 0=PASS). De-risks live tests; regression harness.
+- **`WireClient` service** (Phase 26.0) — UI-agnostic student-side transport (Hello +
+  5 s heartbeat + read loop + reconnect); byte-confirmed against the real Windows Teacher.
+- **WPF→Avalonia cheat sheet** — living document (**20 sections**).
+- **Both theme palettes** — ConferenceDarkTheme (36 keys) + ClassroomLightTheme (36 keys),
+  coexisting — plus the **Classroom design system** (`ClassroomControls.axaml`).
 - **Complete Conference Mode UI** (Tile + Toolbar + Sidebar, composed) + **Classroom
-  StudentCard + ContextMenu** — 5 HeadlessCapture scenarios
-  (`theme`/`tile`/`bottombar`/`sidebar`/`studentcard`).
+  StudentCard + ContextMenu** + **four Classroom dialogs** (ApplyPolicy, Roster, Camera,
+  TeacherIP) + the **Connection panel** (live wire client).
 
 ### Constraints (verified honored)
 - MessagePack pinned exactly `2.5.187` for byte-compat (NU1902/NU1903 advisories
@@ -147,46 +196,72 @@ references at §14. Unverified rows still explicitly tagged.
 
 ## Status of prior pending items
 
-- [x] **Real Windows-Teacher interop verification** — ✅ byte-perfect on real hardware.
-- [x] **Phase 25.1 ConferenceToolbar** · **25.3 ConferenceSidebar** · **25.4 StudentCard
-  ContextMenu** — ✅ all done.
-- [ ] **v1.2.1 bulk lock fix** — Windows product, **separate track** (see Option 4).
+- [x] **Real Windows-Teacher interop verification** — ✅ byte-perfect on real hardware
+  (Milestone 15 LIVE, 4/4 PASS).
+- [x] **Conference Mode UI** (Toolbar/Sidebar/full composition) · **StudentCard ContextMenu**
+  (+ dynamic submenu) — ✅ all done.
+- [x] **Classroom Mode foundation** — light theme + design system + 4 dialogs — ✅ done.
+- [x] **Functional wire student** (connect/appear/receive/reflect) — ✅ done + LIVE-confirmed.
+- [ ] **v1.2.1 bulk lock fix** — Windows product, **separate track** (next-session Option 1).
+- [ ] **Phase 27 native APIs** (screen capture / video / camera / audio / enforcement) —
+  the deferred boundary; **not started** (next-session Option 2).
 
 ## Next-session preparation notes
 
 - Open the cheat sheet (`docs/WPF-TO-AVALONIA-CHEATSHEET.md`) first — the porting playbook
-  (14 sections; §11/§13 cover ContextMenu + popup-boundary routing).
-- Sandbox app: `dotnet run --project src/ClassroomCtrl.Avalonia.Sandbox` — MainWindow is
-  a TabControl: Theme tokens · ConferenceTile · Bottom bar · Sidebar · Conference Full ·
-  Student Grid.
+  (**20 sections**; §11/§13 ContextMenu+routing, §16 ThemeVariantScope, §17 lists, §19
+  background services + Dispatcher).
+- Sandbox app: `dotnet run --project src/ClassroomCtrl.Avalonia.Sandbox` — MainWindow is a
+  **12-tab** TabControl: Theme tokens · ConferenceTile · Bottom bar · Sidebar · Conference
+  Full · Student Grid · Classroom · Apply Policy · Roster · Camera · Teacher IP · Connection.
 - Build: `dotnet build ClassroomCtrl.Avalonia.slnx`. Screenshots:
   `dotnet run --project tools/HeadlessCapture -- --list` then `--scenario <name>`.
-- **Method is validated** — 25.5+ is execution. Two idioms to remember: base-values-in-a-
-  style (§6) and `Host` back-reference for popup/menu commands (§13).
+  Wire self-test: `dotnet run --project tools/MockTeacher -- --selftest`.
+- **Method is fully validated end-to-end on real hardware.** Idioms to remember:
+  base-values-in-a-style (§6), `Host` back-reference for popup/menu commands (§13),
+  `ThemeVariantScope=Light` for light dialogs (§16), and service=async+events / VM=Dispatcher
+  (§19). Live-test procedure: `docs/LIVE-TEST-26.0.md`.
 
 ---
 
-## Next session — pick ONE (not started)
+## Next session — recommended priority order
 
-**Option 1 — Icon/font system** (~2–4 h)
-Real blocker for icon-heavy Teacher views (Segoe MDL2 → cross-platform font or vector
-set). Requires research + a design decision (icon font vs SVG resources vs per-glyph
-mapping). High leverage: unblocks most remaining Teacher UI. Pairs with porting the
-Classroom **Material theme** keys (`Surface.*`, `Text.*`, `Border.*`).
+**1 — v1.2.1 Windows bulk-lock fix** (~2–3 h) · *customer priority, external track*
+The bulk-lock 18/50 issue in the shipped product. **Separate from the macOS port** — lives
+in the shipped Windows repo (`~/Dev/nty-classroom-macos/`), NOT this branch. Schedule first
+by customer urgency; it does not touch the Avalonia work.
 
-**Option 2 — Dynamic `ItemsSource` submenu** (~30–60 min)
-Finish the deferred StudentCard "Assign to Room" submenu (dynamic `ItemsSource=Rooms`
-+ per-item routing via the `Host` pattern). Small quick-win that closes the ContextMenu
-story and proves dynamic nested menus.
+**2 — Phase 27 native APIs kick-off** (~3–5 h per subsystem) · *the real remaining risk*
+The deferred boundary is now the critical path. Start with **screen capture (ScreenCaptureKit)**
+— the Teacher's `StudentStreamStart`/`RequestScreenshot` already arrive (proven LIVE, currently
+noted deferred); wiring real capture turns the Mac into a viewable student. Then VideoToolbox
+(encode), AVFoundation (camera/audio), NSWorkspace/overlay (lock/policy enforcement). Per the
+timeline analysis, these subsystems — not the UI — carry the 6–8-month weight.
 
-**Option 3 — Next Classroom Mode view** (~3–5 h)
-Continue the UI port (e.g. a Teacher dialog or the main grid shell). **Needs the
-Classroom Material theme ported first** (currently mapped ad-hoc to `Conf*`). Larger;
-best after Option 1 lands the theme + icons.
+**3 — Phase 25.8+ progressive UI ports** (~3–5 h each) · *execution, low risk*
+Continue porting Teacher/Student views on the proven design system (heavier dialogs:
+Branding ~232 lines, GroupManager ~200 lines; or the main grid shell). Fully mechanical now.
 
-**Option 4 (external track) — v1.2.1 Windows bulk-lock fix** (~2–3 h)
-Customer priority (bulk lock 18/50 issue). **Separate from the macOS port** — shipped
-Windows repo (`~/Dev/nty-classroom-macos/`), not this branch.
+**4 — Runtime light/dark theme swap** (~1–2 h)
+Wire `RequestedThemeVariant` switching so Conference (dark) and Classroom (light) coexist at
+runtime rather than per-view `ThemeVariantScope`. Polish; unblocks a unified shell.
 
-**Recommended sequence:** Option 2 (quick close-out) → Option 1 (icons + Classroom
-theme, the real unblock) → Option 3. Option 4 is orthogonal, schedule by customer urgency.
+**5 — Business: customer conversation with LIVE screenshots**
+The Milestone-15 evidence (`docs/PHASE-26.0-LIVE-CONFIRMATION.md` + screenshot) is
+demo-ready: a Mac student live in the shipped Windows Teacher. Use for the customer/portfolio.
+
+**Recommendation:** #1 if the customer is waiting; otherwise **#2 (ScreenCaptureKit)** is the
+highest-leverage next step — it attacks the actual remaining risk and builds directly on the
+LIVE-confirmed wire foundation.
+
+---
+
+## Team handoff status
+
+A new team member picks up a **complete, de-risked foundation**:
+- **This summary** + `docs/PHASE-26.0-LIVE-CONFIRMATION.md` (LIVE evidence).
+- **20-section cheat sheet** of battle-tested WPF→Avalonia patterns.
+- **15 milestones** documented; **Foundation phase = COMPLETE**, **Execution phase =
+  PROVEN at scale** (4 dialogs + full Conference UI + live wire client).
+- **Shipped Windows repo never touched** (verified clean after every phase).
+- Ready for **progressive Phase 27+ work** (native APIs) on a byte-confirmed wire base.
