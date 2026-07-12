@@ -86,6 +86,16 @@ public static class CaptureRunner
         Dispatcher.UIThread.RunJobs();
     }
 
+    /// <summary>Open the first ContextMenu found in the tree (for menu-open baselines).
+    /// Avalonia ContextMenu popups DO render into CaptureRenderedFrame.</summary>
+    public static void OpenFirstContextMenu(Window window)
+    {
+        var border = window.GetVisualDescendants().OfType<Control>()
+            .FirstOrDefault(c => c.ContextMenu != null);
+        border?.ContextMenu?.Open(border);
+        Dispatcher.UIThread.RunJobs();
+    }
+
     /// <summary>Advance the headless animation clock ~iterations*sleepMs of REAL time.
     /// Avalonia's headless clock uses wall-clock elapsed time, so we sleep between
     /// forced render ticks. NOTE: this makes animated captures timing-dependent (not

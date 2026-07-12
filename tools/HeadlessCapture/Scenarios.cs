@@ -54,6 +54,17 @@ public static class Scenarios
             AfterShow = w => CaptureRunner.SelectTab(w, 1),
         },
 
+        ["studentcard"] = new()
+        {
+            Description = "StudentCard grid with a ContextMenu OPEN — Sandbox tab 5. "
+                        + "Shows the ported ContextMenu (17 items + separators + nested submenu).",
+            OriginalPhase = "25.4",
+            OriginalScreenshot = "docs/phase-25.4-studentcard-menu.png",
+            Width = 1000, Height = 800,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w => { CaptureRunner.SelectTab(w, 5); CaptureRunner.OpenFirstContextMenu(w); },
+        },
+
         ["sidebar"] = new()
         {
             Description = "Full Conference composition — tile grid + toolbar (bottom) + "

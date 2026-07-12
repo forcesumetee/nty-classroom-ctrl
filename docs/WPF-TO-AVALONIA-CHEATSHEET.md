@@ -462,6 +462,20 @@ Notes / caveats:
   `PlacementTarget.Tag`/`RelativeSource AncestorType=ContextMenu` command-routing
   will need rethinking (Avalonia menu items bind against the flyout's DataContext).
 
+### `ContextMenu` specifics (Phase 25.4 — ported StudentCard's 17-item menu)
+- **Right-click gesture is built in.** Set `<Border.ContextMenu><ContextMenu>…` (or
+  `ContextFlyout`) and Avalonia opens it on right-click — **no code-behind** (WPF
+  needed the `Tag`-stash + placement handling). This is *simpler* than WPF.
+- **Command routing:** menu items live in a popup, so `$parent` fails — route via the
+  target's DataContext (`Host` pattern, see §13). WPF `PlacementTarget.Tag.X` → `Host.X`.
+- **Structure ports 1:1:** `<MenuItem Header="…" Command=… CommandParameter=…/>`,
+  `<Separator/>`, and **nested `<MenuItem>`** for cascading submenus — the cascade
+  chevron ▸ + hover-open behavior render correctly (verified). No `ItemContainerStyle`
+  needed for static items; dynamic `ItemsSource` submenus are a separate exercise.
+- **`ContextMenu` popups DO render into headless `CaptureRenderedFrame`** (open it via
+  `contextMenu.Open(target)` before capture) — unlike a `Button.Flyout`, which didn't.
+  So menu-open baselines *are* capturable headlessly.
+
 ## 12. Manual tabs vs `TabControl`
 _(added Phase 25.3, from the ConferenceSidebar port)_
 
@@ -525,9 +539,32 @@ Related scope selectors:
 - Reflection fallback: `{ReflectionBinding …}` skips compile-time checking if you
   ever need the WPF-style late binding.
 
-> **Forward reference:** `StudentCard`'s large `ContextMenu`/`MenuFlyout` (Phase 25.4?)
-> will lean on this heavily — every `MenuItem` reaches `MainViewModel` commands from
-> a detached menu scope. The cast idiom above is the pattern to reuse.
+### ⚠️ `$parent` does NOT cross a popup/ContextMenu boundary
+_(Phase 25.4 — verified empirically with a headless route-test)_
+
+**`$parent[…]` ancestor-walk stops at the popup root.** A `ContextMenu`/`Flyout`/
+`MenuFlyout` renders in a **separate visual root**, so from inside a menu item
+`$parent[ItemsControl]` / `$parent[Window]` resolves to **nothing** → the bound
+`Command` comes back **null** (menu item silently disabled). This is the opposite of
+WPF, whose ContextMenu used `PlacementTarget` to walk back to the owner.
+
+**The fix — route via the target's DataContext.** An Avalonia `ContextMenu` *inherits
+the DataContext of the control it's attached to* (for `StudentCard` that's the item
+VM). So give the item a **`Host` back-reference** and bind through it — a plain
+DataContext binding that lives entirely inside the popup's own scope:
+
+```xml
+<!-- item VM exposes: public HostVm? Host {get;set;}  (wired when the item is created) -->
+<MenuItem Header="Lock"
+          Command="{Binding Host.LockOneCommand}"
+          CommandParameter="{Binding}"/>   <!-- {Binding} = the item itself -->
+```
+Verified: flat item AND nested-submenu item both resolve non-null and fire with the
+correct parameter. (For controls in the **main tree** — e.g. card-body buttons —
+`$parent[…]` still works; only the popup boundary breaks it. Standardize on the
+`Host` pattern so menu and body use one idiom.)
+
+WPF `PlacementTarget.Tag.XCommand` (Tag-stash hack) → Avalonia `Host.XCommand`.
 
 ## 14. Reference links
 
@@ -544,6 +581,6 @@ _Living document (14 sections) — extend as later ports surface new patterns. C
 triggers→classes, converters, DP→StyledProperty, precedence, compiled bindings,
 keyed-Style→ControlTheme + basic ControlTemplate/pseudo-classes (§3e), animations
 (§10), popups/flyouts (§11), manual-tabs vs TabControl (§12), advanced binding
-scopes / $parent + compiled-binding cast (§13). Still uncovered: complex
-ControlTemplates, full ContextMenu→MenuFlyout command routing, DynamicResource
-theme-swap._
+scopes / $parent + compiled-binding cast + popup-boundary routing (§13), ContextMenu
++ cascading submenus (§11). Still uncovered: complex ControlTemplates, dynamic
+ItemsSource submenus, DynamicResource theme-swap, an icon/font system._
