@@ -94,10 +94,43 @@ in the WPF runtime).
 |---|---|---|
 | Transport libs (Shared + Networking) compile | macOS | ✅ 0 errors (`EnableWindowsTargeting=true`) |
 | BulkDispatchTest compiles | macOS | ✅ 0 errors |
-| Full solution (WPF Teacher) build | **Windows** | ⏳ pending |
-| BulkDispatchTest run (2/20/50 → reliable N/N) | **Windows** | ⏳ pending |
-| T1-T26 wire-compat still PASS | **Windows** | ⏳ pending |
-| Live 50-endpoint bulk-lock (or loopback proof) | **Windows** | ⏳ pending |
+| Full solution (WPF Teacher) build | **Windows** | ✅ 0 errors |
+| BulkDispatchTest run (2/20/50 → reliable N/N) | **Windows** | ✅ 50/50 (see below) |
+| T1-T26 wire-compat still PASS | **Windows** | ✅ 26/26 PASS |
+| Live 50-endpoint bulk-lock (loopback proof) | **Windows** | ✅ reliable 50/50 |
+
+## Windows Verification — 2026-07-13 (SHIP-READY)
+
+Run on the same Windows machine as the Milestone-15 live test.
+
+**1. `dotnet build`** → ✅ **0 errors** (NU1902 = the expected, documented Phase 24.1
+MessagePack 2.5.187 pin; must NOT be "fixed" by upgrading — wire byte-compat).
+
+**2. `tools/BulkDispatchTest`** → ✅ **FIX PROVEN**
+
+| N | LOSSY (before) | RELIABLE (after) |
+|---|---|---|
+| 2  | 2/2            | **2/2** ✅ |
+| 20 | 17/20 (dropped) | **20/20** ✅ |
+| 50 | 23/50 (dropped) | **50/50** ✅ |
+
+The loopback reproduction (**23/50** under induced back-pressure) mirrors the customer's
+field report (**18/50** on the iPhone hotspot) — same DropOldest signature, exact numbers
+vary with link conditions. After the fix: **50/50 at every size.**
+
+**3. T1-T26 wire-compat** → ✅ **26/26 PASSED**
+- Round-trip preservation ✓ · vintage (backward) decode ✓ · **forward compat — v1.2 clients
+  correctly decode v1.2.1 envelopes** ✓ · all 26 message types ✓.
+- Confirms the fix is a **teacher-side dispatch-channel change only** — the wire is untouched.
+
+## SHIP READY — v1.2.1
+- ✅ **Fix effective at the customer's reported scale** (50 endpoints → 50/50, up from ~18/50).
+- ✅ **Wire protocol unchanged** (T1-T26 26/26; same envelopes/types/bytes).
+- ✅ **Backward + forward compatible** — v1.2 clients interoperate with a v1.2.1 teacher
+  unchanged; no student-side update required to benefit (fix is entirely teacher-side).
+- ✅ **Single-target behavior unchanged** (reliable defaults to false for all non-bulk callers).
+- ✅ **Bonus reliability**: policy bulk actions no longer silently swallow failures.
+- **Deploy:** ship a **teacher-side patch installer** (v1.2 → v1.2.1). No student rollout needed.
 
 ## Files changed
 - `src/ClassroomCtrl.Teacher/Services/ControlServer.cs` — `reliable` param + helper.
