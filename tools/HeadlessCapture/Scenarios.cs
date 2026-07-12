@@ -115,6 +115,28 @@ public static class Scenarios
             },
         },
 
+        ["screencapture"] = new()
+        {
+            Description = "Phase 27-A-3 Screen Capture tab driving a REAL ScreenCaptureKit "
+                        + "capture of the main display (permission granted in the terminal context) "
+                        + "— live frame in the Image + fps/resolution/dropped stats — Sandbox tab 12.",
+            OriginalPhase = "27-A-3",
+            OriginalScreenshot = "docs/phase-27-a-screencapture.png",
+            Width = 940, Height = 1000,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w =>
+            {
+                CaptureRunner.SelectTab(w, 12);
+                if (w.DataContext is not MainWindowViewModel mvm) return;
+                // Drive the actual capture: Start → let StartAsync complete + real
+                // SCStream frames arrive and their UI-thread Posts render → Stop.
+                mvm.ScreenCapture.StartCaptureCommand.Execute(null);
+                CaptureRunner.StepAnimation(iterations: 45, sleepMs: 100); // ~4.5 s
+                mvm.ScreenCapture.StopCaptureCommand.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+            },
+        },
+
         ["connection"] = new()
         {
             Description = "Phase 26.0 Connection tab — wire-connect form + status pill + "
