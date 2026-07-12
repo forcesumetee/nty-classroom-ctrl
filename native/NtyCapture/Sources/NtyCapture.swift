@@ -1,15 +1,17 @@
-// NtyCapture.swift — Swift implementation of the libNtyCapture.dylib C ABI (Phase 27-A)
+// NtyCapture.swift — Swift implementation of the libNtyCapture.dylib C ABI (Phase 27-A/C)
 // ---------------------------------------------------------------------------------
 // @_cdecl exports each function as a plain C symbol so the .NET side can P/Invoke it.
 // Keep signatures in lockstep with Headers/nty_capture.h and the C# LibraryImports.
 //
-// 27-A-2: Screen Recording permission (TCC).
-// 27-A-3: main-display capture via SCStream → BGRA frames delivered to the C callback.
+// 27-A-2: permission (TCC). 27-A-3: BGRA capture. 27-C-1: JPEG capture mode (ImageIO
+// encode of the downscaled frame) for sending StudentStreamFrame to the Teacher.
 
 import Foundation
 import CoreGraphics
 import CoreMedia
 import CoreVideo
+import CoreImage
+import ImageIO
 import ScreenCaptureKit
 
 // MARK: - Permission (TCC) ---------------------------------------------------------
@@ -24,108 +26,125 @@ public func nty_request_permission() -> Int32 {
     return CGRequestScreenCaptureAccess() ? 1 : 0
 }
 
-// MARK: - Capture ------------------------------------------------------------------
+// MARK: - Callback types -----------------------------------------------------------
 
-/// C function-pointer type for per-frame delivery. Matches nty_frame_cb in the header.
+/// BGRA frame callback (27-A). bgra valid only during the call; honor bytesPerRow.
 public typealias NtyFrameCallback = @convention(c)
     (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int32, Int32, Int32) -> Void
 
-/// Single active capture session. Guarded so start/stop are idempotent and safe.
+/// JPEG frame callback (27-C). jpeg bytes valid only during the call.
+///   (ctx, jpeg, length, width, height)
+public typealias NtyJpegCallback = @convention(c)
+    (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int32, Int32, Int32) -> Void
+
+// MARK: - Capture ------------------------------------------------------------------
+
 private final class CaptureSession: NSObject, SCStreamOutput {
-    let callback: NtyFrameCallback
     let ctx: UnsafeMutableRawPointer?
+    let bgraCallback: NtyFrameCallback?
+    let jpegCallback: NtyJpegCallback?
+    let jpegQuality: Double     // 0..1
     var stream: SCStream?
-    // Dedicated serial queue for frame delivery (never the main thread).
     let queue = DispatchQueue(label: "com.nty.classroom.capture", qos: .userInitiated)
 
-    init(callback: @escaping NtyFrameCallback, ctx: UnsafeMutableRawPointer?) {
-        self.callback = callback
+    init(ctx: UnsafeMutableRawPointer?,
+         bgra: NtyFrameCallback?, jpeg: NtyJpegCallback?, quality: Double) {
         self.ctx = ctx
+        self.bgraCallback = bgra
+        self.jpegCallback = jpeg
+        self.jpegQuality = quality
     }
 
-    // SCStreamOutput — called on `queue` per delivered frame.
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
                 of type: SCStreamOutputType) {
-        guard type == .screen else { return }
-        guard sampleBuffer.isValid,
+        guard type == .screen, sampleBuffer.isValid,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        // Frames whose status attachment isn't `.complete` carry no new pixels
-        // (idle screen) — skip them.
+        // Only frames with new pixels (skip .idle / .blank).
         if let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false)
             as? [[SCStreamFrameInfo: Any]],
            let statusRaw = attachments.first?[.status] as? Int,
-           let status = SCFrameStatus(rawValue: statusRaw),
-           status != .complete {
+           let status = SCFrameStatus(rawValue: statusRaw), status != .complete {
             return
         }
 
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
-
-        guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else { return }
         let width = Int32(CVPixelBufferGetWidth(pixelBuffer))
         let height = Int32(CVPixelBufferGetHeight(pixelBuffer))
-        let bytesPerRow = Int32(CVPixelBufferGetBytesPerRow(pixelBuffer))
-
         NtyState.lastWidth = width
         NtyState.lastHeight = height
         NtyState.frameCount += 1
 
-        // Synchronous call: `bgra` is valid only until this returns (buffer still locked).
-        callback(ctx, base.assumingMemoryBound(to: UInt8.self), width, height, bytesPerRow)
+        // JPEG mode (27-C): encode the (already-downscaled) frame and deliver bytes.
+        if let jcb = jpegCallback {
+            guard let data = encodeJpeg(pixelBuffer, quality: jpegQuality) else { return }
+            data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+                guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return }
+                jcb(ctx, base, Int32(data.count), width, height)
+            }
+            return
+        }
+
+        // BGRA mode (27-A): hand the locked base address to the callback (call-scoped).
+        if let bcb = bgraCallback {
+            CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+            guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else { return }
+            let bpr = Int32(CVPixelBufferGetBytesPerRow(pixelBuffer))
+            bcb(ctx, base.assumingMemoryBound(to: UInt8.self), width, height, bpr)
+        }
     }
 }
 
-/// Process-wide capture state (single session; matches the C ABI's singleton model).
+/// Encode a BGRA CVPixelBuffer to JPEG via ImageIO. Reuses a shared CIContext.
+private func encodeJpeg(_ pixelBuffer: CVPixelBuffer, quality: Double) -> Data? {
+    let ci = CIImage(cvPixelBuffer: pixelBuffer)
+    guard let cg = NtyState.ciContext.createCGImage(ci, from: ci.extent) else { return nil }
+    let out = NSMutableData()
+    guard let dest = CGImageDestinationCreateWithData(out as CFMutableData, "public.jpeg" as CFString, 1, nil)
+    else { return nil }
+    let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: quality]
+    CGImageDestinationAddImage(dest, cg, props as CFDictionary)
+    guard CGImageDestinationFinalize(dest) else { return nil }
+    return out as Data
+}
+
 private enum NtyState {
     static let lock = NSLock()
     static var session: CaptureSession?
     static var lastWidth: Int32 = 0
     static var lastHeight: Int32 = 0
     static var frameCount: Int64 = 0
+    static let ciContext = CIContext(options: nil)
 }
 
-@_cdecl("nty_capture_start")
-public func nty_capture_start(_ fps: Int32, _ cb: NtyFrameCallback?, _ ctx: UnsafeMutableRawPointer?) -> Int32 {
-    guard let cb = cb else { return -4 } // no callback
-    NtyState.lock.lock()
-    defer { NtyState.lock.unlock() }
-    if NtyState.session != nil { return -3 } // already running
-
-    // SCShareableContent is async; bridge to sync for the simple C ABI with a semaphore.
+/// Shared stream setup. `targetW/H`=0 → capture at full display size (BGRA mode);
+/// otherwise SCStream downscales to targetW×targetH (JPEG mode).
+private func startInternal(fps: Int32, targetW: Int, targetH: Int, session: CaptureSession) -> Int32 {
     let sem = DispatchSemaphore(value: 0)
     var content: SCShareableContent?
     var contentError: Error?
     SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { c, e in
         content = c; contentError = e; sem.signal()
     }
-    // Bounded wait so a hung TCC/content query can't deadlock the caller.
     if sem.wait(timeout: .now() + 5) == .timedOut { return -5 }
-    if contentError != nil { return -1 } // typically "not permitted"
-    guard let display = content?.displays.first else { return -2 } // no display
+    if contentError != nil { return -1 }
+    guard let display = content?.displays.first else { return -2 }
 
-    let session = CaptureSession(callback: cb, ctx: ctx)
     let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
-
     let config = SCStreamConfiguration()
     config.pixelFormat = kCVPixelFormatType_32BGRA
-    config.width = display.width
-    config.height = display.height
+    config.width = targetW > 0 ? targetW : display.width
+    config.height = targetH > 0 ? targetH : display.height
     config.queueDepth = 3
     config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(max(1, fps)))
     config.showsCursor = true
 
     let stream = SCStream(filter: filter, configuration: config, delegate: nil)
-    do {
-        try stream.addStreamOutput(session, type: .screen, sampleHandlerQueue: session.queue)
-    } catch {
-        return -6 // failed to attach output
-    }
+    do { try stream.addStreamOutput(session, type: .screen, sampleHandlerQueue: session.queue) }
+    catch { return -6 }
     session.stream = stream
     NtyState.frameCount = 0
 
-    // startCapture is async; block briefly for its completion so we return a real code.
     let startSem = DispatchSemaphore(value: 0)
     var startError: Error?
     stream.startCapture { e in startError = e; startSem.signal() }
@@ -134,6 +153,47 @@ public func nty_capture_start(_ fps: Int32, _ cb: NtyFrameCallback?, _ ctx: Unsa
 
     NtyState.session = session
     return 0
+}
+
+/// Compute an aspect-preserving downscale of (w,h) to fit within (maxW,maxH); never upscales.
+private func fit(_ w: Int, _ h: Int, _ maxW: Int, _ maxH: Int) -> (Int, Int) {
+    if maxW <= 0 || maxH <= 0 { return (w, h) }
+    let scale = min(Double(maxW) / Double(w), Double(maxH) / Double(h), 1.0)
+    return (max(1, Int(Double(w) * scale)), max(1, Int(Double(h) * scale)))
+}
+
+@_cdecl("nty_capture_start")
+public func nty_capture_start(_ fps: Int32, _ cb: NtyFrameCallback?, _ ctx: UnsafeMutableRawPointer?) -> Int32 {
+    guard let cb = cb else { return -4 }
+    NtyState.lock.lock(); defer { NtyState.lock.unlock() }
+    if NtyState.session != nil { return -3 }
+    let session = CaptureSession(ctx: ctx, bgra: cb, jpeg: nil, quality: 0.6)
+    return startInternal(fps: fps, targetW: 0, targetH: 0, session: session)
+}
+
+/// 27-C — capture the main display, downscale to fit maxW×maxH, JPEG-encode at
+/// `quality` (0..100), deliver bytes via `cb`. Matches the shipped StudentBroadcaster
+/// (1280×720, quality 60, ~4 fps).
+@_cdecl("nty_capture_start_jpeg")
+public func nty_capture_start_jpeg(_ fps: Int32, _ quality: Int32, _ maxW: Int32, _ maxH: Int32,
+                                   _ cb: NtyJpegCallback?, _ ctx: UnsafeMutableRawPointer?) -> Int32 {
+    guard let cb = cb else { return -4 }
+    NtyState.lock.lock(); defer { NtyState.lock.unlock() }
+    if NtyState.session != nil { return -3 }
+
+    // Need the display size up front to compute the target. Query once here.
+    let sem = DispatchSemaphore(value: 0)
+    var content: SCShareableContent?
+    SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { c, _ in
+        content = c; sem.signal()
+    }
+    if sem.wait(timeout: .now() + 5) == .timedOut { return -5 }
+    guard let display = content?.displays.first else { return -2 }
+    let (tw, th) = fit(display.width, display.height, Int(maxW), Int(maxH))
+
+    let q = min(1.0, max(0.05, Double(quality) / 100.0))
+    let session = CaptureSession(ctx: ctx, bgra: nil, jpeg: cb, quality: q)
+    return startInternal(fps: fps, targetW: tw, targetH: th, session: session)
 }
 
 @_cdecl("nty_capture_stop")
@@ -149,7 +209,6 @@ public func nty_capture_stop() {
     session.stream = nil
 }
 
-/// Optional stats accessors (used by the .NET stats UI).
 @_cdecl("nty_last_width")  public func nty_last_width()  -> Int32 { NtyState.lastWidth }
 @_cdecl("nty_last_height") public func nty_last_height() -> Int32 { NtyState.lastHeight }
 @_cdecl("nty_frame_count") public func nty_frame_count() -> Int64 { NtyState.frameCount }

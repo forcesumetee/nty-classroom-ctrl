@@ -52,12 +52,30 @@ typedef void (*nty_frame_cb)(void *ctx, const uint8_t *bgra,
                              int width, int height, int bytesPerRow);
 
 /*
+ * JPEG frame callback (27-C). `jpeg` points to `length` bytes of a complete JPEG
+ * (call-scoped — copy before returning). width/height are the encoded (downscaled)
+ * dimensions.
+ */
+typedef void (*nty_jpeg_cb)(void *ctx, const uint8_t *jpeg,
+                            int length, int width, int height);
+
+/*
  * nty_capture_start — begin capturing the main display at ~fps frames/sec, invoking
  *   `cb` per frame. Returns 0 on success, negative on error (e.g. -1 not permitted,
  *   -2 no display, -3 already running). Implemented in Phase 27-A-3.
  * nty_capture_stop — stop the stream and release resources. Safe to call when idle.
  */
 int nty_capture_start(int fps, nty_frame_cb cb, void *ctx);
+
+/*
+ * nty_capture_start_jpeg — capture the main display, downscale to fit maxW x maxH
+ *   (aspect-preserving, never upscales), JPEG-encode at `quality` (0-100), and
+ *   deliver each frame's bytes via `cb`. Returns 0 on success, negative on error.
+ *   Matches the shipped StudentBroadcaster (1280x720, quality 60, ~4 fps).
+ */
+int nty_capture_start_jpeg(int fps, int quality, int maxW, int maxH,
+                           nty_jpeg_cb cb, void *ctx);
+
 void nty_capture_stop(void);
 
 /* Optional stats (last delivered frame dimensions + cumulative frame count). */

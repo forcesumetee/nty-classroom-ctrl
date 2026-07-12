@@ -25,6 +25,7 @@ public sealed partial class ScreenCaptureService
     [LibraryImport(Lib)] private static partial int nty_check_permission();
     [LibraryImport(Lib)] private static partial int nty_request_permission();
     [LibraryImport(Lib)] private static partial int nty_capture_start(int fps, nint cb, nint ctx);
+    [LibraryImport(Lib)] private static partial int nty_capture_start_jpeg(int fps, int quality, int maxW, int maxH, nint cb, nint ctx);
     [LibraryImport(Lib)] private static partial void nty_capture_stop();
     [LibraryImport(Lib)] private static partial int nty_last_width();
     [LibraryImport(Lib)] private static partial int nty_last_height();
@@ -34,6 +35,10 @@ public sealed partial class ScreenCaptureService
     /// freshly-copied, tightly-packed (width*4 stride) BGRA8888 buffer. Subscribers
     /// must marshal to their UI thread.</summary>
     public event Action<byte[], int, int>? FrameReceived;
+
+    /// <summary>27-C — raised per captured frame with a freshly-copied complete JPEG
+    /// (width/height = encoded/downscaled dims). Fires on the native delivery thread.</summary>
+    public event Action<byte[], int, int>? JpegFrameReceived;
 
     private GCHandle _self;
     public bool IsCapturing { get; private set; }
@@ -73,6 +78,28 @@ public sealed partial class ScreenCaptureService
         });
     }
 
+    /// <summary>27-C — start JPEG capture: downscale to fit maxW×maxH, encode at
+    /// `quality` (0–100), raise <see cref="JpegFrameReceived"/> per frame. Matches the
+    /// shipped StudentBroadcaster (1280×720, Q60, ~4 fps). Returns 0 or a native error.</summary>
+    public Task<int> StartJpegAsync(int fps, int quality, int maxW, int maxH)
+    {
+        if (!IsSupported) return Task.FromResult(-1000);
+        if (IsCapturing) return Task.FromResult(-3);
+        return Task.Run(() =>
+        {
+            _self = GCHandle.Alloc(this);
+            int rc;
+            unsafe
+            {
+                delegate* unmanaged[Cdecl]<nint, nint, int, int, int, void> fp = &OnJpegStatic;
+                rc = nty_capture_start_jpeg(fps, quality, maxW, maxH, (nint)fp, GCHandle.ToIntPtr(_self));
+            }
+            if (rc == 0) IsCapturing = true;
+            else if (_self.IsAllocated) _self.Free();
+            return rc;
+        });
+    }
+
     public Task StopAsync()
     {
         if (!IsSupported || !IsCapturing) return Task.CompletedTask;
@@ -94,6 +121,19 @@ public sealed partial class ScreenCaptureService
         if (ctx == 0 || bgra == 0) return;
         if (GCHandle.FromIntPtr(ctx).Target is ScreenCaptureService svc)
             svc.OnFrame(bgra, width, height, bytesPerRow);
+    }
+
+    // JPEG delivery (27-C): copy the call-scoped JPEG bytes and raise the event.
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static void OnJpegStatic(nint ctx, nint jpeg, int length, int width, int height)
+    {
+        if (ctx == 0 || jpeg == 0 || length <= 0) return;
+        if (GCHandle.FromIntPtr(ctx).Target is ScreenCaptureService svc)
+        {
+            var buf = new byte[length];
+            Marshal.Copy(jpeg, buf, 0, length);
+            svc.JpegFrameReceived?.Invoke(buf, width, height);
+        }
     }
 
     private void OnFrame(nint bgra, int width, int height, int bytesPerRow)
