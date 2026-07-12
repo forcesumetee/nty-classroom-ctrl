@@ -26,6 +26,7 @@ public sealed partial class ScreenCaptureService
     [LibraryImport(Lib)] private static partial int nty_request_permission();
     [LibraryImport(Lib)] private static partial int nty_capture_start(int fps, nint cb, nint ctx);
     [LibraryImport(Lib)] private static partial int nty_capture_start_jpeg(int fps, int quality, int maxW, int maxH, nint cb, nint ctx);
+    [LibraryImport(Lib)] private static partial int nty_capture_start_h264(int fps, int bitrateKbps, nint cb, nint ctx);
     [LibraryImport(Lib)] private static partial void nty_capture_stop();
     [LibraryImport(Lib)] private static partial int nty_last_width();
     [LibraryImport(Lib)] private static partial int nty_last_height();
@@ -39,6 +40,11 @@ public sealed partial class ScreenCaptureService
     /// <summary>27-C — raised per captured frame with a freshly-copied complete JPEG
     /// (width/height = encoded/downscaled dims). Fires on the native delivery thread.</summary>
     public event Action<byte[], int, int>? JpegFrameReceived;
+
+    /// <summary>27-B — raised per captured frame with a freshly-copied Annex-B H.264
+    /// bundle (keyframe = [SPS][PPS][IDR], delta = [slice]); bool = isKeyframe. Fires on
+    /// the native (VideoToolbox) delivery thread.</summary>
+    public event Action<byte[], int, int, bool>? H264FrameReceived;
 
     private GCHandle _self;
     public bool IsCapturing { get; private set; }
@@ -100,6 +106,28 @@ public sealed partial class ScreenCaptureService
         });
     }
 
+    /// <summary>27-B — start H.264 capture (1920×1080, Baseline, CBR ~bitrateKbps,
+    /// IDR every fps×2) via VideoToolbox; raise <see cref="H264FrameReceived"/> per frame.
+    /// Returns 0 or a native error code.</summary>
+    public Task<int> StartH264Async(int fps, int bitrateKbps)
+    {
+        if (!IsSupported) return Task.FromResult(-1000);
+        if (IsCapturing) return Task.FromResult(-3);
+        return Task.Run(() =>
+        {
+            _self = GCHandle.Alloc(this);
+            int rc;
+            unsafe
+            {
+                delegate* unmanaged[Cdecl]<nint, nint, int, int, int, int, void> fp = &OnH264Static;
+                rc = nty_capture_start_h264(fps, bitrateKbps, (nint)fp, GCHandle.ToIntPtr(_self));
+            }
+            if (rc == 0) IsCapturing = true;
+            else if (_self.IsAllocated) _self.Free();
+            return rc;
+        });
+    }
+
     public Task StopAsync()
     {
         if (!IsSupported || !IsCapturing) return Task.CompletedTask;
@@ -133,6 +161,19 @@ public sealed partial class ScreenCaptureService
             var buf = new byte[length];
             Marshal.Copy(jpeg, buf, 0, length);
             svc.JpegFrameReceived?.Invoke(buf, width, height);
+        }
+    }
+
+    // H.264 delivery (27-B): copy the call-scoped Annex-B bytes and raise the event.
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static void OnH264Static(nint ctx, nint nal, int length, int width, int height, int isKeyframe)
+    {
+        if (ctx == 0 || nal == 0 || length <= 0) return;
+        if (GCHandle.FromIntPtr(ctx).Target is ScreenCaptureService svc)
+        {
+            var buf = new byte[length];
+            Marshal.Copy(nal, buf, 0, length);
+            svc.H264FrameReceived?.Invoke(buf, width, height, isKeyframe != 0);
         }
     }
 
