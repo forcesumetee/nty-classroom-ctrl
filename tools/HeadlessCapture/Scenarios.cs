@@ -56,13 +56,14 @@ public static class Scenarios
 
         ["studentcard"] = new()
         {
-            Description = "StudentCard grid with a ContextMenu OPEN — Sandbox tab 5. "
-                        + "Shows the ported ContextMenu (17 items + separators + nested submenu).",
+            Description = "StudentCard grid with the ContextMenu + dynamic 'Assign to "
+                        + "room' submenu OPEN — Sandbox tab 5 (17 items + separators + "
+                        + "ItemsSource-driven submenu).",
             OriginalPhase = "25.4",
             OriginalScreenshot = "docs/phase-25.4-studentcard-menu.png",
             Width = 1000, Height = 800,
             BuildWindow = () => new MainWindow(),
-            AfterShow = w => { CaptureRunner.SelectTab(w, 5); CaptureRunner.OpenFirstContextMenu(w); },
+            AfterShow = w => { CaptureRunner.SelectTab(w, 5); CaptureRunner.OpenContextMenuWithSubmenu(w, "Assign to room"); },
         },
 
         ["sidebar"] = new()

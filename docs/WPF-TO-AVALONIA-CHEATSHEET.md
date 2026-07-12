@@ -470,11 +470,53 @@ Notes / caveats:
   target's DataContext (`Host` pattern, see §13). WPF `PlacementTarget.Tag.X` → `Host.X`.
 - **Structure ports 1:1:** `<MenuItem Header="…" Command=… CommandParameter=…/>`,
   `<Separator/>`, and **nested `<MenuItem>`** for cascading submenus — the cascade
-  chevron ▸ + hover-open behavior render correctly (verified). No `ItemContainerStyle`
-  needed for static items; dynamic `ItemsSource` submenus are a separate exercise.
-- **`ContextMenu` popups DO render into headless `CaptureRenderedFrame`** (open it via
-  `contextMenu.Open(target)` before capture) — unlike a `Button.Flyout`, which didn't.
-  So menu-open baselines *are* capturable headlessly.
+  chevron ▸ + hover-open behavior render correctly (verified).
+- **Headless capture:** the **top-level `ContextMenu` popup renders** into
+  `CaptureRenderedFrame` (open via `contextMenu.Open(target)` first) — unlike a
+  `Button.Flyout`. But a **nested submenu popup does NOT rasterize** into the frame
+  (set `menuItem.IsSubMenuOpen = true`; the parent highlights ▸ but the child items
+  don't appear). Verify dynamic submenu *contents* functionally, not by screenshot.
+
+### Dynamic submenu — `ItemsSource` + `ItemContainerTheme` (Phase 25.4-E)
+WPF customizes generated items with **`ItemContainerStyle`** (a `Style`); Avalonia uses
+**`ItemContainerTheme`** (a `ControlTheme`). This applies to any items host —
+`MenuItem`, `ListBox`, `ItemsControl`, `TreeView`, etc.
+
+```xml
+<!-- WPF -->
+<MenuItem Header="Assign to Room" ItemsSource="{Binding Rooms}">
+  <MenuItem.ItemContainerStyle>
+    <Style TargetType="MenuItem">
+      <Setter Property="Header"  Value="{Binding RoomName}"/>
+      <Setter Property="Command" Value="{Binding DataContext.AssignCmd, RelativeSource=…}"/>
+      <Setter Property="CommandParameter" Value="{Binding}"/>
+    </Style>
+  </MenuItem.ItemContainerStyle>
+</MenuItem>
+
+<!-- Avalonia -->
+<MenuItem Header="Assign to room"
+          ItemsSource="{Binding Host.Rooms}"
+          IsEnabled="{Binding Host.HasRooms}">          <!-- empty-state -->
+  <MenuItem.ItemContainerTheme>
+    <ControlTheme TargetType="MenuItem" x:DataType="vm:RoomDemo">   <!-- x:DataType → compiled bindings -->
+      <Setter Property="Header"  Value="{Binding RoomName}"/>
+      <Setter Property="Command" Value="{Binding Host.AssignToRoomCommand}"/>  <!-- Host on the item -->
+      <Setter Property="CommandParameter" Value="{Binding}"/>       <!-- the room -->
+    </ControlTheme>
+  </MenuItem.ItemContainerTheme>
+</MenuItem>
+```
+| WPF | Avalonia |
+|---|---|
+| `ItemContainerStyle` (a `Style`) | **`ItemContainerTheme`** (a `ControlTheme`) |
+| Setters set `Header`/`Command`/`CommandParameter` | **same** |
+| (no compile-time check) | add **`x:DataType`** on the `ControlTheme` for compiled bindings |
+| command via `RelativeSource`/`Tag` | via the item's **`Host`** back-ref (§13), popup-safe |
+
+Empty-state: bind the parent's `IsEnabled` to a `HasItems`-style flag (raise change
+notification on the collection). Verified: 3 rooms → 3 realized items, command fires;
+`Rooms.Clear()` → parent disables.
 
 ## 12. Manual tabs vs `TabControl`
 _(added Phase 25.3, from the ConferenceSidebar port)_
@@ -565,6 +607,18 @@ correct parameter. (For controls in the **main tree** — e.g. card-body buttons
 `Host` pattern so menu and body use one idiom.)
 
 WPF `PlacementTarget.Tag.XCommand` (Tag-stash hack) → Avalonia `Host.XCommand`.
+
+**Nuance (Phase 25.4-E — verified):** `$parent` traverses the **menu's OWN hierarchy**
+even across nested submenu popups — a generated submenu item CAN reach its parent
+`MenuItem` via `$parent[MenuItem]`:
+```xml
+<!-- inside a dynamic submenu's ItemContainerTheme; reaches the parent item's student -->
+{Binding $parent[MenuItem].((vm:StudentCardDemoViewModel)DataContext).DisplayName}  <!-- resolved "Somchai" ✓ -->
+```
+So the precise rule is: **`$parent` walks the menu/popup's internal ancestor chain,
+but cannot escape the popup outward to the host window's tree** (that outward hop is
+what returns null). Reaching a *parent menu item* = OK; reaching the *hosting
+ItemsControl/Window* = use `Host`.
 
 ## 14. Reference links
 

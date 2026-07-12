@@ -96,6 +96,21 @@ public static class CaptureRunner
         Dispatcher.UIThread.RunJobs();
     }
 
+    /// <summary>Open the first ContextMenu, then expand a named submenu item (for
+    /// dynamic-submenu baselines, e.g. "Assign to room" → its ItemsSource rooms).</summary>
+    public static void OpenContextMenuWithSubmenu(Window window, string submenuHeader)
+    {
+        var owner = window.GetVisualDescendants().OfType<Control>()
+            .FirstOrDefault(c => c.ContextMenu != null);
+        var cm = owner?.ContextMenu;
+        if (owner == null || cm == null) return;
+        cm.Open(owner);
+        Dispatcher.UIThread.RunJobs();
+        var mi = cm.Items.OfType<MenuItem>().FirstOrDefault(m => (m.Header as string) == submenuHeader);
+        if (mi != null) mi.IsSubMenuOpen = true;
+        for (int i = 0; i < 6; i++) Dispatcher.UIThread.RunJobs();
+    }
+
     /// <summary>Advance the headless animation clock ~iterations*sleepMs of REAL time.
     /// Avalonia's headless clock uses wall-clock elapsed time, so we sleep between
     /// forced render ticks. NOTE: this makes animated captures timing-dependent (not

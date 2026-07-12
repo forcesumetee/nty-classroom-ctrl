@@ -84,6 +84,39 @@ proving `$parent` fails in the popup, then landing the `Host` pattern — exactl
 "hardest flagged pattern" the phase set out to crack. The card body + menu structure
 were mechanical thanks to prior patterns.
 
+---
+
+## Addendum — Phase 25.4-E: Dynamic `ItemsSource` submenu
+
+Completed the deferred dynamic "Assign to room" submenu.
+
+**Special question answered — does `MenuItem.ItemsSource` work like WPF? Mostly, but
+the container-customization API differs.** WPF uses **`ItemContainerStyle`** (a
+`Style`); Avalonia uses **`ItemContainerTheme`** (a `ControlTheme`, with `x:DataType`
+for compiled bindings). Same Setters (`Header`/`Command`/`CommandParameter`). Applies
+to any items host (MenuItem/ListBox/ItemsControl/TreeView). → new §11 entry.
+
+**Verified (headless route-test):** `ItemsSource={Binding Host.Rooms}` → `ItemCount=3`,
+3 room `MenuItem`s realized, `Header='Group A'`, `Command` non-null → invoke →
+`LastAction="Assign → Group A"`. Empty-state: `IsEnabled={Binding Host.HasRooms}`;
+`Rooms.Clear()` → parent disables (seen greyed out). Routing via `RoomDemo.Host`
+(§13 pattern on the room item) — no `$parent` needed.
+
+**BONUS finding — `$parent` DOES traverse the menu's own hierarchy.** A generated
+submenu item reached its parent `MenuItem`'s DataContext (the student) via
+`$parent[MenuItem].((vm:StudentCardDemoViewModel)DataContext).DisplayName` → resolved
+**"Somchai"** (non-null). This **refines the 25.4-C rule**: `$parent` walks the
+popup/menu's *internal* ancestor chain (submenu item → parent menu item = OK), but
+**cannot escape the popup outward** to the host window's tree (that hop returns null →
+use `Host`). Documented in §13.
+
+**Headless-capture refinement:** the **top-level ContextMenu popup renders** into
+`CaptureRenderedFrame`, but a **nested submenu popup does NOT rasterize** (parent
+highlights ▸, child items absent). Verify dynamic submenu contents functionally.
+
+**Cheat sheet:** §11 (`ItemContainerTheme` vs `ItemContainerStyle` + headless nested-
+popup note) and §13 ($parent menu-hierarchy nuance).
+
 ## Next
 - **Phase 25.5 candidate:** an **icon/font system** (the deferred concern) — Segoe
   MDL2 / Material glyphs used across Teacher views; decide on a cross-platform icon
