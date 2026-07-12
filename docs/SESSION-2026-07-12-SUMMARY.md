@@ -26,10 +26,13 @@ github.com/forcesumetee/nty-classroom-ctrl).
 | **25.1-B** | Reaction picker Flyout | WPF `Popup` → Avalonia `Button.Flyout`; 5 emoji reactions → `SendReactionCommand`. |
 | **25.1-C** | Reaction float animation on ConferenceTile | **Fulfils the Phase 24.3 `TODO`** — WPF Storyboard → Avalonia `Animation`. |
 | **25.1-D** | Conference bottom-bar demo + docs | Toolbar + tiles; picked reaction floats over a tile — full chain proven mid-float (`docs/phase-25.1-bottombar.png`). |
+| **25.2** | Promote headless-Skia harness → `tools/HeadlessCapture/` | Reusable off-screen screenshot tool (no display/permission). Hybrid scenario-registry (`theme`/`tile`/`bottombar`, self-documenting metadata) + generic `--view-type` reflection + `--list`. Verified by re-capture; baselines preserved, differences explained. |
 
 ## Commit list (this session)
 
 ```
+05dec39  Phase 25.2: Promote headless-Skia harness to tools/HeadlessCapture
+9054b39  Phase 25.1 closeout: session summary update + push
 3acfe2c  Phase 25.1-D: Conference bottom-bar demo + docs
 6f9abf9  Phase 25.1-C: reaction float animation on ConferenceTile
 798771d  Phase 25.1-B: reaction picker Flyout on the More button
@@ -94,10 +97,10 @@ Grew to **12 numbered sections** with real, tested examples: added §3e
 ### Tools built (reusable)
 - **T1–T26 wire compat harness** (`tools/EnvelopeWireCompatTest`) — runs on macOS.
 - **Cross-platform interop client** (`tools/CrossPlatformInteropTest`).
-- **Headless-Skia screenshot recipe** — off-screen render to PNG, no display /
-  screen-recording permission needed (used for all baselines). Lives in scratchpad
-  as `CaptureTile`; now supports **tab selection + reaction trigger + animation-clock
-  stepping** (captures mid-animation frames). Worth promoting to `tools/` (Option 1).
+- **`tools/HeadlessCapture`** (Phase 25.2) — reusable off-screen screenshot tool, no
+  display / screen-recording permission. Scenario registry (`theme`/`tile`/`bottombar`,
+  self-documenting) + generic `--view-type` reflection + `--list`. Add a scenario per
+  future port. (Promoted from the scratchpad `CaptureTile` harness.)
 - **WPF→Avalonia cheat sheet** — living document (12 sections).
 - **Full ConferenceDarkTheme** + theme showcase baseline.
 - **ConferenceTile + ConferenceToolbar** ported (Conference bottom bar) with a
@@ -132,25 +135,23 @@ Grew to **12 numbered sections** with real, tested examples: added §3e
 
 ---
 
-## Next session — pick ONE (not started)
+## Next session (Phase 25.3) — pick ONE (not started)
 
-**Option 1 — Promote the headless-Skia capture harness to `tools/`** (~1 h)
-Move scratchpad `CaptureTile` → a committed tool (tab-select + reaction-trigger +
-animation-clock stepping already built). Value: reusable visual-regression infra
-that pays back on every future port. Lowest risk, highest leverage per hour.
+_(The former Option 1 — promote the capture harness — was done as Phase 25.2.)_
 
-**Option 2 — Phase 25.2 `ConferenceSidebar`** (~2–3 h)
+**Option A — `ConferenceSidebar`** (~2–3 h)
 Continue the Conference arc (tile → theme → toolbar → **sidebar**). Introduces
 `TabControl` (participants/chat) + chat-list virtualization. 558 lines (Complex
-tier). Value: completes the Conference surface (bottom + side).
+tier). Value: completes the Conference surface (bottom + side). Add a `sidebar`
+scenario to `tools/HeadlessCapture/Scenarios.cs` for its baseline.
 
-**Option 3 — Phase 25.2 `StudentCard` ContextMenu** (~3–4 h)
+**Option B — `StudentCard` ContextMenu** (~3–4 h)
 Tackle the large `ContextMenu` → `MenuFlyout`/`ContextFlyout` while cheat-sheet §11
 is fresh; redesign the WPF `PlacementTarget.Tag` command routing. 242 lines but the
 hardest pattern flagged in the 24.3 findings. Value: unlocks Classroom Mode UI.
 
-**Pre-read for any option:** the cheat sheet (`docs/WPF-TO-AVALONIA-CHEATSHEET.md`)
-— §10/§11 are the newest and most relevant to Options 2/3.
+**Pre-read for either:** the cheat sheet (`docs/WPF-TO-AVALONIA-CHEATSHEET.md`) —
+§10/§11 are the newest and most relevant; use `tools/HeadlessCapture` for the baseline.
 
 **Also queued (separate track):** v1.2.1 Windows bulk-lock fix; customer conversation
 on the macOS timeline (use the §"Timeline data" numbers).
