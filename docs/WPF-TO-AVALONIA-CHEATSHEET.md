@@ -871,6 +871,22 @@ private static void OnFrameStatic(nint ctx, nint bgra, int w, int h, int stride)
 guarded by `Exists` so non-mac builds don't fail). Frames render fine under headless Skia, so
 the whole live pipeline is verifiable off-screen (the Phase 27-A `screencapture` scenario).
 
+**Video encode with VideoToolbox** _(Phase 27-B — H.264 to interop with a shipped OpenH264 decoder)._
+When the wire target is another decoder (here the Windows Teacher's H264Sharp/OpenH264), match
+its byte-format exactly, in the native encoder, before it hits the wire:
+- **VideoToolbox emits AVCC** (`[4-byte BE len][NAL]…`); most decoders (OpenH264, Android) want
+  **Annex-B** (`00 00 00 01` start codes). Convert every NAL in the output handler.
+- **SPS/PPS are out-of-band** in VideoToolbox (in the `CMFormatDescription`) — pull them via
+  `CMVideoFormatDescriptionGetH264ParameterSetAtIndex` and **prepend in-band before each IDR**
+  (`[SPS][PPS][slices]`), because Annex-B decoders expect parameter sets per keyframe.
+- **Keyframe = sync sample:** absence/false of `kCMSampleAttachmentKey_NotSync` in the sample
+  attachments. **Low latency:** `Baseline` profile + `AllowFrameReordering=false` (no B-frames)
+  + `RealTime=true`; `MaxKeyFrameInterval` for the IDR cadence. Use the block-based
+  `VTCompressionSessionEncodeFrame(…, outputHandler:)` (session created with a nil callback).
+- **Verify structurally when the target decoder isn't available locally:** parse the NAL types
+  (7=SPS, 8=PPS, 5=IDR, 1=slice) + assert start codes + first-frame-keyframe. Strong interop
+  proof; keep the real decode for the live test. (H.264 vs MJPEG here: ~10× per-pixel bandwidth.)
+
 ## 21. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
