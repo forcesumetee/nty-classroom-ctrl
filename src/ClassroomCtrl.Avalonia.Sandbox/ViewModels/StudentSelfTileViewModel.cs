@@ -27,6 +27,10 @@ public partial class StudentSelfTileViewModel : ObservableObject
     /// screen stream / camera) — logged + shown, not enforced.</summary>
     [ObservableProperty] private string lastDeferred = "";
 
+    /// <summary>Phase 27-C — true while streaming this screen to the teacher.</summary>
+    [ObservableProperty] private bool isStreaming;
+    [ObservableProperty] private int streamedFrames;
+
     public void Reset()
     {
         IsLocked = false;
@@ -35,6 +39,8 @@ public partial class StudentSelfTileViewModel : ObservableObject
         IsHandRaised = false;
         LastChat = "";
         LastDeferred = "";
+        IsStreaming = false;
+        StreamedFrames = 0;
     }
 
     public void SetPolicy(System.Collections.Generic.IEnumerable<string> chips)

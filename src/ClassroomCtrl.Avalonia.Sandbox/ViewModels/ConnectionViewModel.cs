@@ -40,6 +40,9 @@ public partial class ConnectionViewModel : ObservableObject
     /// <summary>Reflects the state Teacher commands drive onto this student.</summary>
     public StudentSelfTileViewModel SelfTile { get; } = new();
 
+    /// <summary>Phase 27-C — screen → JPEG → StudentStreamFrame streamer.</summary>
+    private readonly ScreenStreamer _streamer = new();
+
     private CancellationTokenSource? _cts;
 
     [ObservableProperty] private string teacherIp = "172.20.10.7";  // Phase 24.2 hotspot subnet
@@ -87,13 +90,36 @@ public partial class ConnectionViewModel : ObservableObject
             Status = s;
             SelfTile.IsOnline = s == WireStatus.Connected;
             SelfTile.DisplayName = DisplayName;
-            if (s == WireStatus.Disconnected) SelfTile.Reset();
+            if (s == WireStatus.Disconnected) { _ = _streamer.StopAsync(); SelfTile.Reset(); }
             ConnectCommand.NotifyCanExecuteChanged();
             DisconnectCommand.NotifyCanExecuteChanged();
             RaiseHandCommand.NotifyCanExecuteChanged();
         });
         Client.Traffic += (dir, label, size) => Post(() => AddLog(dir, label, size));
         Client.EnvelopeReceived += env => Post(() => Dispatch(env));
+        _streamer.FrameSent += seq => Post(() => SelfTile.StreamedFrames = seq);
+    }
+
+    private async Task StartStreamingAsync()
+    {
+        int rc = await _streamer.StartAsync(Client);
+        Post(() =>
+        {
+            SelfTile.IsStreaming = rc == 0;
+            if (rc == 0) SelfTile.LastDeferred = "";
+            else SelfTile.LastDeferred = $"StudentStreamStart · capture failed (code {rc})";
+            AddLog(WireDirection.System, rc == 0 ? "screen streaming started" : $"stream start failed ({rc})", 0);
+        });
+    }
+
+    private async Task StopStreamingAsync()
+    {
+        await _streamer.StopAsync();
+        Post(() =>
+        {
+            SelfTile.IsStreaming = false;
+            AddLog(WireDirection.System, "screen streaming stopped", 0);
+        });
     }
 
     /// <summary>Decode an inbound envelope: enrich the traffic log with a summary
@@ -135,11 +161,20 @@ public partial class ConnectionViewModel : ObservableObject
                 SelfTile.IsHandRaised = false;
                 detail = "hand lowered";
                 break;
-            // Capture-class commands: logged + noted, deferred until native macOS
-            // APIs land (Phase 27+). No frames are produced.
+            // Phase 27-C — the Teacher's "View Screen" request. Start real
+            // ScreenCaptureKit → JPEG → StudentStreamFrame streaming.
+            case MessageType.StudentStreamStart:
+                _ = StartStreamingAsync();
+                detail = "▶ streaming screen to teacher";
+                break;
+            case MessageType.StudentStreamStop:
+                _ = StopStreamingAsync();
+                detail = "■ stream stopped";
+                break;
+            // Remaining capture-class commands: logged + noted, deferred until their
+            // native macOS APIs land (Phase 27-B+). No frames produced.
             case MessageType.RequestScreenshot:
             case MessageType.ScreenStreamStart:
-            case MessageType.StudentStreamStart:
             case MessageType.CameraStart:
             case MessageType.ConferenceStart:
             case MessageType.MicMonitorStart:
