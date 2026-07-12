@@ -149,5 +149,12 @@
                                          HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
             </Grid>
         </TabItem>
+        <!-- Tab 13 (Phase 28-C): AVCaptureSession camera capture (permission + device + preview). -->
+        <TabItem Header="Camera Capture">
+            <Grid Background="#1F1F23">
+                <views:CameraCaptureView DataContext="{Binding CameraCapture}"
+                                         HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>
