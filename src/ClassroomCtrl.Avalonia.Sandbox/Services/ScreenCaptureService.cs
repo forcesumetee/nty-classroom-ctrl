@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -8,47 +9,110 @@ public enum ScreenPermission { Denied, Granted }
 
 /// <summary>
 /// Phase 27-A — managed side of the native ScreenCaptureKit helper
-/// (native/NtyCapture/libNtyCapture.dylib). UI-agnostic (no Avalonia refs), like
-/// <see cref="WireClient"/> — the ViewModel marshals to the UI thread. This is the
-/// interop template for every Phase 27 subsystem: a tiny P/Invoke surface over a
-/// Swift dylib, plus (from 27-A-3) a GC-rooted frame callback.
+/// (native/NtyCapture/libNtyCapture.dylib). UI-agnostic (no Avalonia refs) like
+/// <see cref="WireClient"/>; the ViewModel marshals frames to the UI thread.
 ///
-/// 27-A-2 scope: Screen Recording permission (TCC). Capture start/stop wiring +
-/// the FrameReceived event land in 27-A-3.
+/// Interop pattern (the template for all Phase 27 subsystems): a static
+/// <see cref="UnmanagedCallersOnlyAttribute"/> callback (no per-frame delegate
+/// marshalling) whose <c>ctx</c> is a <see cref="GCHandle"/> to this instance, so
+/// the static callback recovers <c>this</c> and raises an instance event. The
+/// GCHandle roots the service for the capture's lifetime.
 /// </summary>
 public sealed partial class ScreenCaptureService
 {
     private const string Lib = "NtyCapture"; // → libNtyCapture.dylib on macOS
 
-    [LibraryImport(Lib)]
-    private static partial int nty_check_permission();
+    [LibraryImport(Lib)] private static partial int nty_check_permission();
+    [LibraryImport(Lib)] private static partial int nty_request_permission();
+    [LibraryImport(Lib)] private static partial int nty_capture_start(int fps, nint cb, nint ctx);
+    [LibraryImport(Lib)] private static partial void nty_capture_stop();
+    [LibraryImport(Lib)] private static partial int nty_last_width();
+    [LibraryImport(Lib)] private static partial int nty_last_height();
+    [LibraryImport(Lib)] private static partial long nty_frame_count();
 
-    [LibraryImport(Lib)]
-    private static partial int nty_request_permission();
+    /// <summary>Raised per captured frame on the native delivery thread with a
+    /// freshly-copied, tightly-packed (width*4 stride) BGRA8888 buffer. Subscribers
+    /// must marshal to their UI thread.</summary>
+    public event Action<byte[], int, int>? FrameReceived;
 
-    /// <summary>True only on macOS (the dylib is macOS-only). Guards P/Invoke so the
-    /// app still loads on other platforms (permission simply reports Denied).</summary>
+    private GCHandle _self;
+    public bool IsCapturing { get; private set; }
+
     public static bool IsSupported => OperatingSystem.IsMacOS();
 
-    /// <summary>Current Screen Recording authorization — never prompts.</summary>
+    // ── permission ────────────────────────────────────────────────────────────
     public ScreenPermission CheckPermission()
-    {
-        if (!IsSupported) return ScreenPermission.Denied;
-        return nty_check_permission() == 1 ? ScreenPermission.Granted : ScreenPermission.Denied;
-    }
+        => IsSupported && nty_check_permission() == 1 ? ScreenPermission.Granted : ScreenPermission.Denied;
 
-    /// <summary>
-    /// Trigger the system Screen Recording prompt (if undetermined) and return the
-    /// authorization at call time. NOTE: for Screen Recording the grant only takes
-    /// effect after an app RELAUNCH (TCC caches it at process launch) — callers
-    /// should prompt the user to grant + relaunch, then re-<see cref="CheckPermission"/>.
-    /// </summary>
     public Task<ScreenPermission> RequestPermissionAsync()
     {
         if (!IsSupported) return Task.FromResult(ScreenPermission.Denied);
-        // The native call is quick (shows the prompt, returns current status); run it
-        // off the UI thread so a slow first-time TCC init never stalls rendering.
+        return Task.Run(() => nty_request_permission() == 1 ? ScreenPermission.Granted : ScreenPermission.Denied);
+    }
+
+    // ── capture ───────────────────────────────────────────────────────────────
+    /// <summary>Start main-display capture at ~<paramref name="fps"/>. Returns 0 on
+    /// success or the native negative error code. Runs off the UI thread (the native
+    /// call bridges async SC APIs with a bounded wait, so it can take up to a few s).</summary>
+    public Task<int> StartAsync(int fps)
+    {
+        if (!IsSupported) return Task.FromResult(-1000);
+        if (IsCapturing) return Task.FromResult(-3);
         return Task.Run(() =>
-            nty_request_permission() == 1 ? ScreenPermission.Granted : ScreenPermission.Denied);
+        {
+            _self = GCHandle.Alloc(this);
+            int rc;
+            unsafe
+            {
+                delegate* unmanaged[Cdecl]<nint, nint, int, int, int, void> fp = &OnFrameStatic;
+                rc = nty_capture_start(fps, (nint)fp, GCHandle.ToIntPtr(_self));
+            }
+            if (rc == 0) IsCapturing = true;
+            else if (_self.IsAllocated) _self.Free();
+            return rc;
+        });
+    }
+
+    public Task StopAsync()
+    {
+        if (!IsSupported || !IsCapturing) return Task.CompletedTask;
+        return Task.Run(() =>
+        {
+            nty_capture_stop();
+            IsCapturing = false;
+            if (_self.IsAllocated) _self.Free();
+        });
+    }
+
+    public (int Width, int Height, long Frames) Stats()
+        => IsSupported ? (nty_last_width(), nty_last_height(), nty_frame_count()) : (0, 0, 0);
+
+    // ── native callback (delivery-queue thread) ─────────────────────────────────
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static void OnFrameStatic(nint ctx, nint bgra, int width, int height, int bytesPerRow)
+    {
+        if (ctx == 0 || bgra == 0) return;
+        if (GCHandle.FromIntPtr(ctx).Target is ScreenCaptureService svc)
+            svc.OnFrame(bgra, width, height, bytesPerRow);
+    }
+
+    private void OnFrame(nint bgra, int width, int height, int bytesPerRow)
+    {
+        // The native buffer is valid ONLY during this call (CVPixelBuffer still
+        // locked), so copy now. Honor bytesPerRow (row padding: measured 5888 vs
+        // width*4=5880 on a 1470-wide display) → copy row-by-row into a
+        // tightly-packed width*4 buffer that WriteableBitmap can ingest directly.
+        int dstStride = width * 4;
+        var buf = new byte[dstStride * height];
+        unsafe
+        {
+            byte* src = (byte*)bgra;
+            fixed (byte* dst = buf)
+            {
+                for (int y = 0; y < height; y++)
+                    Buffer.MemoryCopy(src + (long)y * bytesPerRow, dst + (long)y * dstStride, dstStride, dstStride);
+            }
+        }
+        FrameReceived?.Invoke(buf, width, height);
     }
 }
