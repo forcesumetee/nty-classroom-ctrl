@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <!-- Namespaces of the copied files stay ClassroomCtrl.Shared.* to preserve
+         the original public API surface (class + namespace names unchanged).
+         MessagePack keys — not type names — define the wire format, so this
+         does not affect byte-compat. -->
+    <RootNamespace>ClassroomCtrl.Shared</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- PINNED EXACTLY for byte-identical envelopes vs shipped Windows v1.2. -->
+    <PackageReference Include="MessagePack" Version="2.5.187" />
+  </ItemGroup>
+</Project>

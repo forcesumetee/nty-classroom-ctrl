@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net10.0 (NOT net10.0-windows) and no win-x64 RID — inherited from
+         the clean root Directory.Build.props. Proving T1-T26 pass here on
+         macOS is the cross-platform byte-compat guarantee. -->
+    <RootNamespace>EnvelopeWireCompatTest</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
+  </ItemGroup>
+</Project>

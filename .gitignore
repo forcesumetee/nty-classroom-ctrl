@@ -1,0 +1,18 @@
+## .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+
+## Rider / VS / VS Code
+.idea/
+.vs/
+.vscode/
+
+## macOS
+.DS_Store
+
+## NuGet
+*.nupkg
+packages/

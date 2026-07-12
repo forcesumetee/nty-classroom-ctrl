@@ -1,0 +1,15 @@
+<Project>
+  <!-- Phase 24.1 — CLEAN cross-platform props for the Avalonia/macOS port.
+       Deliberately NO net10.0-windows, NO win-x64 RID, NO UseWPF/UseWindowsForms.
+       The whole point of this solution is to build on macOS (and any OS). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Version>1.2.0</Version>
+    <Company>NTY MULTIMEDIA CO.,LTD</Company>
+    <Product>Classroom Control System (macOS port)</Product>
+    <Copyright>Copyright © NTY MULTIMEDIA CO.,LTD</Copyright>
+  </PropertyGroup>
+</Project>
