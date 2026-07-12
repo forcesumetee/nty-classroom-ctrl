@@ -54,29 +54,57 @@
                     </DockPanel>
                 </Border>
 
-                <!-- Body: permission card -->
+                <!-- Body: controls + live preview -->
                 <StackPanel Grid.Row="1" Margin="24,20">
+                    <!-- Controls row: permission + capture + stats -->
                     <Border Background="{StaticResource Surface.Card}"
                             BorderBrush="{StaticResource Border.Default}" BorderThickness="1"
                             CornerRadius="8" Padding="16">
                         <StackPanel>
-                            <TextBlock Text="Screen Recording permission" FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{StaticResource Text.Primary}"/>
                             <TextBlock Text="{Binding Hint}" FontSize="12"
-                                       Foreground="{StaticResource Text.Secondary}"
-                                       Margin="0,6,0,0" TextWrapping="Wrap"/>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                                <Button Theme="{StaticResource Button.Secondary}" Content="Check"
-                                        Command="{Binding CheckPermissionCommand}" Margin="0,0,8,0"/>
-                                <Button Theme="{StaticResource Button.Primary}" Content="Request permission"
-                                        Command="{Binding RequestPermissionCommand}"/>
-                            </StackPanel>
+                                       Foreground="{StaticResource Text.Secondary}" TextWrapping="Wrap"/>
+                            <DockPanel Margin="0,14,0,0">
+                                <!-- stats (left) -->
+                                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="fps" FontSize="11" Foreground="{StaticResource Text.Muted}" VerticalAlignment="Bottom"/>
+                                    <TextBlock Text="{Binding FpsText}" FontSize="15" FontWeight="Bold" Margin="4,0,16,0"
+                                               Foreground="{StaticResource Accent.Primary}"/>
+                                    <TextBlock Text="res" FontSize="11" Foreground="{StaticResource Text.Muted}" VerticalAlignment="Bottom"/>
+                                    <TextBlock Text="{Binding ResolutionText}" FontSize="15" FontWeight="SemiBold" Margin="4,0,16,0"
+                                               Foreground="{StaticResource Text.Primary}"/>
+                                    <TextBlock Text="dropped" FontSize="11" Foreground="{StaticResource Text.Muted}" VerticalAlignment="Bottom"/>
+                                    <TextBlock Text="{Binding DroppedFrames}" FontSize="15" FontWeight="SemiBold" Margin="4,0,0,0"
+                                               Foreground="{StaticResource Text.Secondary}"/>
+                                </StackPanel>
+                                <!-- buttons (right) -->
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Theme="{StaticResource Button.Secondary}" Content="Check"
+                                            Command="{Binding CheckPermissionCommand}" Margin="0,0,8,0"/>
+                                    <Button Theme="{StaticResource Button.Secondary}" Content="Request permission"
+                                            Command="{Binding RequestPermissionCommand}" Margin="0,0,8,0"
+                                            IsVisible="{Binding !IsGranted}"/>
+                                    <Button Theme="{StaticResource Button.Primary}" Content="Start capture"
+                                            Command="{Binding StartCaptureCommand}" Margin="0,0,8,0"/>
+                                    <Button Theme="{StaticResource Button.Danger}" Content="Stop"
+                                            Command="{Binding StopCaptureCommand}"/>
+                                </StackPanel>
+                            </DockPanel>
                         </StackPanel>
                     </Border>
 
-                    <TextBlock Text="Capture preview + fps/resolution stats arrive in Phase 27-A-3."
-                               FontSize="11" Foreground="{StaticResource Text.Muted}"
-                               Margin="2,14,0,0"/>
+                    <!-- Live preview -->
+                    <Border Margin="0,16,0,0" Height="380"
+                            Background="#0B1220"
+                            BorderBrush="{StaticResource Border.Default}" BorderThickness="1"
+                            CornerRadius="8" ClipToBounds="True">
+                        <Panel>
+                            <TextBlock Text="Press Start capture to preview the main display."
+                                       FontSize="12" Foreground="{StaticResource Text.Muted}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       IsVisible="{Binding Frame, Converter={x:Static ObjectConverters.IsNull}}"/>
+                            <Image Source="{Binding Frame}" Stretch="Uniform" Margin="8"/>
+                        </Panel>
+                    </Border>
                 </StackPanel>
             </Grid>
         </Border>
