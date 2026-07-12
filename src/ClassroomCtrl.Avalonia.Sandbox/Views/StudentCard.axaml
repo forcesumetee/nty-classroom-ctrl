@@ -32,6 +32,74 @@
     <Border x:Name="CardRoot" CornerRadius="12" ClipToBounds="True" Cursor="Hand"
             Classes.selected="{Binding IsSelected}"
             PointerPressed="Card_Pressed">
+        <!-- WPF ContextMenu → Avalonia ContextMenu (opens on right-click automatically).
+             The WPF version stashed the Window DataContext on Border.Tag and walked
+             PlacementTarget.Tag.XCommand; here every item routes to the host VM via
+             $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).XCommand
+             — the popup-scope routing verified in 25.4-C. CommandParameter={Binding}
+             is the card's item (the ContextMenu inherits the target's DataContext). -->
+        <Border.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="View screen"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).ViewStudentScreenCommand}"
+                          CommandParameter="{Binding}"/>
+                <Separator/>
+                <MenuItem Header="Lock screen"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).LockOneCommand}"
+                          CommandParameter="{Binding}"/>
+                <MenuItem Header="Unlock screen"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).UnlockOneCommand}"
+                          CommandParameter="{Binding}"/>
+                <Separator/>
+                <MenuItem Header="Apply policy"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).ApplyPolicyToStudentCommand}"
+                          CommandParameter="{Binding}"/>
+                <MenuItem Header="Revert policy"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).RevertPolicyForStudentCommand}"
+                          CommandParameter="{Binding}"/>
+                <Separator/>
+                <MenuItem Header="Chat"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).OpenDMConversationCommand}"
+                          CommandParameter="{Binding}"/>
+                <Separator/>
+                <MenuItem Header="Set as host"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).SetAsHostCommand}"
+                          CommandParameter="{Binding}"/>
+                <MenuItem Header="Remove host"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).RemoveHostCommand}"
+                          CommandParameter="{Binding}"/>
+                <Separator/>
+                <MenuItem Header="Start demo"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).StartDemoCommand}"
+                          CommandParameter="{Binding}"/>
+                <MenuItem Header="Stop demo"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).StopDemoCommand}"/>
+                <Separator/>
+                <!-- Static nested submenu (Phase 25.4 scope: 2 hardcoded rooms;
+                     dynamic ItemsSource=Rooms deferred). Proves MenuFlyout nesting. -->
+                <MenuItem Header="Assign to room">
+                    <MenuItem Header="Group A"
+                              Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).AssignToRoomACommand}"
+                              CommandParameter="{Binding}"/>
+                    <MenuItem Header="Group B"
+                              Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).AssignToRoomBCommand}"
+                              CommandParameter="{Binding}"/>
+                </MenuItem>
+                <MenuItem Header="Remove from room"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).RemoveFromRoomCommand}"
+                          CommandParameter="{Binding}"/>
+                <Separator/>
+                <MenuItem Header="Logoff"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).LogoffOneCommand}"
+                          CommandParameter="{Binding}"/>
+                <MenuItem Header="Restart"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).RestartOneCommand}"
+                          CommandParameter="{Binding}"/>
+                <MenuItem Header="Shutdown"
+                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).ShutdownOneCommand}"
+                          CommandParameter="{Binding}"/>
+            </ContextMenu>
+        </Border.ContextMenu>
         <Grid RowDefinitions="*,Auto">
             <!-- Screen preview area (dark plate; thumbnail omitted in the demo). -->
             <Border Grid.Row="0" Background="#0D1224" CornerRadius="11,11,0,0"

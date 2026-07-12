@@ -80,7 +80,7 @@
                                      CaretBrush="{StaticResource ConfTextPrimaryBrush}"
                                      BorderBrush="{StaticResource ConfBorderSubtleBrush}"
                                      BorderThickness="1"
-                                     Watermark="Message…"
+                                     PlaceholderText="Message…"
                                      Text="{Binding ConferenceConversation.DraftInput}"/>
                             <Button Grid.Column="1" Margin="8,0,0,0" Width="40" Height="40" Padding="0"
                                     Background="{StaticResource ConfAccentBlueBrush}"
