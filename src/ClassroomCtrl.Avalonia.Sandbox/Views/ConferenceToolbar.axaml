@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.ConferenceToolbar"
+             x:DataType="vm:ConferenceToolbarDemoViewModel"
+             Background="Transparent"
+             FontFamily="{StaticResource ConfFontFamily}">
+
+    <!-- PORTED from Shared.Wpf/Conference/ConferenceToolbar.xaml (Phase 25.1).
+         Meet-style centered pill dock. Buttons draw their base look from the
+         ported ConfToolbarButtonStyle ControlTheme (Phase 25.0-B) applied via
+         Theme=; per-button active/pending state (WPF DataTriggers) becomes the
+         conditional classes + selectors below. -->
+
+    <UserControl.Styles>
+        <!-- WPF per-button DataTrigger (green "on") → .active class.
+             Setting Background/BorderBrush/Foreground on the Button flows into
+             the ControlTheme template via its TemplateBindings. -->
+        <Style Selector="Button.active">
+            <Setter Property="Background" Value="{StaticResource ConfAccentGreenBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource ConfAccentGreenBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <!-- WPF amber DataTrigger (hand raised / share requesting) → .pending. -->
+        <Style Selector="Button.pending">
+            <Setter Property="Background" Value="{StaticResource ConfAccentYellowBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource ConfAccentYellowBrush}"/>
+            <Setter Property="Foreground" Value="#1F1F23"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="{StaticResource ConfToolbarBgBrush}"
+            CornerRadius="{StaticResource ConfToolbarCornerRadius}"
+            Padding="8"
+            HorizontalAlignment="Center"
+            Margin="0,12">
+        <StackPanel Orientation="Horizontal">
+
+            <!-- 🎙 Mic -->
+            <Button Theme="{StaticResource ConfToolbarButtonStyle}"
+                    Command="{Binding ToggleMicCommand}"
+                    ToolTip.Tip="{Binding MicTooltipText}"
+                    Classes.active="{Binding IsMicOn}">
+                <TextBlock Text="🎙" FontSize="18"/>
+            </Button>
+
+            <!-- 📷 Camera -->
+            <Button Theme="{StaticResource ConfToolbarButtonStyle}"
+                    Command="{Binding ToggleCameraCommand}"
+                    ToolTip.Tip="{Binding CameraButtonText}"
+                    Classes.active="{Binding IsBroadcastingCamera}">
+                <TextBlock Text="📷" FontSize="18"/>
+            </Button>
+
+            <!-- 🖥 Share — visibility gated by Role.CanShareScreen; active(green)
+                 for Approved/Sharing, pending(amber) for Requesting. -->
+            <Button Theme="{StaticResource ConfToolbarButtonStyle}"
+                    Command="{Binding ShareScreenCommand}"
+                    ToolTip.Tip="{Binding ShareScreenButtonText}"
+                    IsVisible="{Binding Role.CanShareScreen}"
+                    Classes.active="{Binding ShareIsActive}"
+                    Classes.pending="{Binding ShareIsPending}">
+                <TextBlock Text="🖥" FontSize="18"/>
+            </Button>
+
+            <!-- 💬 Chat sidebar toggle -->
+            <Button Theme="{StaticResource ConfToolbarButtonStyle}"
+                    Command="{Binding ToggleConferenceSidebarCommand}"
+                    ToolTip.Tip="Chat"
+                    Classes.active="{Binding IsConferenceSidebarVisible}">
+                <TextBlock Text="💬" FontSize="18"/>
+            </Button>
+
+            <!-- ✋ Hand raise (amber when raised) -->
+            <Button Theme="{StaticResource ConfToolbarButtonStyle}"
+                    Command="{Binding RaiseHandCommand}"
+                    ToolTip.Tip="Raise hand"
+                    Classes.pending="{Binding IsHandRaised}">
+                <TextBlock Text="✋" FontSize="18"/>
+            </Button>
+
+            <!-- ⋮ More — reaction picker Flyout added in Phase 25.1-B. -->
+            <Button x:Name="MoreButton"
+                    Theme="{StaticResource ConfToolbarButtonStyle}"
+                    ToolTip.Tip="More">
+                <TextBlock Text="⋮" FontSize="20" FontWeight="Bold"/>
+            </Button>
+
+            <!-- 📞 End / Leave — filled red pill. -->
+            <Button Theme="{StaticResource ConfToolbarEndButtonStyle}"
+                    Command="{Binding EndConferenceCommand}"
+                    ToolTip.Tip="Leave">
+                <TextBlock Text="📞" FontSize="18"/>
+            </Button>
+
+        </StackPanel>
+    </Border>
+</UserControl>

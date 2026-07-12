@@ -16,6 +16,9 @@ public class MainWindowViewModel
 {
     public ObservableCollection<ConferenceTileViewModel> Tiles { get; } = new();
 
+    /// <summary>Phase 25.1 — demo VM driving the ported ConferenceToolbar.</summary>
+    public ConferenceToolbarDemoViewModel Toolbar { get; } = new();
+
     public MainWindowViewModel()
     {
         // 1) Teacher self — HOST badge, mic live (green dot + white mic), cam off (red).
