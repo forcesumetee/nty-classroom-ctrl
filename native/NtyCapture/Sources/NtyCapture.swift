@@ -37,6 +37,11 @@ public typealias NtyFrameCallback = @convention(c)
 public typealias NtyJpegCallback = @convention(c)
     (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int32, Int32, Int32) -> Void
 
+/// H.264 frame callback (27-B). Annex-B NAL bytes, call-scoped.
+///   (ctx, nal, length, width, height, isKeyframe)
+public typealias NtyH264Callback = @convention(c)
+    (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int32, Int32, Int32, Int32) -> Void
+
 // MARK: - Capture ------------------------------------------------------------------
 
 private final class CaptureSession: NSObject, SCStreamOutput {
@@ -44,15 +49,17 @@ private final class CaptureSession: NSObject, SCStreamOutput {
     let bgraCallback: NtyFrameCallback?
     let jpegCallback: NtyJpegCallback?
     let jpegQuality: Double     // 0..1
+    let h264: H264Encoder?      // 27-B — set for H.264 mode
     var stream: SCStream?
     let queue = DispatchQueue(label: "com.nty.classroom.capture", qos: .userInitiated)
 
     init(ctx: UnsafeMutableRawPointer?,
-         bgra: NtyFrameCallback?, jpeg: NtyJpegCallback?, quality: Double) {
+         bgra: NtyFrameCallback?, jpeg: NtyJpegCallback?, quality: Double, h264: H264Encoder? = nil) {
         self.ctx = ctx
         self.bgraCallback = bgra
         self.jpegCallback = jpeg
         self.jpegQuality = quality
+        self.h264 = h264
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
@@ -73,6 +80,13 @@ private final class CaptureSession: NSObject, SCStreamOutput {
         NtyState.lastWidth = width
         NtyState.lastHeight = height
         NtyState.frameCount += 1
+
+        // H.264 mode (27-B): feed the pixel buffer to VideoToolbox; the encoder's
+        // output handler converts to Annex B and invokes the C callback.
+        if let enc = h264 {
+            enc.encode(pixelBuffer, pts: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+            return
+        }
 
         // JPEG mode (27-C): encode the (already-downscaled) frame and deliver bytes.
         if let jcb = jpegCallback {
@@ -196,17 +210,39 @@ public func nty_capture_start_jpeg(_ fps: Int32, _ quality: Int32, _ maxW: Int32
     return startInternal(fps: fps, targetW: tw, targetH: th, session: session)
 }
 
+/// 27-B — capture the main display at 1920×1080 and H.264-encode via VideoToolbox
+/// (Baseline, CBR, IDR every fps×2), delivering Annex-B NAL bytes per frame.
+/// `bitrateKbps` in kbit/s (e.g. 1500). Matches the shipped OpenH264 wire format.
+@_cdecl("nty_capture_start_h264")
+public func nty_capture_start_h264(_ fps: Int32, _ bitrateKbps: Int32,
+                                   _ cb: NtyH264Callback?, _ ctx: UnsafeMutableRawPointer?) -> Int32 {
+    guard let cb = cb else { return -4 }
+    NtyState.lock.lock(); defer { NtyState.lock.unlock() }
+    if NtyState.session != nil { return -3 }
+
+    let w = 1920, h = 1080
+    guard let enc = H264Encoder(width: w, height: h, fps: Int(max(1, fps)),
+                                bitrate: Int(max(100, bitrateKbps)) * 1000, callback: cb, ctx: ctx)
+    else { return -9 } // VTCompressionSession create failed
+
+    let session = CaptureSession(ctx: ctx, bgra: nil, jpeg: nil, quality: 0, h264: enc)
+    return startInternal(fps: fps, targetW: w, targetH: h, session: session)
+}
+
 @_cdecl("nty_capture_stop")
 public func nty_capture_stop() {
     NtyState.lock.lock()
     let session = NtyState.session
     NtyState.session = nil
     NtyState.lock.unlock()
-    guard let session = session, let stream = session.stream else { return }
-    let sem = DispatchSemaphore(value: 0)
-    stream.stopCapture { _ in sem.signal() }
-    _ = sem.wait(timeout: .now() + 3)
-    session.stream = nil
+    guard let session = session else { return }
+    if let stream = session.stream {
+        let sem = DispatchSemaphore(value: 0)
+        stream.stopCapture { _ in sem.signal() }
+        _ = sem.wait(timeout: .now() + 3)
+        session.stream = nil
+    }
+    session.h264?.stop()
 }
 
 @_cdecl("nty_last_width")  public func nty_last_width()  -> Int32 { NtyState.lastWidth }

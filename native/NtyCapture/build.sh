@@ -13,11 +13,13 @@ swiftc -emit-library -o "$OUT" \
     -target "$DEPLOY_TARGET" \
     -O \
     -framework ScreenCaptureKit \
+    -framework VideoToolbox \
     -framework CoreMedia \
     -framework CoreVideo \
+    -framework CoreImage \
     -framework CoreGraphics \
     -framework Foundation \
-    Sources/NtyCapture.swift
+    Sources/*.swift
 
 echo "✔ built $(pwd)/$OUT"
 echo "▶ exported C symbols:"

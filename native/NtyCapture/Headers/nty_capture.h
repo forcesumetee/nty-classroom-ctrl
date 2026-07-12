@@ -76,6 +76,21 @@ int nty_capture_start(int fps, nty_frame_cb cb, void *ctx);
 int nty_capture_start_jpeg(int fps, int quality, int maxW, int maxH,
                            nty_jpeg_cb cb, void *ctx);
 
+/*
+ * H.264 frame callback (27-B). `nal` = concatenated Annex-B NAL units for one frame
+ * (keyframe = [SPS][PPS][IDR], delta = [slice]); call-scoped. isKeyframe = 1 for IDR.
+ */
+typedef void (*nty_h264_cb)(void *ctx, const uint8_t *nal,
+                            int length, int width, int height, int isKeyframe);
+
+/*
+ * nty_capture_start_h264 — capture the main display at 1920x1080 and H.264-encode via
+ *   VideoToolbox (Baseline, CBR, IDR every fps*2), delivering Annex-B NAL bytes per
+ *   frame. `bitrateKbps` in kbit/s (e.g. 1500). Matches the shipped OpenH264 wire format.
+ *   Returns 0 on success, negative on error.
+ */
+int nty_capture_start_h264(int fps, int bitrateKbps, nty_h264_cb cb, void *ctx);
+
 void nty_capture_stop(void);
 
 /* Optional stats (last delivered frame dimensions + cumulative frame count). */
