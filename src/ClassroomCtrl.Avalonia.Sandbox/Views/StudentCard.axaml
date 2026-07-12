@@ -33,70 +33,69 @@
             Classes.selected="{Binding IsSelected}"
             PointerPressed="Card_Pressed">
         <!-- WPF ContextMenu → Avalonia ContextMenu (opens on right-click automatically).
-             The WPF version stashed the Window DataContext on Border.Tag and walked
-             PlacementTarget.Tag.XCommand; here every item routes to the host VM via
-             $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).XCommand
-             — the popup-scope routing verified in 25.4-C. CommandParameter={Binding}
-             is the card's item (the ContextMenu inherits the target's DataContext). -->
+             ROUTING (25.4-C finding): $parent ancestor-walk does NOT cross the
+             ContextMenu popup boundary (Command resolved null). Since the ContextMenu
+             inherits the target's DataContext (the item), route via the item's Host
+             back-reference: {Binding Host.XCommand}. CommandParameter={Binding} = item. -->
         <Border.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="View screen"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).ViewStudentScreenCommand}"
+                          Command="{Binding Host.ViewStudentScreenCommand}"
                           CommandParameter="{Binding}"/>
                 <Separator/>
                 <MenuItem Header="Lock screen"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).LockOneCommand}"
+                          Command="{Binding Host.LockOneCommand}"
                           CommandParameter="{Binding}"/>
                 <MenuItem Header="Unlock screen"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).UnlockOneCommand}"
+                          Command="{Binding Host.UnlockOneCommand}"
                           CommandParameter="{Binding}"/>
                 <Separator/>
                 <MenuItem Header="Apply policy"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).ApplyPolicyToStudentCommand}"
+                          Command="{Binding Host.ApplyPolicyToStudentCommand}"
                           CommandParameter="{Binding}"/>
                 <MenuItem Header="Revert policy"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).RevertPolicyForStudentCommand}"
+                          Command="{Binding Host.RevertPolicyForStudentCommand}"
                           CommandParameter="{Binding}"/>
                 <Separator/>
                 <MenuItem Header="Chat"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).OpenDMConversationCommand}"
+                          Command="{Binding Host.OpenDMConversationCommand}"
                           CommandParameter="{Binding}"/>
                 <Separator/>
                 <MenuItem Header="Set as host"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).SetAsHostCommand}"
+                          Command="{Binding Host.SetAsHostCommand}"
                           CommandParameter="{Binding}"/>
                 <MenuItem Header="Remove host"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).RemoveHostCommand}"
+                          Command="{Binding Host.RemoveHostCommand}"
                           CommandParameter="{Binding}"/>
                 <Separator/>
                 <MenuItem Header="Start demo"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).StartDemoCommand}"
+                          Command="{Binding Host.StartDemoCommand}"
                           CommandParameter="{Binding}"/>
                 <MenuItem Header="Stop demo"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).StopDemoCommand}"/>
+                          Command="{Binding Host.StopDemoCommand}"/>
                 <Separator/>
                 <!-- Static nested submenu (Phase 25.4 scope: 2 hardcoded rooms;
                      dynamic ItemsSource=Rooms deferred). Proves MenuFlyout nesting. -->
                 <MenuItem Header="Assign to room">
                     <MenuItem Header="Group A"
-                              Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).AssignToRoomACommand}"
+                              Command="{Binding Host.AssignToRoomACommand}"
                               CommandParameter="{Binding}"/>
                     <MenuItem Header="Group B"
-                              Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).AssignToRoomBCommand}"
+                              Command="{Binding Host.AssignToRoomBCommand}"
                               CommandParameter="{Binding}"/>
                 </MenuItem>
                 <MenuItem Header="Remove from room"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).RemoveFromRoomCommand}"
+                          Command="{Binding Host.RemoveFromRoomCommand}"
                           CommandParameter="{Binding}"/>
                 <Separator/>
                 <MenuItem Header="Logoff"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).LogoffOneCommand}"
+                          Command="{Binding Host.LogoffOneCommand}"
                           CommandParameter="{Binding}"/>
                 <MenuItem Header="Restart"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).RestartOneCommand}"
+                          Command="{Binding Host.RestartOneCommand}"
                           CommandParameter="{Binding}"/>
                 <MenuItem Header="Shutdown"
-                          Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).ShutdownOneCommand}"
+                          Command="{Binding Host.ShutdownOneCommand}"
                           CommandParameter="{Binding}"/>
             </ContextMenu>
         </Border.ContextMenu>
@@ -144,7 +143,7 @@
                         </Border>
                     </StackPanel>
 
-                    <!-- Bottom-right: REC button (host-routed via $parent[ItemsControl]). -->
+                    <!-- Bottom-right: REC button (host-routed via item.Host). -->
                     <Button HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="6"
                             Width="48" Height="22" FontSize="9" FontWeight="Bold" Padding="0"
                             Foreground="White" BorderBrush="White" BorderThickness="1" Cursor="Hand"
@@ -152,7 +151,7 @@
                             Background="{Binding RecButtonColorHex, Converter={StaticResource HexToBrush}}"
                             Opacity="{Binding RecOpacity}"
                             IsEnabled="{Binding CanRecord}"
-                            Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).ToggleStudentRecordingCommand}"
+                            Command="{Binding Host.ToggleStudentRecordingCommand}"
                             CommandParameter="{Binding}"/>
                 </Grid>
             </Border>
@@ -170,7 +169,7 @@
                     </StackPanel>
                     <Button Grid.Column="1" Width="28" Height="28" Background="Transparent"
                             BorderThickness="0" Cursor="Hand"
-                            Command="{Binding $parent[ItemsControl].((vm:StudentGridDemoViewModel)DataContext).ViewStudentScreenCommand}"
+                            Command="{Binding Host.ViewStudentScreenCommand}"
                             CommandParameter="{Binding}">
                         <TextBlock Text="👁" FontSize="14"
                                    Foreground="{StaticResource ConfTextSecondaryBrush}"

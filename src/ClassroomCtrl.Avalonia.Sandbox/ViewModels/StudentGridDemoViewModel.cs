@@ -20,32 +20,41 @@ public partial class StudentGridDemoViewModel : ObservableObject
 
     public StudentGridDemoViewModel()
     {
-        Students.Add(new StudentCardDemoViewModel
+        AddStudent(new StudentCardDemoViewModel
         {
             DisplayName = "Somchai", MachineName = "LAB-01",
             RoomBadgeVisible = true, RoomName = "Group A", RoomBadgeColorHex = "#4285F4",
             QualityDotColorHex = "#34A853", HostBadge = true, CanRecord = true,
             RecButtonText = "REC", RecButtonColorHex = "#EA4335", RecOpacity = 1.0,
         });
-        Students.Add(new StudentCardDemoViewModel
+        AddStudent(new StudentCardDemoViewModel
         {
             DisplayName = "Ploy", MachineName = "LAB-02",
             HandRaised = true, Talking = true, QualityDotColorHex = "#FBBC04",
             CanRecord = false, RecButtonText = "REC", RecButtonColorHex = "#5F6368", RecOpacity = 0.5,
         });
-        Students.Add(new StudentCardDemoViewModel
+        AddStudent(new StudentCardDemoViewModel
         {
             DisplayName = "Anong", MachineName = "LAB-03", IsSelected = true,
             PolicyBadgeVisible = true, QualityDotColorHex = "#EA4335",
             CanRecord = true, RecButtonText = "REC", RecButtonColorHex = "#EA4335", RecOpacity = 1.0,
         });
-        Students.Add(new StudentCardDemoViewModel
+        AddStudent(new StudentCardDemoViewModel
         {
             DisplayName = "Kittipong", MachineName = "LAB-04",
             RoomBadgeVisible = true, RoomName = "Group B", RoomBadgeColorHex = "#7C3AED",
             QualityDotColorHex = "#34A853", CanRecord = true, RecButtonText = "REC",
             RecButtonColorHex = "#EA4335", RecOpacity = 1.0,
         });
+    }
+
+    /// <summary>Wire each item's Host back-reference so its ContextMenu can route
+    /// commands via {Binding Host.XCommand} — required because $parent ancestor-walk
+    /// does NOT cross the ContextMenu popup boundary (verified in 25.4-C).</summary>
+    private void AddStudent(StudentCardDemoViewModel s)
+    {
+        s.Host = this;
+        Students.Add(s);
     }
 
     private void Act(string verb, StudentCardDemoViewModel? s)
@@ -76,6 +85,11 @@ public partial class StudentGridDemoViewModel : ObservableObject
 /// bools → IsVisible. Dynamic colors stay as hex strings + HexToBrushConverter.</summary>
 public partial class StudentCardDemoViewModel : ObservableObject
 {
+    /// <summary>Back-reference to the host VM. The ContextMenu inherits the item's
+    /// DataContext, so menu items bind {Binding Host.XCommand} to reach host commands
+    /// (popup-safe, unlike $parent which can't escape the popup — see 25.4-C).</summary>
+    public StudentGridDemoViewModel? Host { get; set; }
+
     public string DisplayName { get; init; } = "";
     public string MachineName { get; init; } = "";
     [ObservableProperty] private bool isSelected;
