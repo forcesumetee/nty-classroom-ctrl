@@ -66,6 +66,38 @@ zero shipped-repo change.
 | Sustained | ~6.5 Mbit/s | **~1.16 Mbit/s** |
 | Net | baseline | **~10× per-pixel** |
 
+## Milestone 19 — Phase 28: Camera streaming (AVCaptureSession) ⏳ Mac-side ✅ · LIVE pending
+Camera (webcam) peer-cam to the shipped Teacher's **Conference gallery**, over existing
+envelopes — no shipped-repo change, no wire change. **Session 6.**
+- **Investigation (28-A) reshaped the plan** (third wrong-direction catch): camera is NOT a
+  mirror of screen — **no** Teacher "view one student's cam" window/request exists; a student's
+  cam reaches the Teacher **only inside Conference Mode** (`ConferenceCameraFrame` 0x0681 →
+  gallery tile by `EndpointId`); camera is **JPEG-only** (no `Codec`/`IsKeyframe`) so the H.264
+  encoder does NOT apply; `CameraStart/Frame` 0x0460 is the wrong direction. Locked: Conference
+  path + JPEG + 320×240 @ 10 fps (matches the shipped Windows student).
+- **28-B** native `AVCaptureSession` (`Camera.swift`, +AVFoundation) → BGRA → shared ImageIO
+  encoder; own session state (`CamState`); camera permission (`NSCameraUsageDescription`, shown,
+  no relaunch, enumerate pre-grant). **28-C** `.NET CameraCaptureService` + Camera Capture tab
+  (device dropdown + live self-preview) — **interactively confirmed** (permission dialog with
+  custom text, immediate live preview).
+- **28-D/E** `CameraStreamer` (`ConferenceCameraStart/Frame/Stop`) + `ConnectionViewModel` wire-in
+  on the Conference lifecycle; self-tile "🔴 Camera live". Multi-trigger default = respect the
+  manual preview; 5 edge cases handled.
+- **28-F** `MockTeacher --cameratest`: **12/12** valid JPEG + correct `SourceEndpointId` + clean
+  start/stop. **Caught a real bug headless:** the cam ignores the `qvga320x240` preset (delivered
+  1080p, ~122 KB/frame) → fixed with **`encodeJpegFitted`** (encode-time aspect downscale) →
+  **320×180 @ ~7.4 KB/frame (~16× reduction, ~0.6 Mbit/s)**.
+- **LIVE (28-G):** Teacher → **Start Conference Mode** → Mac's gallery tile shows its camera.
+  See `docs/PHASE-28-FINDINGS.md`. Cheat sheet **§20** AVCaptureSession addendum. *(awaiting LIVE
+  confirmation.)*
+
+### Bandwidth: camera preset-bug vs fitted
+| | Preset-only (bug) | **encodeJpegFitted (fix)** |
+|---|---|---|
+| Delivered dims | 1920×1080 | **320×180** (16:9 fit, no distortion) |
+| Per-frame | ~122 KB | **~7.4 KB** |
+| Sustained @ 10 fps | ~9.6 Mbit/s | **~0.6 Mbit/s** (~16× reduction) |
+
 ## Commits (Sessions 3–5) — 16
 ```
 3a350c7  27-B-7: findings + cheat sheet §20 addendum (VideoToolbox) + screenshot
@@ -117,13 +149,12 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | 15 | 26.0 | LIVE wire interop (lock/policy/chat/hand) |
 | 16 | 27-A | ScreenCaptureKit capture (native foundation) |
 | 17 | 27-C | **LIVE** MJPEG screen streaming → Windows Teacher |
-| **18** | **27-B** | **LIVE** H.264 streaming (~10× bandwidth), **MJPEG + H.264** |
+| 18 | 27-B | **LIVE** H.264 streaming (~10× bandwidth), **MJPEG + H.264** |
+| **19** | **28** | Camera peer-cam → Conference gallery (JPEG 320×180, ~16× vs preset bug) — Mac-side ✅, **LIVE pending** |
 
 ## Next-session priority queue
-1. **Phase 27-D — Camera streaming (AVCaptureSession)** — next native API; reuses the §20
-   Swift-dylib template + the wire path already exists (`CameraStart/Frame/Stop` /
-   Conference cam). **Recommended next.**
-2. **Audio (AVFoundation)** — mic capture + the audio wire frames.
+1. **Audio (AVFoundation)** — mic capture + the Conference voice-audio wire frames; reuses the
+   §20 template (independent session, own C callback). **Recommended next.**
 3. **Screen-lock enforcement** (overlay + Accessibility) · **Input hooks** (CGEventTap).
 4. **System integration** — permissions bundle, auto-start, packaging/signing for distribution.
 5. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
@@ -133,8 +164,8 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 - **Cross-platform demo circle COMPLETE + optimized:** M15 wire compat · M17 MJPEG LIVE ·
   **M18 H.264 LIVE (~10× bandwidth)**. A macOS student streams its screen, production-grade,
   into the shipped Windows Teacher over unchanged wire.
-- **Native-APIs progression:** ✓ 27-A capture · ✓ 27-C JPEG · ✓ 27-B H.264 · ⏳ 27-D
-  camera/audio/lock/input · ⏳ 27-E system integration.
+- **Native-APIs progression:** ✓ 27-A capture · ✓ 27-C JPEG · ✓ 27-B H.264 · ✓ 28 camera
+  (AVCaptureSession, Mac-side) · ⏳ audio/lock/input · ⏳ system integration.
 - Native-interop template (**§20**, incl. VideoToolbox) proven three times; `MockTeacher`
   `--streamtest*` is the reuse + de-risk pattern for every remaining subsystem.
 - Both tracks green, synced with origin, independently documented.

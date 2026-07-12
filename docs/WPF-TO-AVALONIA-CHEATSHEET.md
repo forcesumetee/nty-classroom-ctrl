@@ -887,6 +887,34 @@ its byte-format exactly, in the native encoder, before it hits the wire:
   (7=SPS, 8=PPS, 5=IDR, 1=slice) + assert start codes + first-frame-keyframe. Strong interop
   proof; keep the real decode for the live test. (H.264 vs MJPEG here: ~10× per-pixel bandwidth.)
 
+**Native camera capture with AVCaptureSession (28-B) — deltas from ScreenCaptureKit.** Same
+interop template (Swift dylib + `@_cdecl` + GC-rooted `[UnmanagedCallersOnly]` JPEG callback),
+but the camera subsystem is a **separate, independent path**:
+- **Own session state.** The screen `NtyState` allows one capture at a time; give the camera its
+  own singleton (`CamState`) so screen + camera can run concurrently (a Conference sharing screen
+  while the cam is live). Link `-framework AVFoundation` (the `Sources/*.swift` glob picks up the
+  new file automatically).
+- **Permission is a *different* TCC bucket, and friendlier than Screen Recording:** the
+  `NSCameraUsageDescription` text **is shown** to the user (screen's is system-generated), the grant
+  is **effective immediately (no relaunch)**, and **device enumeration works pre-authorization**
+  (`AVCaptureDevice…localizedName` resolves before the grant — populate your dropdown early).
+  `AVCaptureDevice.authorizationStatus`/`requestAccess(for: .video)`; expose tri-state on the .NET side.
+- **Reuse the shared ImageIO encoder.** `AVCaptureVideoDataOutput` with
+  `kCVPixelFormatType_32BGRA` gives the same buffer shape as ScreenCaptureKit → the *same* JPEG
+  encode + shared `CIContext` (make the encode func `internal`, not file-private). No H.264 for
+  camera when the wire frame is JPEG-only (no codec field).
+- **AVCaptureSession presets are NOT honored uniformly — downscale at ENCODE time, not via preset.**
+  A device may ignore `.qvga320x240` and deliver 1080p (→ ~16× the intended bandwidth). Don't trust
+  the preset for sizing: scale every frame to the exact target with an aspect-preserving `CIImage`
+  transform (`encodeJpegFitted`), and treat the preset as only a cheap-to-scale hint (`.medium`).
+  Caught headless by the MockTeacher self-test before the live run (122 KB→7.4 KB/frame).
+- **fps throttle with monotonic PTS** (`CMSampleBufferGetPresentationTimeStamp`), not device frame-
+  duration config (which is format-fragile) and not wall-clock.
+- **Wire path = existing Conference peer-cam envelopes** (`ConferenceCameraStart/Frame/Stop`,
+  0x0680–2), matched Teacher-side to a gallery tile by `SourceEndpointId` (== `WireClient.EndpointId`
+  == `Envelope.SenderId`). Emit Start only AFTER a successful native start (no dangling signal on
+  failure); Stop is best-effort (disconnect → the Teacher's implicit PeerDisconnected stop covers it).
+
 ## 21. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
@@ -899,6 +927,7 @@ its byte-format exactly, in the native encoder, before it hits the wire:
 - Built-in converters (`ObjectConverters`, `StringConverters`, `BoolConverters`):
   https://docs.avaloniaui.net/docs/guides/data-binding/how-to-use-value-converters
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
+- AVFoundation capture (AVCaptureSession): https://developer.apple.com/documentation/avfoundation/avcapturesession
 
 ---
 _Living document (21 sections) — extend as later ports surface new patterns. Covered:
@@ -910,6 +939,8 @@ cast + popup-boundary routing (§13), icon strategy = none-needed (§14), multip
 dictionaries coexisting (§15), ThemeVariantScope for light views in a dark app (§16),
 ListView/GridView → templated ListBox + when-to-DataGrid (§17), background services +
 Dispatcher marshalling / CancellationTokenSource lifetime (§18), native macOS interop —
-Swift dylib + P/Invoke + streamed callback + TCC/bundle (§20). Still uncovered: complex
+Swift dylib + P/Invoke + streamed callback + TCC/bundle + VideoToolbox H.264 +
+AVCaptureSession camera (independent session, shared encoder, encode-time downscale) (§20).
+Still uncovered: complex
 ControlTemplates re-authoring (MaterialDesign control styles → Avalonia ControlThemes),
 DynamicResource theme-swap._
