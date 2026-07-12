@@ -135,5 +135,12 @@
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Grid>
         </TabItem>
+        <!-- Tab 11 (Phase 26.0): live wire connection to a real/mock Teacher. -->
+        <TabItem Header="Connection">
+            <Grid Background="#1F1F23">
+                <views:ConnectionView DataContext="{Binding Connection}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>

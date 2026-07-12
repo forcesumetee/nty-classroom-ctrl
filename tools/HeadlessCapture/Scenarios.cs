@@ -112,6 +112,17 @@ public static class Scenarios
             },
         },
 
+        ["connection"] = new()
+        {
+            Description = "Phase 26.0 Connection tab — wire-connect form (IP/port/name) + status "
+                        + "pill + live wire-traffic log. ClassroomLightTheme + design system — Sandbox tab 11.",
+            OriginalPhase = "26.0",
+            OriginalScreenshot = "docs/phase-26.0-connection.png",
+            Width = 820, Height = 720,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w => CaptureRunner.SelectTab(w, 11),
+        },
+
         ["classroom"] = new()
         {
             Description = "Classroom LIGHT theme tokens (36) + icon showcase — Sandbox tab 6. "
