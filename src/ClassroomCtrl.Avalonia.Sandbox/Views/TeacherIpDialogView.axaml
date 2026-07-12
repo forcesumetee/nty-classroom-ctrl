@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.TeacherIpDialogView"
+             x:DataType="vm:TeacherIpDemoViewModel">
+
+    <!-- PORTED from Student.Agent/Setup/TeacherIPDialog.xaml (Phase 25.7-C, first
+         Student-side view). Header/body/footer input dialog on ClassroomLightTheme
+         + the design system. Body = labelled TextBox + hint + an inline error
+         TextBlock (Accent.Danger) that appears only when validation fails
+         (StringConverters.IsNotNullOrEmpty → IsVisible — the reference pattern for
+         every future input dialog). ThemeVariantScope=Light for the Fluent TextBox. -->
+
+    <ThemeVariantScope RequestedThemeVariant="Light">
+        <Border Background="{StaticResource Surface.Background}">
+            <Grid RowDefinitions="Auto,*,Auto" Width="520">
+
+                <!-- Header -->
+                <Border Grid.Row="0" Padding="20,16"
+                        Background="{StaticResource Surface.Elevated}"
+                        BorderBrush="{StaticResource Border.Soft}" BorderThickness="0,0,0,1">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Left" Width="36" Height="36"
+                                Background="{StaticResource Accent.PrimarySubtle}"
+                                CornerRadius="8" Margin="0,0,12,0">
+                            <TextBlock Text="🔌" FontSize="18"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Classes="h2" Text="Classroom Setup"
+                                       Foreground="{StaticResource Text.Primary}"/>
+                            <TextBlock Text="Enter the teacher computer's IP address to connect."
+                                       FontSize="12" Foreground="{StaticResource Text.Secondary}"
+                                       Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Body -->
+                <StackPanel Grid.Row="1" Margin="20,16">
+                    <TextBlock Text="Teacher IP address"
+                               FontWeight="SemiBold" FontSize="12"
+                               Foreground="{StaticResource Text.Primary}" Margin="0,0,0,4"/>
+                    <TextBox Text="{Binding TeacherIp}" FontSize="14" Padding="10,8"
+                             Watermark="192.168.1.10"/>
+                    <TextBlock Text="Example: 192.168.1.10 — ask your teacher if unsure."
+                               FontSize="11" Foreground="{StaticResource Text.Muted}"
+                               Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding ErrorMessage}"
+                               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               Foreground="{StaticResource Accent.Danger}" FontSize="12"
+                               Margin="0,12,0,0" TextWrapping="Wrap"/>
+
+                    <TextBlock Text="{Binding LastAction, StringFormat='Last action: {0}'}"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="{StaticResource Accent.Primary}" Margin="0,16,0,0"/>
+                </StackPanel>
+
+                <!-- Footer -->
+                <Border Grid.Row="2" Padding="20,12"
+                        Background="{StaticResource Surface.Elevated}"
+                        BorderBrush="{StaticResource Border.Soft}" BorderThickness="0,1,0,0">
+                    <DockPanel LastChildFill="False">
+                        <Button DockPanel.Dock="Right" Theme="{StaticResource Button.Primary}"
+                                Content="Save" Command="{Binding SaveCommand}"/>
+                        <Button DockPanel.Dock="Right" Theme="{StaticResource Button.Ghost}"
+                                Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,8,0"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </ThemeVariantScope>
+</UserControl>

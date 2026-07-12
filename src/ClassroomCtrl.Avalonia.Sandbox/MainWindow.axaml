@@ -128,5 +128,12 @@
                                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Grid>
         </TabItem>
+        <!-- Tab 10 (Phase 25.7-C): ported TeacherIPDialog (first Student-side view). -->
+        <TabItem Header="Teacher IP">
+            <Grid Background="#1F1F23">
+                <views:TeacherIpDialogView DataContext="{Binding TeacherIp}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>

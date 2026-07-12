@@ -89,6 +89,29 @@ public static class Scenarios
             AfterShow = w => CaptureRunner.SelectTab(w, 9),
         },
 
+        ["teacherip"] = new()
+        {
+            Description = "Ported TeacherIPDialog (first Student-side view) — header/body/footer "
+                        + "input dialog, ClassroomLightTheme + design system, TextBox + inline "
+                        + "validation error (Accent.Danger). Captured MID-VALIDATION: an invalid "
+                        + "IP was entered + Save fired so the error TextBlock shows — Sandbox tab 10.",
+            OriginalPhase = "25.7",
+            OriginalScreenshot = "docs/phase-25.7-teacherip.png",
+            Width = 620, Height = 440,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w =>
+            {
+                CaptureRunner.SelectTab(w, 10);
+                // Drive the validation path so the inline error is visible in the baseline.
+                if (w.DataContext is MainWindowViewModel mvm)
+                {
+                    mvm.TeacherIp.TeacherIp = "192.168.1";      // invalid dotted-quad (only 3 octets)
+                    mvm.TeacherIp.SaveCommand.Execute(null);
+                }
+                Dispatcher.UIThread.RunJobs();
+            },
+        },
+
         ["classroom"] = new()
         {
             Description = "Classroom LIGHT theme tokens (36) + icon showcase — Sandbox tab 6. "

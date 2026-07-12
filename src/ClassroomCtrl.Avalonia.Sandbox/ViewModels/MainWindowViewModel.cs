@@ -34,6 +34,9 @@ public class MainWindowViewModel
     /// <summary>Phase 25.7-B — VM for the ported CameraSelectorDialog.</summary>
     public CameraSelectorDemoViewModel CameraSelector { get; } = new();
 
+    /// <summary>Phase 25.7-C — VM for the ported TeacherIPDialog (first Student-side view).</summary>
+    public TeacherIpDemoViewModel TeacherIp { get; } = new();
+
     /// <summary>Phase 25.1-D — tiles shown in the bottom-bar demo tab; a picked
     /// reaction floats over DemoTileA (fulfils the 24.3 float-on-tile design).</summary>
     public ConferenceTileViewModel DemoTileA { get; } =
