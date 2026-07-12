@@ -77,5 +77,31 @@
                 </DockPanel>
             </DockPanel>
         </TabItem>
+        <!-- Tab 5 (Phase 25.4): StudentCard grid + ContextMenu. The LastAction line
+             shows which menu/button command fired (routing evidence). -->
+        <TabItem Header="Student Grid">
+            <Grid Background="{StaticResource ConfWindowBgBrush}" RowDefinitions="Auto,*"
+                  DataContext="{Binding StudentGrid}">
+                <Border Grid.Row="0" Background="{StaticResource ConfTitleBarBgBrush}" Padding="12,8">
+                    <TextBlock Foreground="{StaticResource ConfTextPrimaryBrush}" FontSize="13">
+                        <Run Text="Right-click a card for its menu · Last action:"/>
+                        <Run Text="{Binding LastAction}" FontWeight="Bold"
+                             Foreground="{StaticResource ConfAccentBluePale}"/>
+                    </TextBlock>
+                </Border>
+                <ScrollViewer Grid.Row="1" Padding="12">
+                    <ItemsControl ItemsSource="{Binding Students}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:StudentCardDemoViewModel">
+                                <views:StudentCard Margin="6"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>
