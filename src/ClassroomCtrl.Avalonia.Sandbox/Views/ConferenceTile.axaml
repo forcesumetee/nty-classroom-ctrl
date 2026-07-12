@@ -149,13 +149,16 @@
                 </StackPanel>
             </Border>
 
-            <!-- Layer 5: reaction glyph.  Float-up animation DEFERRED (see
-                 code-behind TODO).  Rendered as a static centered emoji, shown
-                 only while CurrentReactionEmoji is non-empty. -->
+            <!-- Layer 5: reaction glyph.  Phase 25.1-C — float-up animation now
+                 IMPLEMENTED (Avalonia Animation, code-behind).  Resting Opacity=0;
+                 the animation drives Opacity 0→1→0 + a Y rise when
+                 CurrentReactionEmoji becomes non-empty.  IsVisible gates it into
+                 the tree only while a reaction is set. -->
             <TextBlock x:Name="ReactionFloater"
                        Text="{Binding CurrentReactionEmoji}"
                        IsVisible="{Binding CurrentReactionEmoji, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
                        FontSize="48"
+                       Opacity="0"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        IsHitTestVisible="False"/>
         </Grid>
