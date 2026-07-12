@@ -137,6 +137,36 @@ public static class Scenarios
             },
         },
 
+        ["streaming"] = new()
+        {
+            Description = "Phase 27-C Connection tab with the self-tile STREAMING to the teacher "
+                        + "(StudentStreamStart received → screen→JPEG→StudentStreamFrame). Seeded "
+                        + "connected + streaming state — Sandbox tab 11.",
+            OriginalPhase = "27-C",
+            OriginalScreenshot = "docs/phase-27-c-streaming.png",
+            Width = 820, Height = 900,
+            BuildWindow = () => new MainWindow(),
+            AfterShow = w =>
+            {
+                CaptureRunner.SelectTab(w, 11);
+                if (w.DataContext is not MainWindowViewModel mvm) return;
+                var c = mvm.Connection;
+                c.Status = WireStatus.Connected;
+                c.SelfTile.IsOnline = true;
+                c.AddLog(WireDirection.System, "TCP connected to 172.20.10.7:7777", 0);
+                c.AddLog(WireDirection.Tx, "Hello", 213);
+                c.Dispatch(Envelope.Create(MessageType.StudentStreamStart,
+                    MessagePackSerializer.Serialize(new StudentStreamStartRequest { Codec = VideoCodec.Mjpeg }), System.Guid.NewGuid()));
+                // Reflect a live-streaming self-tile (the real capture path is proven by
+                // MockTeacher --streamtest; here we show the UI state deterministically).
+                c.SelfTile.IsStreaming = true;
+                c.SelfTile.StreamedFrames = 42;
+                for (int i = 40; i <= 42; i++)
+                    c.AddLog(WireDirection.Tx, "StudentStreamFrame", 137000);
+                Dispatcher.UIThread.RunJobs();
+            },
+        },
+
         ["connection"] = new()
         {
             Description = "Phase 26.0 Connection tab — wire-connect form + status pill + "
