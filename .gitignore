@@ -16,3 +16,9 @@ obj/
 ## NuGet
 *.nupkg
 packages/
+
+## Phase 27-A — native build artifacts (rebuild via native/NtyCapture/build.sh)
+native/NtyCapture/libNtyCapture.dylib
+*.dylib
+## Packaged app bundle (rebuild via scripts/package-app.sh)
+/ClassroomCtrl.Sandbox.app/

@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.ScreenCaptureView"
+             x:DataType="vm:ScreenCaptureViewModel">
+
+    <!-- Phase 27-A-2 — Screen Recording permission flow (ScreenCaptureKit via the
+         native libNtyCapture.dylib). Capture image + stats land in 27-A-3. Reuses
+         ClassroomLightTheme + design system + ThemeVariantScope. -->
+
+    <UserControl.Styles>
+        <Style Selector="Border.pill">
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Background" Value="{DynamicResource Border.Default}"/>
+        </Style>
+        <Style Selector="Border.pill > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}"/>
+        </Style>
+        <Style Selector="Border.pill.granted"><Setter Property="Background" Value="#D1FAE5"/></Style>
+        <Style Selector="Border.pill.granted > TextBlock"><Setter Property="Foreground" Value="#065F46"/></Style>
+        <Style Selector="Border.pill.denied"><Setter Property="Background" Value="#FEE2E2"/></Style>
+        <Style Selector="Border.pill.denied > TextBlock"><Setter Property="Foreground" Value="#991B1B"/></Style>
+    </UserControl.Styles>
+
+    <ThemeVariantScope RequestedThemeVariant="Light">
+        <Border Background="{StaticResource Surface.Background}">
+            <Grid RowDefinitions="Auto,*" Width="720">
+
+                <!-- Header -->
+                <Border Grid.Row="0" Padding="20,16"
+                        Background="{StaticResource Surface.Elevated}"
+                        BorderBrush="{StaticResource Border.Soft}" BorderThickness="0,0,0,1">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Left" Width="36" Height="36"
+                                Background="{StaticResource Accent.PrimarySubtle}"
+                                CornerRadius="8" Margin="0,0,12,0">
+                            <TextBlock Text="🖥" FontSize="18"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Center"
+                                Classes="pill"
+                                Classes.granted="{Binding IsGranted}"
+                                Classes.denied="{Binding !IsGranted}">
+                            <TextBlock Text="{Binding PermissionStatus}" FontSize="12" FontWeight="SemiBold"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Classes="h2" Text="Screen Capture"
+                                       Foreground="{StaticResource Text.Primary}"/>
+                            <TextBlock Text="ScreenCaptureKit via the native helper — Phase 27-A."
+                                       FontSize="12" Foreground="{StaticResource Text.Secondary}"
+                                       Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Body: permission card -->
+                <StackPanel Grid.Row="1" Margin="24,20">
+                    <Border Background="{StaticResource Surface.Card}"
+                            BorderBrush="{StaticResource Border.Default}" BorderThickness="1"
+                            CornerRadius="8" Padding="16">
+                        <StackPanel>
+                            <TextBlock Text="Screen Recording permission" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Text.Primary}"/>
+                            <TextBlock Text="{Binding Hint}" FontSize="12"
+                                       Foreground="{StaticResource Text.Secondary}"
+                                       Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                                <Button Theme="{StaticResource Button.Secondary}" Content="Check"
+                                        Command="{Binding CheckPermissionCommand}" Margin="0,0,8,0"/>
+                                <Button Theme="{StaticResource Button.Primary}" Content="Request permission"
+                                        Command="{Binding RequestPermissionCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Capture preview + fps/resolution stats arrive in Phase 27-A-3."
+                               FontSize="11" Foreground="{StaticResource Text.Muted}"
+                               Margin="2,14,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </ThemeVariantScope>
+</UserControl>

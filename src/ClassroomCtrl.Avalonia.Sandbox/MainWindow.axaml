@@ -142,5 +142,12 @@
                                       HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
             </Grid>
         </TabItem>
+        <!-- Tab 12 (Phase 27-A): ScreenCaptureKit capture (permission + preview). -->
+        <TabItem Header="Screen Capture">
+            <Grid Background="#1F1F23">
+                <views:ScreenCaptureView DataContext="{Binding ScreenCapture}"
+                                         HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>

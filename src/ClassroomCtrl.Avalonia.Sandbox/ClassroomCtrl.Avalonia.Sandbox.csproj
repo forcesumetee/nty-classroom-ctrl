@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Phase 27-A — LibraryImport source-generated P/Invoke requires unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,5 +22,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
+  </ItemGroup>
+
+  <!-- Phase 27-A — copy the native ScreenCaptureKit helper next to the managed
+       output so LibraryImport("NtyCapture") resolves it at runtime. Built by
+       native/NtyCapture/build.sh; guarded by Exists so a Windows/CI build (where
+       the dylib is absent) doesn't fail. -->
+  <ItemGroup Condition="Exists('..\..\native\NtyCapture\libNtyCapture.dylib')">
+    <None Include="..\..\native\NtyCapture\libNtyCapture.dylib">
+      <Link>libNtyCapture.dylib</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

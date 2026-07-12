@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>ClassroomCtrl Sandbox</string>
+    <key>CFBundleDisplayName</key>
+    <string>ClassroomCtrl Sandbox</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.nty.classroom.sandbox</string>
+    <key>CFBundleVersion</key>
+    <string>27.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>27.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <!-- Must match the .NET apphost name (assembly name). -->
+    <key>CFBundleExecutable</key>
+    <string>ClassroomCtrl.Avalonia.Sandbox</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.3</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- Screen Recording (unlike camera/mic) does not actually consume a usage-
+         description string — the TCC prompt text is system-generated. Included for
+         intent/documentation; harmless. See PHASE-27-A-FINDINGS. -->
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>ClassroomCtrl needs to capture your screen to share it with the teacher.</string>
+</dict>
+</plist>
