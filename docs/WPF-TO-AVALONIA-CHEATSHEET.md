@@ -1,0 +1,327 @@
+# WPF → Avalonia Cheat Sheet
+
+Practical reference for porting NTY ClassroomCtrl views from WPF (`net10.0-windows`)
+to Avalonia 12.1 (`net10.0`). **Audience:** you know WPF; you're learning Avalonia.
+
+Every example below is taken from the real Phase 24.3 `ConferenceTile` port, not
+theory. Where a claim wasn't directly exercised in that port it's marked
+_(not yet verified in this codebase)_.
+
+> **Golden rules (read first)**
+> 1. There are **no triggers** in Avalonia. `DataTrigger`/`Trigger` → **style
+>    classes + selectors** (§3).
+> 2. There is **no `Visibility`**. It's a `bool IsVisible` (§2, §4).
+> 3. **A locally-set property outranks a style setter** (same as WPF). Any
+>    property a class toggles must have its base value **in a style**, not inline (§6).
+> 4. Turn on **`x:DataType` compiled bindings** — they catch binding typos at
+>    build time (§7).
+
+---
+
+## 1. Imports / namespaces
+
+| WPF | Avalonia |
+|---|---|
+| `xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"` | `xmlns="https://github.com/avaloniaui"` |
+| `xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"` | **same** |
+| `xmlns:local="clr-namespace:Foo"` | `xmlns:local="using:Foo"` |
+| `xmlns:sys="clr-namespace:System;assembly=mscorlib"` | not needed — use `x:` intrinsics (`x:Double`, `x:Int32`, `x:Boolean`) |
+| `.xaml` file extension | `.axaml` (convention; the SDK globs `**/*.axaml`) |
+| `mc:Ignorable="d"` + `d:DesignWidth` | supported, optional (kept by the template) |
+
+**Design-time namespaces** (`d:`, `mc:`) work in Avalonia but aren't required.
+
+---
+
+## 2. Property / element mappings
+
+| WPF | Avalonia | Note |
+|---|---|---|
+| `Visibility="Visible/Collapsed"` | `IsVisible="True/False"` | **bool**, not a 3-state enum. No `Hidden` equivalent. |
+| `Visibility="{Binding B, Converter={StaticResource BoolToVis}}"` | `IsVisible="{Binding B}"` | converter **deleted** |
+| `<sys:Double x:Key="k">36</sys:Double>` | `<x:Double x:Key="k">36</x:Double>` | scalar resources |
+| `System.Windows.Media.Imaging.BitmapSource` | `Avalonia.Media.Imaging.Bitmap` | image frames; `Image.Source` binds it directly |
+| `MergedDictionaries` + `Source="Theme.xaml"` | `<ResourceInclude Source="avares://Asm/Path.axaml"/>` | `avares://` asset URI |
+| `SnapsToDevicePixels="True"` | `UseLayoutRounding="True"` | _(not yet verified in this codebase)_ |
+| `Panel.ZIndex="100"` | `ZIndex="100"` | attached → direct |
+| `TextTrimming="CharacterEllipsis"` | **same** | |
+| `<Run Text="{Binding X}"/>` inlines | **same** — `<Run>` inlines + bindings work | |
+| `Foreground/Background` = `SolidColorBrush` | **same** | brushes port 1:1 incl. `Opacity` |
+| `CornerRadius`, `Thickness`, `FontFamily` resources | **same** element+content syntax | |
+
+### `x:Name`
+Same attribute. In Avalonia, `x:Name`d elements are also referenceable in bindings
+via the `#Name` selector: `{Binding #Root.SelfSuffix}` (element-name binding). No
+`ElementName=` needed — use `#Name`.
+
+### Merging a resource dictionary (real example)
+```xml
+<!-- App.axaml -->
+<Application.Resources>
+  <ResourceDictionary>
+    <ResourceDictionary.MergedDictionaries>
+      <ResourceInclude Source="avares://ClassroomCtrl.Avalonia.Sandbox/Themes/ConferenceDarkTheme.axaml"/>
+    </ResourceDictionary.MergedDictionaries>
+  </ResourceDictionary>
+</Application.Resources>
+```
+
+---
+
+## 3. Trigger translation — the big one
+
+Avalonia has **no** `Style.Triggers`, `DataTrigger`, `Trigger`, or `EventTrigger`.
+Replace them with **conditional style classes** (`Classes.foo="{Binding Bar}"`) and
+**CSS-like selectors**.
+
+### 3a. Simple boolean state
+**WPF:**
+```xml
+<Style TargetType="Border">
+  <Setter Property="BorderThickness" Value="0"/>
+  <Style.Triggers>
+    <DataTrigger Binding="{Binding IsSpeaking}" Value="True">
+      <Setter Property="BorderBrush" Value="{StaticResource Ring}"/>
+      <Setter Property="BorderThickness" Value="3"/>
+    </DataTrigger>
+  </Style.Triggers>
+</Style>
+```
+**Avalonia:**
+```xml
+<!-- on the element: bind a class to the bool -->
+<Border x:Name="OuterBorder" Classes.speaking="{Binding IsSpeaking}"/>
+
+<!-- in <UserControl.Styles>: base + conditional selectors -->
+<Style Selector="Border#OuterBorder">                 <!-- BASE (see Golden Rule 3) -->
+  <Setter Property="BorderThickness" Value="0"/>
+</Style>
+<Style Selector="Border#OuterBorder.speaking">        <!-- when class present -->
+  <Setter Property="BorderBrush" Value="{StaticResource Ring}"/>
+  <Setter Property="BorderThickness" Value="3"/>
+</Style>
+```
+
+### 3b. "Not null" / string state (no bool in the VM)
+Use a converter to feed the class:
+```xml
+<Border Classes.live="{Binding JpegFrame, Converter={x:Static conv:ObjectConverters.IsNotNull}}"/>
+<TextBlock IsVisible="{Binding Emoji, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+```
+(`xmlns:conv="using:Avalonia.Data.Converters"`)
+
+### 3c. Shared style across many elements + per-element state
+```xml
+<!-- style once; toggle .on per element -->
+<Style Selector="TextBlock.statusIcon">      <Setter Property="Foreground" Value="{StaticResource Red}"/></Style>
+<Style Selector="TextBlock.statusIcon.on">   <Setter Property="Foreground" Value="{StaticResource White}"/></Style>
+
+<TextBlock Text="🎙" Classes="statusIcon" Classes.on="{Binding IsMicLive}"/>
+<TextBlock Text="📷" Classes="statusIcon" Classes.on="{Binding IsCamLive}"/>
+```
+
+### 3d. Multi-condition
+Chain classes in the selector — `Selector="Border.a.b"` matches when **both**
+classes are present (logical AND). For enum state, bind one class per enum value
+(`Classes.pinned`, `Classes.speaking`) or use a converter that returns a class
+name string _(not yet needed in this codebase)_.
+
+### Selector quick reference
+| Selector | Matches |
+|---|---|
+| `Border` | all Borders |
+| `Border#OuterBorder` | the Border named `OuterBorder` |
+| `Border.speaking` | Borders with class `speaking` |
+| `Border#OuterBorder.speaking` | that named Border, when `speaking` is set |
+| `TextBlock.a.b` | TextBlocks with **both** `a` and `b` |
+| `Border > TextBlock` | direct child; `Border TextBlock` = any descendant |
+| `Button:pointerover` | pseudo-class (WPF `IsMouseOver`) |
+
+---
+
+## 4. Converter translation
+
+| WPF converter | Avalonia |
+|---|---|
+| `BooleanToVisibilityConverter` | **gone** — bind `IsVisible` to the bool directly |
+| null→Visibility | `{x:Static conv:ObjectConverters.IsNotNull}` / `IsNull` |
+| null→Visibility with `Inverted` param | just use the opposite: `IsNull` vs `IsNotNull` |
+| empty-string check | `{x:Static conv:StringConverters.IsNotNullOrEmpty}` |
+| **custom business logic** (e.g. `HexToBrush`) | **keep it** — implement `Avalonia.Data.Converters.IValueConverter` (same interface shape as WPF's `System.Windows.Data.IValueConverter`, minus the WPF namespaces) |
+
+Built-ins live in `Avalonia.Data.Converters`: `ObjectConverters.IsNull/IsNotNull`,
+`StringConverters.IsNotNullOrEmpty`, `BoolConverters.And/Or`. Reference via
+`{x:Static conv:...}`.
+
+---
+
+## 5. DependencyProperty → StyledProperty
+
+**WPF:**
+```csharp
+public static readonly DependencyProperty SelfSuffixProperty =
+    DependencyProperty.Register(nameof(SelfSuffix), typeof(string),
+        typeof(ConferenceTile), new PropertyMetadata(""));
+public string SelfSuffix
+{
+    get => (string)GetValue(SelfSuffixProperty);
+    set => SetValue(SelfSuffixProperty, value);
+}
+```
+**Avalonia:**
+```csharp
+public static readonly StyledProperty<string> SelfSuffixProperty =
+    AvaloniaProperty.Register<ConferenceTile, string>(nameof(SelfSuffix), "");
+public string SelfSuffix
+{
+    get => GetValue(SelfSuffixProperty);   // generic — no cast
+    set => SetValue(SelfSuffixProperty, value);
+}
+```
+
+| Concern | WPF | Avalonia |
+|---|---|---|
+| Registration | `DependencyProperty.Register` | `AvaloniaProperty.Register<TOwner, T>` (generic) |
+| Default value | `new PropertyMetadata(default)` | last arg of `Register<>()` |
+| Get/Set | `(T)GetValue(...)` | `GetValue(...)` (typed, no cast) |
+| Change callback | `PropertyMetadata(cb)` | override `OnPropertyChanged(AvaloniaPropertyChangedEventArgs)`, or `Property.Changed.AddClassHandler<T>(...)` _(not yet verified here)_ |
+| Read-only DP | `RegisterReadOnly` | `DirectProperty` for VM-style props; `StyledProperty` for style-able ones _(not yet verified here)_ |
+| Attached | `RegisterAttached` | `AvaloniaProperty.RegisterAttached<...>` _(not yet verified here)_ |
+
+**Rule of thumb:** control property that participates in styling/binding →
+`StyledProperty`. Plain data-only property → prefer a VM `[ObservableProperty]`
+(CommunityToolkit.Mvvm works unchanged in Avalonia).
+
+---
+
+## 6. Style ordering & precedence (the trap that cost us)
+
+**Avalonia ranks a locally-set property value ABOVE a style setter — exactly like
+WPF.** So this silently breaks:
+```xml
+<!-- WRONG: local BorderThickness/Brush block the .speaking setters forever -->
+<Border x:Name="OuterBorder" BorderThickness="0" BorderBrush="Transparent"
+        Classes.speaking="{Binding IsSpeaking}"/>
+```
+The ring never appears because the inline `BorderThickness="0"` outranks
+`Border#OuterBorder.speaking`'s `BorderThickness="3"`.
+
+**Fix — base values in a style, never inline:**
+```xml
+<Style Selector="Border#OuterBorder">
+  <Setter Property="BorderThickness" Value="0"/>
+  <Setter Property="BorderBrush" Value="Transparent"/>
+  <Setter Property="Background" Value="{StaticResource Tile}"/>
+</Style>
+<!-- element keeps only structural attrs + class bindings -->
+<Border x:Name="OuterBorder" CornerRadius="10" ClipToBounds="True"
+        Classes.speaking="{Binding IsSpeaking}"/>
+```
+
+Other precedence notes:
+- Among **matching styles**, the **later** one wins. Order `.pinned` after
+  `.speaking` if pinned should win when both are active (mirrors WPF "last
+  DataTrigger wins").
+- Style **specificity** does not override source order the way CSS does — think
+  "last matching setter wins," not "most specific wins."
+
+---
+
+## 7. Compiled bindings (`x:DataType`) — adopt from day one
+
+Not a WPF concept. Declare the binding's data type; the compiler validates every
+`{Binding}` path against it.
+
+```xml
+<UserControl xmlns:vm="using:...ViewModels"
+             x:DataType="vm:ConferenceTileViewModel">
+  ...
+  <TextBlock Text="{Binding DisplayName}"/>   <!-- validated at build -->
+</UserControl>
+
+<DataTemplate DataType="vm:ConferenceTileViewModel"> ... </DataTemplate>
+```
+- Typo in a binding path → **build error**, not a silent runtime blank.
+- For control-owned (non-VM) properties, use element-name binding so the compiler
+  resolves against the element, not the DataContext: `{Binding #Root.SelfSuffix}`.
+- To opt a single binding out of compilation: `{Binding X, Mode=…}` still works;
+  reflection fallback via `{ReflectionBinding X}` _(not yet needed here)_.
+
+---
+
+## 8. Findings from the ConferenceTile port
+
+**What surprised us**
+- Converters largely **evaporate** — `Visibility` becoming a plain `bool IsVisible`
+  removed all three of the tile's converters.
+- Local-value-beats-style precedence is identical to WPF and is **invisible until
+  you look at the rendered pixels** (compiles fine, binds fine, just doesn't apply).
+
+**Thought it'd be hard, wasn't**
+- The VM: **zero** logic changes — CommunityToolkit.Mvvm source generators run the
+  same. Only one *type* swap (`BitmapSource`→`Bitmap`).
+- `<Run>` inline bindings, `x:Double`/`CornerRadius`/`Thickness` resources, and the
+  merged dictionary all compiled first try.
+
+**Thought it'd be easy, wasn't**
+- `DataTrigger`→classes is a genuine mental-model shift (declarative "when X set Y"
+  → "toggle a class, style the class"), not a syntax swap. Budget thinking time.
+- Screenshotting from a headless shell needs off-screen rendering (see §9), not
+  `screencapture`.
+
+---
+
+## 9. Commands & verification
+
+```bash
+# Build a single project (macOS, Apple Silicon)
+dotnet build src/ClassroomCtrl.Avalonia.Sandbox/ClassroomCtrl.Avalonia.Sandbox.csproj
+
+# Run the app (opens a window in your desktop session)
+dotnet run --project src/ClassroomCtrl.Avalonia.Sandbox
+
+# Build the whole solution
+dotnet build ClassroomCtrl.Avalonia.slnx
+```
+
+**XAML preview:** the Avalonia previewer runs inside the IDE extensions (VS Code
+"Avalonia for VSCode", Rider Avalonia plugin) — it renders the `.axaml` live. There
+is no standalone CLI previewer.
+
+**Headless screenshot (no display / permission needed)** — the technique we used
+to capture `docs/phase-24.3-conferencetile.png` when `screencapture` failed:
+```csharp
+AppBuilder.Configure<App>()
+    .UseSkia()
+    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+    .SetupWithoutStarting();
+var win = new MainWindow(); win.Show();
+Dispatcher.UIThread.RunJobs();
+win.CaptureRenderedFrame()!.Save("out.png");   // needs Avalonia.Headless + Avalonia.Skia
+```
+Keep this as a committed tool for per-view visual checks.
+
+**Debug tips**
+- Binding not showing? First check the **build log** — with `x:DataType` a bad path
+  is a compile error. Without it, bindings fail silently.
+- Trigger/class not applying? Suspect **local-value precedence** (§6) before
+  anything else.
+- Set `Background` on a `Panel`/`Border` to make invisible layout regions visible
+  while debugging.
+- `Classes` are case-sensitive and must match the selector exactly.
+
+---
+
+## 10. Reference links
+
+- Avalonia docs: https://docs.avaloniaui.net
+- WPF → Avalonia migration: https://docs.avaloniaui.net/docs/get-started/wpf/
+- Styles & selectors: https://docs.avaloniaui.net/docs/styling/
+- Data binding / compiled bindings: https://docs.avaloniaui.net/docs/basics/data/data-binding/
+- Built-in converters (`ObjectConverters`, `StringConverters`, `BoolConverters`):
+  https://docs.avaloniaui.net/docs/guides/data-binding/how-to-use-value-converters
+- Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
+
+---
+_Living document — extend as later ports surface new patterns (animations,
+ControlTemplates, ContextMenus, DynamicResource theming are not yet covered)._
