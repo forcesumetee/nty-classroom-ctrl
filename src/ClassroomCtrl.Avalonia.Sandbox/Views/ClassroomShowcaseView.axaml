@@ -111,6 +111,23 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Design system (Phase 25.6-B): Button ControlThemes + Text.h* classes. -->
+                <TextBlock Classes="h2" Text="Design system — Button variants + Text hierarchy" Foreground="{StaticResource Text.Primary}" Margin="0,12,0,4"/>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Theme="{StaticResource Button.Primary}" Content="Primary"/>
+                    <Button Theme="{StaticResource Button.Secondary}" Content="Secondary"/>
+                    <Button Theme="{StaticResource Button.Danger}" Content="Danger"/>
+                    <Button Theme="{StaticResource Button.Success}" Content="Success"/>
+                    <Button Theme="{StaticResource Button.Ghost}" Content="Ghost"/>
+                    <Button Theme="{StaticResource Button.Icon}" Content="⚙"/>
+                    <Button Theme="{StaticResource Button.Primary}" Content="Disabled" IsEnabled="False"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <TextBlock Classes="h1" Text="H1 heading" Foreground="{StaticResource Text.Primary}"/>
+                    <TextBlock Classes="h2" Text="H2 heading" Foreground="{StaticResource Text.Primary}" VerticalAlignment="Bottom"/>
+                    <TextBlock Classes="h3" Text="H3 heading" Foreground="{StaticResource Text.Primary}" VerticalAlignment="Bottom"/>
+                </StackPanel>
+
                 <!-- Icon showcase — proves emoji + Unicode symbols render natively on macOS. -->
                 <TextBlock Classes="h" Text="Icons — emoji + Unicode (NO icon font/library; native on macOS)"/>
                 <WrapPanel>

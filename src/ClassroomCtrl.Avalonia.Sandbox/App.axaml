@@ -17,5 +17,7 @@
 
     <Application.Styles>
         <FluentTheme />
+        <!-- Classroom design system: Button.* ControlThemes + Text.h* classes (Phase 25.6-B). -->
+        <StyleInclude Source="avares://ClassroomCtrl.Avalonia.Sandbox/Themes/ClassroomControls.axaml"/>
     </Application.Styles>
 </Application>

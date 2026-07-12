@@ -1,0 +1,112 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+    Classroom design system (Phase 25.6-B) — PORT of Shared/Themes/Buttons.xaml +
+    Typography.xaml (Text.H*). This is the shared dialog design language every Teacher
+    dialog uses (header/body/footer + Button.* + Text.H*).
+
+    WPF → Avalonia:
+      • Keyed <Style TargetType="Button"> (applied via Style=) → <ControlTheme> (applied
+        via Theme="{StaticResource Button.X}"). §3e pattern (like ConfToolbarButtonStyle).
+      • IsMouseOver/IsPressed/IsEnabled triggers → :pointerover / :pressed / :disabled
+        pseudo-class selectors (^ = the templated control; /template/ = into the template).
+      • Keyed <Style TargetType="TextBlock"> (Text.H*) can't be applied via Style= in
+        Avalonia → style CLASSES (Selector "TextBlock.h1", applied via Classes="h1").
+      • Theme brushes referenced via DynamicResource so they resolve from the merged
+        ClassroomLightTheme in App.Resources.
+    Bundled as <Styles> (ControlThemes in Styles.Resources + the text-class Styles);
+    included in App.axaml via StyleInclude.
+    -->
+    <Styles.Resources>
+
+        <!-- Shared base: rounded template + common metrics + disabled dim. -->
+        <ControlTheme x:Key="ClassroomButtonBase" TargetType="Button">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Padding" Value="14,9"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border x:Name="PART_Bg" CornerRadius="8"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.5"/></Style>
+        </ControlTheme>
+
+        <!-- Primary CTA — filled accent. -->
+        <ControlTheme x:Key="Button.Primary" TargetType="Button" BasedOn="{StaticResource ClassroomButtonBase}">
+            <Setter Property="Background" Value="{DynamicResource Accent.Primary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text.OnAccent}"/>
+            <Style Selector="^:pointerover /template/ Border#PART_Bg"><Setter Property="Background" Value="{DynamicResource Accent.PrimaryHover}"/></Style>
+            <Style Selector="^:pressed /template/ Border#PART_Bg"><Setter Property="Background" Value="{DynamicResource Accent.PrimaryPressed}"/></Style>
+        </ControlTheme>
+
+        <!-- Secondary — card surface + border. -->
+        <ControlTheme x:Key="Button.Secondary" TargetType="Button" BasedOn="{StaticResource ClassroomButtonBase}">
+            <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border.Default}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Style Selector="^:pointerover /template/ Border#PART_Bg"><Setter Property="Background" Value="{DynamicResource Surface.Hover}"/></Style>
+        </ControlTheme>
+
+        <!-- Danger — outlined, red text; tinted fill on hover. -->
+        <ControlTheme x:Key="Button.Danger" TargetType="Button" BasedOn="{StaticResource ClassroomButtonBase}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Accent.Danger}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border.Default}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Style Selector="^:pointerover /template/ Border#PART_Bg">
+                <Setter Property="Background" Value="#1AEF4444"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Accent.Danger}"/>
+            </Style>
+        </ControlTheme>
+
+        <!-- Success — filled green. -->
+        <ControlTheme x:Key="Button.Success" TargetType="Button" BasedOn="{StaticResource ClassroomButtonBase}">
+            <Setter Property="Background" Value="{DynamicResource Accent.Success}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text.OnAccent}"/>
+            <Style Selector="^:pointerover /template/ Border#PART_Bg"><Setter Property="Background" Value="{DynamicResource Accent.SuccessHover}"/></Style>
+        </ControlTheme>
+
+        <!-- Ghost — transparent; hover tint + primary text. -->
+        <ControlTheme x:Key="Button.Ghost" TargetType="Button" BasedOn="{StaticResource ClassroomButtonBase}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/>
+            <Style Selector="^:pointerover /template/ Border#PART_Bg"><Setter Property="Background" Value="{DynamicResource Surface.Hover}"/></Style>
+        </ControlTheme>
+
+        <!-- Icon — 36×36 square, transparent; hover tint + primary text. -->
+        <ControlTheme x:Key="Button.Icon" TargetType="Button" BasedOn="{StaticResource ClassroomButtonBase}">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}"/>
+            <Style Selector="^:pointerover /template/ Border#PART_Bg"><Setter Property="Background" Value="{DynamicResource Surface.Hover}"/></Style>
+            <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{DynamicResource Text.Primary}"/></Style>
+        </ControlTheme>
+
+    </Styles.Resources>
+
+    <!-- Text hierarchy (WPF Text.H1/H2/H3 keyed styles → style classes). Apply via Classes="h1". -->
+    <Style Selector="TextBlock.h1"><Setter Property="FontSize" Value="22"/><Setter Property="FontWeight" Value="Bold"/></Style>
+    <Style Selector="TextBlock.h2"><Setter Property="FontSize" Value="16"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+    <Style Selector="TextBlock.h3"><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+</Styles>
