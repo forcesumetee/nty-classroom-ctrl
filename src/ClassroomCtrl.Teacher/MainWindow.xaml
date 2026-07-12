@@ -835,6 +835,14 @@
                         </TextBlock>
                     </StackPanel>
 
+                    <!-- v1.2.1 — live bulk-action progress ("Sending i of N…"),
+                         visible only while a bulk command is running. -->
+                    <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
+                               Margin="12,0,0,0" FontSize="13"
+                               Foreground="{DynamicResource Text.Secondary}"
+                               Text="{Binding BulkStatus}"
+                               Visibility="{Binding BulkStatusVisibility}"/>
+
                     <!-- Clear button (right) -->
                     <Button DockPanel.Dock="Right" Width="28" Height="28"
                             Background="Transparent" BorderThickness="0"

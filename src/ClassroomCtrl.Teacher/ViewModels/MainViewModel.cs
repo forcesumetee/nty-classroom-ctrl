@@ -140,6 +140,20 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     /// flips today, including the 14-B StoppedDueToError handler).</summary>
     [ObservableProperty] private bool isBroadcastingCamera;
 
+    /// <summary>v1.2.1 — live "i of N" progress shown while a bulk action runs
+    /// (empty when idle). Drives a small progress chip; cleared in the finally of
+    /// each bulk command.  Note: this reflects sends ISSUED, not per-student
+    /// delivery ACKs (the broadcast+IsForMe design gives no receipt) — the
+    /// completion message is worded "sent to N" accordingly.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BulkStatusVisibility))]
+    private string bulkStatus = "";
+
+    public System.Windows.Visibility BulkStatusVisibility =>
+        string.IsNullOrEmpty(BulkStatus)
+            ? System.Windows.Visibility.Collapsed
+            : System.Windows.Visibility.Visible;
+
     /// <summary>Phase 19 (v1.1) — Conference sidebar chat draft attachment.
     /// AttachFileCommand fires the OpenFileDialog; once a file is selected
     /// (and passes the 10-MB + extension-blocklist gates) the bytes are
@@ -3767,13 +3781,18 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         if (targets.Count == 0) return;
         try
         {
+            int i = 0;
             foreach (var s in targets)
             {
-                await App.Server.LockOneAsync(s.EndpointId, true, System.Threading.CancellationToken.None);
+                BulkStatus = Loc.Format("Status_BulkProgressFmt", ++i, targets.Count);
+                // v1.2.1 — reliable path: FullMode.Wait back-pressures the burst so
+                // a big selection can't overflow the lossy cap-16 DropOldest queue.
+                await App.Server.LockOneAsync(s.EndpointId, true, System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkLockedFmt", targets.Count));
         }
         catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+        finally { BulkStatus = ""; }
     }
 
     [RelayCommand]
@@ -3784,13 +3803,16 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         if (targets.Count == 0) return;
         try
         {
+            int i = 0;
             foreach (var s in targets)
             {
-                await App.Server.LockOneAsync(s.EndpointId, false, System.Threading.CancellationToken.None);
+                BulkStatus = Loc.Format("Status_BulkProgressFmt", ++i, targets.Count);
+                await App.Server.LockOneAsync(s.EndpointId, false, System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkUnlockedFmt", targets.Count));
         }
         catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+        finally { BulkStatus = ""; }
     }
 
     /// <summary>Open the existing ApplyPolicy dialog once, then apply the
@@ -3798,7 +3820,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
     /// per-student wire path (ApplyPolicyToOneAsync) so no broadcast goes
     /// out — only the selected subset is affected.</summary>
     [RelayCommand]
-    private void BulkApplyPolicy()
+    private async Task BulkApplyPolicy()
     {
         if (App.Server == null) return;
         var targets = GetSelectedSnapshot();
@@ -3823,7 +3845,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
 
         if (dlg.RevertRequested)
         {
-            BulkRevertPolicyInternal(targets);
+            await BulkRevertPolicyInternal(targets);
             return;
         }
 
@@ -3844,46 +3866,63 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         bool any = dlg.BlockUsbStorage || dlg.BlockOpticalDrive || dlg.BlockPrinting
                 || dlg.BlockedProcessNames.Count > 0 || dlg.BlockedHostnames.Count > 0;
 
-        foreach (var s in targets)
+        try
         {
-            s.PerStudentBlockUsb = dlg.BlockUsbStorage;
-            s.PerStudentBlockOptical = dlg.BlockOpticalDrive;
-            s.PerStudentBlockPrint = dlg.BlockPrinting;
-            s.PerStudentBlockedProcessNames = new List<string>(dlg.BlockedProcessNames);
-            s.PerStudentBlockedHostnames = new List<string>(dlg.BlockedHostnames);
-            s.HasPerStudentPolicy = any;
-            s.PerStudentPolicyBadgeVisibility = any
-                ? System.Windows.Visibility.Visible
-                : System.Windows.Visibility.Collapsed;
-            _ = App.Server.ApplyPolicyToOneAsync(s.EndpointId, msg, System.Threading.CancellationToken.None);
+            int i = 0;
+            foreach (var s in targets)
+            {
+                BulkStatus = Loc.Format("Status_BulkProgressFmt", ++i, targets.Count);
+                s.PerStudentBlockUsb = dlg.BlockUsbStorage;
+                s.PerStudentBlockOptical = dlg.BlockOpticalDrive;
+                s.PerStudentBlockPrint = dlg.BlockPrinting;
+                s.PerStudentBlockedProcessNames = new List<string>(dlg.BlockedProcessNames);
+                s.PerStudentBlockedHostnames = new List<string>(dlg.BlockedHostnames);
+                s.HasPerStudentPolicy = any;
+                s.PerStudentPolicyBadgeVisibility = any
+                    ? System.Windows.Visibility.Visible
+                    : System.Windows.Visibility.Collapsed;
+                // v1.2.1 — was fire-and-forget (_ =), which swallowed failures AND rode
+                // the lossy queue.  Now awaited on the reliable path so the burst is
+                // back-pressured and every selected student actually receives the policy.
+                await App.Server.ApplyPolicyToOneAsync(s.EndpointId, msg, System.Threading.CancellationToken.None, reliable: true);
+            }
         }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); return; }
+        finally { BulkStatus = ""; }
 
         var summary = BuildPolicySummary(msg);
         AppendSystemChat(Loc.Format("Chat_BulkPolicyAppliedFmt", targets.Count, summary));
     }
 
     [RelayCommand]
-    private void BulkRevertPolicy()
+    private async Task BulkRevertPolicy()
     {
         var targets = GetSelectedSnapshot();
         if (targets.Count == 0) return;
-        BulkRevertPolicyInternal(targets);
+        await BulkRevertPolicyInternal(targets);
     }
 
-    private void BulkRevertPolicyInternal(List<StudentViewModel> targets)
+    private async Task BulkRevertPolicyInternal(List<StudentViewModel> targets)
     {
         if (App.Server == null) return;
-        foreach (var s in targets)
+        try
         {
-            s.PerStudentBlockUsb = false;
-            s.PerStudentBlockOptical = false;
-            s.PerStudentBlockPrint = false;
-            s.PerStudentBlockedProcessNames = new List<string>();
-            s.PerStudentBlockedHostnames = new List<string>();
-            s.HasPerStudentPolicy = false;
-            s.PerStudentPolicyBadgeVisibility = System.Windows.Visibility.Collapsed;
-            _ = App.Server.RevertPolicyForOneAsync(s.EndpointId, System.Threading.CancellationToken.None);
+            int i = 0;
+            foreach (var s in targets)
+            {
+                BulkStatus = Loc.Format("Status_BulkProgressFmt", ++i, targets.Count);
+                s.PerStudentBlockUsb = false;
+                s.PerStudentBlockOptical = false;
+                s.PerStudentBlockPrint = false;
+                s.PerStudentBlockedProcessNames = new List<string>();
+                s.PerStudentBlockedHostnames = new List<string>();
+                s.HasPerStudentPolicy = false;
+                s.PerStudentPolicyBadgeVisibility = System.Windows.Visibility.Collapsed;
+                await App.Server.RevertPolicyForOneAsync(s.EndpointId, System.Threading.CancellationToken.None, reliable: true);
+            }
         }
+        catch (System.Exception ex) { AppendErrorChat(ex.Message); return; }
+        finally { BulkStatus = ""; }
         AppendSystemChat(Loc.Format("Chat_BulkPolicyRevertedFmt", targets.Count));
     }
 
@@ -3895,13 +3934,16 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         if (targets.Count == 0) return;
         try
         {
+            int i = 0;
             foreach (var s in targets)
             {
-                await App.Server.SendMicMuteRequestAsync(s.EndpointId, true, "Bulk mute", System.Threading.CancellationToken.None);
+                BulkStatus = Loc.Format("Status_BulkProgressFmt", ++i, targets.Count);
+                await App.Server.SendMicMuteRequestAsync(s.EndpointId, true, "Bulk mute", System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkMicMutedFmt", targets.Count));
         }
         catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+        finally { BulkStatus = ""; }
     }
 
     [RelayCommand]
@@ -3912,13 +3954,16 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         if (targets.Count == 0) return;
         try
         {
+            int i = 0;
             foreach (var s in targets)
             {
-                await App.Server.SendMicMuteRequestAsync(s.EndpointId, false, "Bulk unmute", System.Threading.CancellationToken.None);
+                BulkStatus = Loc.Format("Status_BulkProgressFmt", ++i, targets.Count);
+                await App.Server.SendMicMuteRequestAsync(s.EndpointId, false, "Bulk unmute", System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkMicUnmutedFmt", targets.Count));
         }
         catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+        finally { BulkStatus = ""; }
     }
 
     /// <summary>Pick a file once, then send it to every selected student
@@ -3952,9 +3997,11 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
                 FileType = Path.GetExtension(dlg.FileName).ToLowerInvariant(),
                 Data = data,
             };
+            int i = 0;
             foreach (var s in targets)
             {
-                await App.Server.SendDirectMessageAsync(s.EndpointId, "", System.Threading.CancellationToken.None, attachment);
+                BulkStatus = Loc.Format("Status_BulkProgressFmt", ++i, targets.Count);
+                await App.Server.SendDirectMessageAsync(s.EndpointId, "", System.Threading.CancellationToken.None, attachment, reliable: true);
             }
             AppendSystemChat(Loc.Format("Chat_BulkFileSentFmt", attachment.FileName, targets.Count));
         }
@@ -3962,6 +4009,7 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
         {
             AppendSystemChat(Loc.Format("Err_SendFileFailed", ex.Message));
         }
+        finally { BulkStatus = ""; }
     }
 
     [RelayCommand]
@@ -3986,13 +4034,16 @@ public partial class MainViewModel : ObservableObject, IConferenceSidebarHost
 
         try
         {
+            int i = 0;
             foreach (var s in targets)
             {
-                await App.Server.PowerOneAsync(s.EndpointId, type, System.Threading.CancellationToken.None);
+                BulkStatus = Loc.Format("Status_BulkProgressFmt", ++i, targets.Count);
+                await App.Server.PowerOneAsync(s.EndpointId, type, System.Threading.CancellationToken.None, reliable: true);
             }
             AppendSystemChat(Loc.Format(GetIssuedChatKey(type), Loc.Format("Lbl_BulkTargetFmt", targets.Count)));
         }
         catch (System.Exception ex) { AppendErrorChat(ex.Message); }
+        finally { BulkStatus = ""; }
     }
 }
 
