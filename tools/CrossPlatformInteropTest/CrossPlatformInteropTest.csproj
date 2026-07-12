@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net10.0 (no -windows, no RID) inherited from root Directory.Build.props.
+         Proves a Mac process can discover + handshake with the shipped Windows
+         Teacher (v1.2) over the real wire framing. -->
+    <RootNamespace>CrossPlatformInteropTest</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
+  </ItemGroup>
+</Project>
