@@ -462,7 +462,74 @@ Notes / caveats:
   `PlacementTarget.Tag`/`RelativeSource AncestorType=ContextMenu` command-routing
   will need rethinking (Avalonia menu items bind against the flyout's DataContext).
 
-## 12. Reference links
+## 12. Manual tabs vs `TabControl`
+_(added Phase 25.3, from the ConferenceSidebar port)_
+
+Avalonia has a full `TabControl` (`<TabControl><TabItem Header="…">…</TabItem></TabControl>`,
+styleable via `ControlTheme`). But the shipped ConferenceSidebar — and this port —
+**hand-rolls** its Chat/Participants tabs: toggle `Button`s + `IsVisible`-gated body
+panels driven by VM bools.
+
+```xml
+<!-- tab buttons: SidebarTabPill ControlTheme + .active class -->
+<Button Classes="tab" Theme="{StaticResource SidebarTabPill}" Content="Chat"
+        Command="{Binding SelectConferenceChatTabCommand}"
+        Classes.active="{Binding IsConferenceChatTabSelected}"/>
+<!-- bodies: one IsVisible-gated panel per tab -->
+<DockPanel IsVisible="{Binding IsConferenceChatTabSelected}"> … </DockPanel>
+<Grid     IsVisible="{Binding IsConferenceParticipantsTabSelected}"> … </Grid>
+```
+
+| Hand-roll (buttons + `IsVisible`) when… | Use real `TabControl` when… |
+|---|---|
+| Custom tab chrome (pill/underline) that doesn't match the default template | Standard tab look/UX is fine |
+| Few tabs; selected state already lives as VM bools + commands | Many tabs; want built-in selection mgmt |
+| Bodies are arbitrary panels you fully control | Want keyboard nav / `TabStripPlacement` for free |
+
+**Sidebar rationale:** faithful to the shipped WPF (which hand-rolls), and the
+pill/underline design is trivial as classes; matching it inside a `TabControl` would
+need a `ControlTemplate` override — more work for a 2-tab surface. Skipping
+`TabControl` was the right call *here*; it isn't a blanket rule.
+
+## 13. Advanced binding scopes (`$parent`, element-name)
+_(added Phase 25.3 — the key idiom for reaching a host VM from inside an item template)_
+
+`$parent[Type]` is the Avalonia equivalent of WPF
+`RelativeSource={RelativeSource AncestorType=Type}` (FindAncestor): it walks up to
+the nearest ancestor of `Type`.
+
+```xml
+<!-- WPF: {Binding SomeProp, RelativeSource={RelativeSource AncestorType=UserControl}} -->
+{Binding $parent[UserControl].SomeControlProperty}
+```
+
+**CRITICAL for compiled bindings (`x:DataType`):** inside a `DataTemplate` whose
+`x:DataType` is the *item* type, reaching the *ancestor's* `DataContext` members
+needs an explicit **cast** so the compiler can resolve them — the ancestor's
+`DataContext` is statically `object`:
+
+```xml
+<!-- item template x:DataType is ParticipantDemo; reach the host VM's command/role -->
+<Button Content="Mute"
+        IsVisible="{Binding $parent[UserControl].((vm:ConferenceSidebarDemoViewModel)DataContext).Role.CanMuteOthers}"
+        Command="{Binding  $parent[UserControl].((vm:ConferenceSidebarDemoViewModel)DataContext).MuteParticipantCommand}"
+        CommandParameter="{Binding}"/>   <!-- the item itself -->
+```
+Without the `((vm:HostVm)DataContext)` cast you get a compile error (can't bind
+`.Role`/`.Command` on `object`). WPF didn't need this because its bindings are
+late-bound/reflection-based.
+
+Related scope selectors:
+- `#Name.Property` — element-name binding (WPF `ElementName=`); reach a named control.
+- `$self` — the control itself; `$parent` — the immediate parent (no type filter).
+- Reflection fallback: `{ReflectionBinding …}` skips compile-time checking if you
+  ever need the WPF-style late binding.
+
+> **Forward reference:** `StudentCard`'s large `ContextMenu`/`MenuFlyout` (Phase 25.4?)
+> will lean on this heavily — every `MenuItem` reaches `MainViewModel` commands from
+> a detached menu scope. The cast idiom above is the pattern to reuse.
+
+## 14. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
 - WPF → Avalonia migration: https://docs.avaloniaui.net/docs/get-started/wpf/
@@ -473,8 +540,10 @@ Notes / caveats:
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 
 ---
-_Living document — extend as later ports surface new patterns. Covered so far:
+_Living document (14 sections) — extend as later ports surface new patterns. Covered:
 triggers→classes, converters, DP→StyledProperty, precedence, compiled bindings,
 keyed-Style→ControlTheme + basic ControlTemplate/pseudo-classes (§3e), animations
-(§10), popups/flyouts (§11). Still uncovered: complex ControlTemplates, full
-ContextMenu→MenuFlyout command routing, DynamicResource theme-swap._
+(§10), popups/flyouts (§11), manual-tabs vs TabControl (§12), advanced binding
+scopes / $parent + compiled-binding cast (§13). Still uncovered: complex
+ControlTemplates, full ContextMenu→MenuFlyout command routing, DynamicResource
+theme-swap._
