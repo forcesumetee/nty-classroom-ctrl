@@ -689,7 +689,88 @@ keyed `TextBlock` `Style`s (`Text.H*`) → **style classes** `Classes="h1"` (§3
 in `Themes/ClassroomControls.axaml` (a `<Styles>` file: ControlThemes in `Styles.Resources`
 + the text-class `Style`s), included via `StyleInclude`.
 
-## 17. Reference links
+## 17. `ListView`/`GridView` → templated `ListBox` (and when to reach for `DataGrid`)
+_(Phase 25.7 — porting ClassRosterManager, the first list-based view. **Precedent-setting: this is the pattern for every future list view.**)_
+
+Avalonia has **no `ListView`, `GridView`, or `GridViewColumn`.** For a **display-only**
+list (read cells, no inline edit, no built-in sort) — which every roster/attendance-style
+view in this product is — the honest match is a **`ListBox` + a `Grid` `ItemTemplate`**,
+with a **header row whose `ColumnDefinitions` match the item Grid** so columns line up.
+No new package (consistent with the minimal-dependency / MessagePack-pin ethos).
+
+**WPF (ListView + GridView):**
+```xml
+<ListView ItemsSource="{Binding Rooms}">
+  <ListView.View>
+    <GridView>
+      <GridViewColumn Header="Class"       Width="160" DisplayMemberBinding="{Binding ClassName}"/>
+      <GridViewColumn Header="Description"  Width="280" DisplayMemberBinding="{Binding Description}"/>
+      <GridViewColumn Header="Students"     Width="100" DisplayMemberBinding="{Binding Students.Count}"/>
+      <GridViewColumn Header="Last used"    Width="180" DisplayMemberBinding="{Binding LastUsedAt}"/>
+    </GridView>
+  </ListView.View>
+</ListView>
+```
+
+**Avalonia (ListBox + Grid template + explicit header row):**
+```xml
+<Grid RowDefinitions="Auto,*">
+  <!-- Header row — SAME ColumnDefinitions as the ItemTemplate below (the alignment contract). -->
+  <Border Grid.Row="0" Padding="12,8" Background="{StaticResource Surface.Elevated}"
+          BorderBrush="{StaticResource Border.Soft}" BorderThickness="0,0,0,1">
+    <Grid ColumnDefinitions="160,*,90,150">
+      <TextBlock Grid.Column="0" Text="Class"/>       <TextBlock Grid.Column="1" Text="Description"/>
+      <TextBlock Grid.Column="2" Text="Students"/>    <TextBlock Grid.Column="3" Text="Last used"/>
+    </Grid>
+  </Border>
+
+  <ListBox Grid.Row="1" ItemsSource="{Binding Rooms}" SelectedItem="{Binding SelectedRoom}">
+    <ListBox.Styles>
+      <!-- Rows MUST stretch full-width or the * column won't line up with the header. -->
+      <Style Selector="ListBoxItem">
+        <Setter Property="Padding" Value="12,10"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      </Style>
+    </ListBox.Styles>
+    <ListBox.ItemTemplate>
+      <DataTemplate x:DataType="vm:ClassRoomRowDemoViewModel">
+        <Grid ColumnDefinitions="160,*,90,150">
+          <TextBlock Grid.Column="0" Text="{Binding ClassName}" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Grid.Column="1" Text="{Binding Description}" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Grid.Column="2" Text="{Binding StudentCount}"/>
+          <TextBlock Grid.Column="3" Text="{Binding LastUsedAt}"/>
+        </Grid>
+      </DataTemplate>
+    </ListBox.ItemTemplate>
+  </ListBox>
+</Grid>
+```
+
+**Mapping:**
+| WPF | Avalonia |
+|-----|----------|
+| `ListView` + `GridView` | `ListBox` + `Grid` `ItemTemplate` |
+| `GridViewColumn Header=…` | a `TextBlock` in an explicit **header row** `Grid` |
+| `GridViewColumn.Width` | a shared `ColumnDefinitions` string used on **both** the header and item `Grid` |
+| `DisplayMemberBinding="{Binding X}"` | `<TextBlock Text="{Binding X}"/>` per column |
+| `Width="*"`-ish auto-fill | one `*` column — requires **`HorizontalContentAlignment=Stretch`** on `ListBoxItem` so rows fill width |
+
+- **Alignment contract:** the header `Grid` and the item `Grid` **must share the same
+  `ColumnDefinitions`**; keep them identical or columns drift. The `*` column only aligns
+  if rows stretch full-width (the `ListBoxItem` `Stretch` setter above) — this is the one
+  easy-to-miss step.
+- **Selection:** `ListBox.SelectedItem="{Binding SelectedRoom}"` (two-way by default) —
+  the WPF `ListView.SelectedItem` maps 1:1; the blue selection highlight comes free from
+  the Fluent `ListBoxItem` theme (visible in the Phase 25.7 baseline).
+- **Cell trimming:** `TextTrimming="CharacterEllipsis"` per cell (WPF `TextBlock` trimming ports directly).
+
+**When to reach for `Avalonia.Controls.DataGrid` instead** (empirical trigger, not preemptive):
+reach for it only when the list genuinely needs **built-in column sorting, resizing, or
+inline cell editing** (e.g. a future editable Attendance grid). It costs a **new NuGet
+package + a `<StyleInclude>` for its theme**, so a read-only roster does *not* justify it.
+Rule of thumb: **display-only → templated `ListBox`; interactive grid → `DataGrid`.**
+
+## 18. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
 - WPF → Avalonia migration: https://docs.avaloniaui.net/docs/get-started/wpf/
@@ -700,11 +781,13 @@ in `Themes/ClassroomControls.axaml` (a `<Styles>` file: ControlThemes in `Styles
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 
 ---
-_Living document (17 sections) — extend as later ports surface new patterns. Covered:
+_Living document (18 sections) — extend as later ports surface new patterns. Covered:
 triggers→classes, converters, DP→StyledProperty, precedence, compiled bindings,
 keyed-Style→ControlTheme + ControlTemplate/pseudo-classes (§3e), animations (§10),
 popups/flyouts + ContextMenu + dynamic ItemsSource submenu / ItemContainerTheme (§11),
 manual-tabs vs TabControl (§12), advanced binding scopes / $parent + compiled-binding
 cast + popup-boundary routing (§13), icon strategy = none-needed (§14), multiple theme
-dictionaries coexisting (§15). Still uncovered: complex ControlTemplates re-authoring
-(MaterialDesign control styles → Avalonia ControlThemes), DynamicResource theme-swap._
+dictionaries coexisting (§15), ThemeVariantScope for light views in a dark app (§16),
+ListView/GridView → templated ListBox + when-to-DataGrid (§17). Still uncovered: complex
+ControlTemplates re-authoring (MaterialDesign control styles → Avalonia ControlThemes),
+DynamicResource theme-swap._
