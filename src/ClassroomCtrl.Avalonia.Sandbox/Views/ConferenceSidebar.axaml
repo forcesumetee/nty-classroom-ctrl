@@ -1,0 +1,180 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
+             xmlns:models="using:ClassroomCtrl.Shared.Models"
+             x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.ConferenceSidebar"
+             x:DataType="vm:ConferenceSidebarDemoViewModel"
+             Background="{StaticResource ConfSidebarBgBrush}"
+             Foreground="{StaticResource ConfTextPrimaryBrush}"
+             FontFamily="{StaticResource ConfFontFamily}">
+
+    <!-- PORTED from Shared.Wpf/Conference/ConferenceSidebar.xaml (Phase 25.3-A).
+         The shipped sidebar hand-rolls its tabs (buttons + Visibility-gated bodies),
+         NOT a WPF TabControl — this port preserves that (see FINDINGS). Tabs use the
+         SidebarTabPill ControlTheme; active state is the .active class below. -->
+
+    <UserControl.Styles>
+        <!-- Active tab: blue underline accent + blue text (WPF per-tab DataTrigger). -->
+        <Style Selector="Button.tab.active">
+            <Setter Property="BorderBrush" Value="{StaticResource ConfAccentBlueBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource ConfAccentBlueBrush}"/>
+        </Style>
+        <!-- Row status icons (mic/cam): secondary when off, primary when live. -->
+        <Style Selector="TextBlock.rowIcon">
+            <Setter Property="Foreground" Value="{StaticResource ConfTextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.rowIcon.on">
+            <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border BorderBrush="{StaticResource ConfBorderSubtleBrush}" BorderThickness="1,0,0,0">
+        <Grid RowDefinitions="Auto,*">
+
+            <!-- Header: tabs (left) + close ✕ (right). -->
+            <Border Grid.Row="0"
+                    BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                    BorderThickness="0,0,0,1" Padding="10,8">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Width="32" Height="32"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Click="CloseButton_Click" ToolTip.Tip="Close">
+                        <TextBlock Text="✕" FontSize="14"
+                                   Foreground="{StaticResource ConfTextSecondaryBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Classes="tab" Theme="{StaticResource SidebarTabPill}"
+                                Content="Chat"
+                                Command="{Binding SelectConferenceChatTabCommand}"
+                                Classes.active="{Binding IsConferenceChatTabSelected}"/>
+                        <Button Classes="tab" Theme="{StaticResource SidebarTabPill}"
+                                Content="Participants"
+                                Command="{Binding SelectConferenceParticipantsTabCommand}"
+                                Classes.active="{Binding IsConferenceParticipantsTabSelected}"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Tab body. -->
+            <Grid Grid.Row="1">
+
+                <!-- ══ Chat tab ══ (input row + draft strip arrive in 25.3-B) -->
+                <DockPanel IsVisible="{Binding IsConferenceChatTabSelected}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding ConferenceConversation.Messages}" Margin="10,8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:ChatMessage">
+                                    <!-- Dark bubble. v1.2 carry-over: no IsOwn on the model yet,
+                                         so every bubble uses ConfChatOtherBubbleBrush (faithful). -->
+                                    <Border Margin="0,0,0,6" Padding="10,8" CornerRadius="8"
+                                            Background="{StaticResource ConfChatOtherBubbleBrush}"
+                                            BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                                            BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding SenderName}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource ConfTextSecondaryBrush}"/>
+
+                                            <!-- Attachment card (Phase 25.3: rendered; buttons inert — picker deferred). -->
+                                            <Border Margin="0,4" Padding="8,6" CornerRadius="6"
+                                                    Background="{StaticResource ConfChatOwnBubbleBrush}"
+                                                    BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                                                    BorderThickness="1"
+                                                    IsVisible="{Binding HasAttachment}">
+                                                <DockPanel>
+                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                                                VerticalAlignment="Center" Margin="6,0,0,0">
+                                                        <Button Content="Download" FontSize="11" Padding="6,2" Margin="0,0,4,0"
+                                                                Background="Transparent"
+                                                                Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                                                BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                                                                BorderThickness="1" Cursor="Hand"/>
+                                                        <Button Content="Open" FontSize="11" Padding="6,2"
+                                                                Background="{StaticResource ConfAccentBlueBrush}"
+                                                                Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding AttachmentIcon}" FontSize="18"
+                                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                        <StackPanel VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding AttachmentFileName}"
+                                                                       FontSize="12" FontWeight="SemiBold"
+                                                                       Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                                                       TextTrimming="CharacterEllipsis" MaxWidth="160"/>
+                                                            <TextBlock Text="{Binding AttachmentSizeFormatted}"
+                                                                       FontSize="10"
+                                                                       Foreground="{StaticResource ConfTextSecondaryBrush}"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+
+                                            <TextBlock Text="{Binding MessageText}" FontSize="12"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                                       Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+
+                <!-- ══ Participants tab ══ (raised-hands + Mute/Recognize arrive in 25.3-B) -->
+                <Grid IsVisible="{Binding IsConferenceParticipantsTabSelected}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Students}" Margin="8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ParticipantDemo">
+                                    <Border Background="{StaticResource ConfTileBgBrush}"
+                                            BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                                            BorderThickness="1" CornerRadius="8"
+                                            Padding="10,8" Margin="0,0,0,6">
+                                        <DockPanel>
+                                            <!-- Avatar chip. -->
+                                            <Border DockPanel.Dock="Left" Width="36" Height="36"
+                                                    CornerRadius="999"
+                                                    Background="{StaticResource ConfHostBadgeBgBrush}"
+                                                    Margin="0,0,10,0" VerticalAlignment="Center">
+                                                <TextBlock Text="👤" FontSize="18"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <!-- Right: state indicators. -->
+                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                                        VerticalAlignment="Center">
+                                                <Border Padding="6,2" CornerRadius="999" Margin="0,0,4,0"
+                                                        Background="{StaticResource ConfAccentYellowBrush}"
+                                                        IsVisible="{Binding HandRaised}">
+                                                    <TextBlock Text="✋" FontSize="11" Foreground="#1F1F23"/>
+                                                </Border>
+                                                <TextBlock Text="🎙" Classes="rowIcon" Classes.on="{Binding MicLive}"
+                                                           FontSize="14" Margin="4,0"/>
+                                                <TextBlock Text="📷" Classes="rowIcon" Classes.on="{Binding CamLive}"
+                                                           FontSize="14" Margin="4,0,0,0"/>
+                                            </StackPanel>
+                                            <!-- Name + machine. -->
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayName}"
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding MachineName}"
+                                                           FontSize="10"
+                                                           Foreground="{StaticResource ConfTextSecondaryBrush}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

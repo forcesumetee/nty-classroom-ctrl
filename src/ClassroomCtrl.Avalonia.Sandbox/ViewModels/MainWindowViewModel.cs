@@ -19,6 +19,9 @@ public class MainWindowViewModel
     /// <summary>Phase 25.1 — demo VM driving the ported ConferenceToolbar.</summary>
     public ConferenceToolbarDemoViewModel Toolbar { get; } = new();
 
+    /// <summary>Phase 25.3 — demo VM driving the ported ConferenceSidebar.</summary>
+    public ConferenceSidebarDemoViewModel Sidebar { get; } = new();
+
     /// <summary>Phase 25.1-D — tiles shown in the bottom-bar demo tab; a picked
     /// reaction floats over DemoTileA (fulfils the 24.3 float-on-tile design).</summary>
     public ConferenceTileViewModel DemoTileA { get; } =

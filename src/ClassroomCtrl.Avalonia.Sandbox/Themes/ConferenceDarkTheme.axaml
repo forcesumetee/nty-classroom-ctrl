@@ -121,6 +121,8 @@
          into the ControlTemplate; ':pointerover' replaces the WPF IsMouseOver
          trigger.  TemplateBinding works the same. -->
 
+    <!-- ── Toolbar ── (grep "ControlTheme x:Key" by section) -->
+
     <!-- Compact circular pill button used by every ConferenceToolbar entry
          (mic, cam, share, chat, hand raise, more). Hover = translucent white
          overlay (Meet/Zoom feel). -->
@@ -163,6 +165,42 @@
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="Margin" Value="12,0,0,0"/>
+    </ControlTheme>
+
+    <!-- ── Sidebar ── -->
+
+    <!-- ConferenceSidebar tab button (Chat | Participants). Flat text button with
+         a 2px bottom-border accent; the ACTIVE state (blue border+text) is applied
+         per-instance via a ".active" class in ConferenceSidebar.axaml, not here
+         (it's data-driven per tab). Naming: ControlTheme name = purpose. -->
+    <ControlTheme x:Key="SidebarTabPill" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0,0,0,2"/>
+        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="Margin" Value="2,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{StaticResource ConfTextSecondaryBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Tab"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Foreground="{TemplateBinding Foreground}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#PART_Tab">
+            <Setter Property="Background" Value="{StaticResource ConfHoverOverlayBrush}"/>
+        </Style>
     </ControlTheme>
 
 </ResourceDictionary>

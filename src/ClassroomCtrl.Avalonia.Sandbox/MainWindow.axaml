@@ -46,5 +46,13 @@
                 <views:ConferenceToolbar Grid.Row="1" DataContext="{Binding Toolbar}"/>
             </Grid>
         </TabItem>
+        <!-- Tab 3 (Phase 25.3): ConferenceSidebar (hosted at a fixed width; the
+             full-window Conference layout — tiles + toolbar + sidebar — is 25.3-C). -->
+        <TabItem Header="Sidebar">
+            <Grid Background="{StaticResource ConfWindowBgBrush}">
+                <views:ConferenceSidebar DataContext="{Binding Sidebar}"
+                                         Width="360" HorizontalAlignment="Right"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>
