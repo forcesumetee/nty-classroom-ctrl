@@ -55,6 +55,10 @@ plutil -lint "${APP}/Contents/Info.plist" >/dev/null || { echo "ERROR: Info.plis
 BID=$(plutil -extract CFBundleIdentifier raw "${APP}/Contents/Info.plist")
 [[ "$BID" == "com.nty.classroomctrl.student" ]] || { echo "ERROR: bundle id is '${BID}', expected com.nty.classroomctrl.student" >&2; exit 1; }
 echo "  CFBundleIdentifier = ${BID} · LSUIElement = $(plutil -extract LSUIElement raw "${APP}/Contents/Info.plist")"
+# macOS 15+/26 Local Network Privacy: without this key a bundled app is DENIED access to the
+# local-subnet Teacher (the connect fails even though ping/nc work). Guard it so it can't regress.
+plutil -extract NSLocalNetworkUsageDescription raw "${APP}/Contents/Info.plist" >/dev/null 2>&1 \
+    || { echo "ERROR: NSLocalNetworkUsageDescription missing — the bundle can't reach the local-network Teacher (macOS 15+ LNP)." >&2; exit 1; }
 # dylib deps sanity: everything should be an absolute system path (no unresolved @rpath)
 if otool -L "${APP}/Contents/MacOS/${DYLIB}" | tail -n +2 | grep -q "@rpath"; then
     echo "  WARN: dylib references @rpath — may not resolve in the bundle" >&2

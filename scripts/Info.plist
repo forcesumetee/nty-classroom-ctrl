@@ -42,6 +42,13 @@
     <!-- Microphone (M20): shown to the user; grant effective immediately. -->
     <key>NSMicrophoneUsageDescription</key>
     <string>NTY ClassroomCtrl uses your microphone so the teacher can listen to you and for classroom voice.</string>
+    <!-- Local Network (32-G root cause): macOS 15+/26 gates a bundled app's access to the LOCAL
+         network (the Teacher is on a local subnet, e.g. 172.20.10.x). WITHOUT this key the OS denies
+         the TCP connect outright (why the bundle failed but `dotnet run` — under Terminal's grant —
+         did not). The app is NOT sandboxed, so no com.apple.security.network.client entitlement is
+         involved; this usage-description key + the user's one-time "Allow" is the correct fix. -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>NTY ClassroomCtrl connects to your teacher's computer on the local network to join the classroom session.</string>
     <!-- Accessibility (M22): intentionally has NO usage-description key — it is gated by
          AXIsProcessTrusted (System Settings ▸ Privacy ▸ Accessibility), not an Info.plist string. -->
 </dict>
