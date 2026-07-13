@@ -2,9 +2,11 @@
 
 **Goal:** bidirectional audio between the Mac student and the shipped Windows Teacher,
 over existing wire envelopes — no shipped-repo change, no wire change.
-**Result:** ✅ Mac-side complete + verified headless — `MockTeacher --audiotest` proves
-BOTH directions (mic talkback + teacher-audio playback) with correct format, routing,
-lifecycle, and bandwidth. **LIVE Windows test = the one remaining human step (29-H).**
+**Result:** ✅ **LIVE-CONFIRMED (as scoped, 2026-07-13)** — Mac-side bidirectional audio is
+complete and correct; **3 of 4 live paths confirmed**, the 4th (Teacher-mic → Mac) blocked by a
+shipped-Windows-Teacher mic-capture issue (traced: not a Mac defect, not a wire issue, not path C).
+`MockTeacher --audiotest` proves both directions structurally (15/15 valid PCM); the live
+system-audio test proves the Mac playback chain end-to-end. See `docs/PHASE-29-LIVE-CONFIRMATION.md`.
 
 **Sub-phases:** 29-A investigation · 29-B native mic capture · 29-D service + Audio tab ·
 29-E mic wire-in (path B) · 29-F native playback + wire-in (path A) · 29-G `--audiotest`
@@ -127,12 +129,21 @@ the seq assertion (`seqOk == rxB`, not `rxB-1`, since the first frame's seq=1 ma
 `lastSeq(0)+1`). Both were **test-harness** fixes; the capture/playback pipeline was
 correct throughout. MockTeacher-first caught them before the LIVE run.
 
-## LIVE Windows test (29-H — user-run) — awaiting result
-Test A and B **separately** (or with headphones — no AEC):
-- **Path B:** Teacher → **Mic Monitor → "Listen"** on the Mac's row → **hears the Mac mic**;
-  Mac self-tile shows "🎙 Mic live to teacher · N frames".
-- **Path A:** Teacher → **"Mic" / "Share Computer Audio"** → **Mac plays it** through the
-  speakers; Mac self-tile shows "🔊 Playing teacher audio · N frames".
+## LIVE Windows test (29-H) — ✅ CONFIRMED (as scoped) 2026-07-13
+3 of 4 paths confirmed live; the 4th is a teacher-side capture issue (full writeup:
+`docs/PHASE-29-LIVE-CONFIRMATION.md`):
+- ✅ **Path B** — Teacher Mic Monitor "Listen" → Mac mic captured + streamed (0x032C). Teacher has
+  a real audible sink (`StudentAudioMixer` → `WaveOutEvent.Play()`).
+- ✅ **Path A / system audio** — Teacher "Share Computer Audio" → Mac plays it, **no perceptible
+  delay** → proves the whole Mac playback chain (decode + AVAudioEngine + jitter buffer + int16→float).
+- ❌ **Path A / teacher mic** → Mac hears nothing — **NOT a Mac defect.** The Teacher's Mic and
+  Share-Computer-Audio buttons emit the *identical* 0x0329 envelope; the mic source uses a brittle
+  fixed-format `WaveInEvent` (16000/16/1) that emits **zero frames** if the Windows mic can't open
+  at that exact format. Since mic/system frames are byte-identical, a Mac that plays system 0x0329
+  would play mic 0x0329 *if it arrived* — the Teacher isn't sending it. **Windows-track follow-up**
+  (verify test-box mic; a v1.2.x patch could make the mic capture format-robust like the loopback).
+- ✅ (correct-by-design) Manual **Audio tab** capture does NOT stream to the Teacher — the
+  multi-trigger default (respect the manual preview); only Mic Monitor triggers talkback.
 
 ## Constraints honored
 Sandbox + `native/` + `tools/MockTeacher` + wire-compat test only · `Shared.Wire` unchanged ·

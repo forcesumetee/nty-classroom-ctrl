@@ -100,7 +100,7 @@ envelopes — no shipped-repo change, no wire change. **Session 6.**
 | Per-frame | ~122 KB | **~7.4 KB** |
 | Sustained @ 10 fps | ~9.6 Mbit/s | **~0.6 Mbit/s** (~16× reduction) |
 
-## Milestone 20 — Phase 29: Bidirectional audio (AVAudioEngine) ⏳ Mac-side ✅ · LIVE pending
+## Milestone 20 — Phase 29: Bidirectional audio (AVAudioEngine) ✅ LIVE-CONFIRMED (as scoped)
 Raw-PCM audio both ways between the Mac and the shipped Teacher, over existing envelopes —
 no shipped-repo change, no wire change. **Session 7.**
 - **Investigation (29-A) pivot** (4th wrong-direction catch): audio is **raw PCM** (16 k/mono/
@@ -118,9 +118,13 @@ no shipped-repo change, no wire change. **Session 7.**
 - **29-G** `MockTeacher --audiotest`: **both directions PASS** (B: 15/15 valid PCM, seq/endpoint/
   non-silent/lifecycle; A: consumed 12/12) + **T27** locks `AudioStreamFrameMessage` byte-compat
   (T1–T27). Bandwidth **measured** ~288 kbit/s wire.
-- **LIVE (29-H):** (B) Teacher Mic Monitor "Listen" → hears Mac mic; (A) Teacher "Mic"/"Share
-  Computer Audio" → Mac plays it. Test A/B separately — **no AEC** (same-room feedback). See
-  `docs/PHASE-29-FINDINGS.md`. Cheat sheet **§20** AVAudioEngine addendum. *(awaiting LIVE.)*
+- **LIVE (29-H, 2026-07-13): 3/4 paths confirmed.** ✅ Path B (Mic Monitor → Mac mic streamed,
+  teacher has a real `WaveOut` sink) · ✅ Path A system audio → Mac plays, **no delay** (proves the
+  whole playback chain) · ✅ manual Audio-tab doesn't stream (correct-by-design multi-trigger) · ❌
+  Teacher-**mic** → Mac silent — **NOT a Mac defect:** the Teacher's Mic + Share-Computer-Audio emit
+  the *identical* 0x0329 envelope, but the mic source's brittle fixed-format `WaveInEvent` emits zero
+  frames if the Windows mic can't open at 16 k/16/16 → **Windows-track follow-up**, not Mac-port work.
+  M20 complete as scoped. See `docs/PHASE-29-LIVE-CONFIRMATION.md`. Cheat sheet **§20** addendum.
 
 ### Bandwidth: all four media streams
 | Stream | Sustained | |
@@ -167,8 +171,8 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–20** — screen capture + **LIVE MJPEG & H.264 screen streaming (~10×)** + **LIVE camera peer-cam** + **bidirectional audio** (Mac-side; LIVE pending) to the shipped Windows Teacher |
 
 ### Combined day totals (Sessions 1–7, 2026-07-13)
-- **20 milestones** (M1–M20; M20 Mac-side ✅, LIVE pending); today added the first native-macOS-API
-  work + camera + audio.
+- **20 milestones** (M1–M20; M20 LIVE-confirmed 3/4 as scoped); today added the first
+  native-macOS-API work + camera + audio.
 - **Native APIs: 5 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
   **AVCaptureSession camera** · **AVAudioEngine audio** (capture + playback).
 - **Cheat sheet: 21 sections**, §20 with **three addenda** (VideoToolbox + AVCaptureSession +
@@ -199,7 +203,7 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | 17 | 27-C | **LIVE** MJPEG screen streaming → Windows Teacher |
 | 18 | 27-B | **LIVE** H.264 streaming (~10× bandwidth), **MJPEG + H.264** |
 | 19 | 28 | **LIVE** camera peer-cam → Conference gallery (JPEG 320×180, ~16× vs preset bug) |
-| **20** | **29** | Bidirectional audio (raw PCM 16 k, mic talkback + broadcast playback) — Mac-side ✅, **LIVE pending** |
+| **20** | **29** | **LIVE (3/4)** bidirectional audio (raw PCM 16 k) — mic talkback + system-audio playback confirmed; teacher-mic blocked by a Windows-side capture issue (not a Mac defect) |
 
 ## Next-session priority queue
 1. **Phase 30 — Screen-lock enforcement** (overlay + Accessibility) — next native subsystem.
@@ -216,8 +220,12 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
   (production-grade H.264) AND its camera (Conference peer-cam)** into the shipped, unmodified
   Windows Teacher over unchanged wire.
 - **Native-APIs progression (5/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
-  ✓ 27-B H.264 · ✓ 28 AVCaptureSession camera · ✓ 29 AVAudioEngine audio (Mac-side; LIVE pending) ·
-  ⏳ 30 lock · ⏳ 31 input · ⏳ 32 system integration · ⏳ 33 UI ports.
+  ✓ 27-B H.264 · ✓ 28 AVCaptureSession camera · ✓ 29 AVAudioEngine audio (LIVE 3/4; teacher-mic =
+  Windows follow-up) · ⏳ 30 lock · ⏳ 31 input · ⏳ 32 system integration · ⏳ 33 UI ports.
+- **Windows-track follow-up (logged, not Mac-port work):** the shipped Teacher's own-mic broadcast
+  uses a brittle fixed-format `WaveInEvent` (16 k/16/1) that emits no 0x0329 frames if the mic can't
+  open at that exact format — verify the test-box mic; a v1.2.x patch could make it format-robust
+  like the loopback path. The Mac plays any 0x0329 that arrives (proven via system audio).
 - Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession + AVAudioEngine) proven
   **five times**; `MockTeacher --*test` is the reuse + de-risk pattern for every remaining subsystem
   — it caught the camera preset-ignore bug (M19) and two audio-harness bugs (M20) headless before LIVE.
