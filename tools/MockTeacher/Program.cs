@@ -28,7 +28,7 @@ using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false;
+bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false, trayTest = false;
 int holdSeconds = 20;
 for (int i = 0; i < args.Length; i++)
 {
@@ -47,11 +47,13 @@ for (int i = 0; i < args.Length; i++)
             if (i + 1 < args.Length && int.TryParse(args[i + 1], out var hs)) { holdSeconds = hs; i++; }
             break;
         case "--configtest": configTest = true; break;
+        case "--traytest": trayTest = true; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (trayTest) return TrayTest.Run();
 if (configTest) return ConfigTest.Run();
 if (inputHold) return await InputTest.RunHoldAsync(holdSeconds);
 if (inputTest) return await InputTest.RunAsync();
@@ -1140,6 +1142,51 @@ static class ConfigTest
         Console.WriteLine(failures == 0
             ? "\n=== CONFIGTEST PASS ✅ — round-trip · missing→defaults(host name) · corrupt→defaults+logged · admin pre-seed camelCase ==="
             : $"\n=== CONFIGTEST FAIL ❌ ({failures} check(s)) ===");
+        return failures == 0 ? 0 : 1;
+    }
+}
+
+// ── Phase 32-C — TrayPresenter state→glyph mapping self-test (--traytest) ──────────
+// Proves the pure state logic behind the menubar tray (connection status + lock → glyph kind +
+// tooltip + status line), including lock-precedence. The icon RENDERING (drawn dot/padlock) and
+// the menu interaction (Show Debug Window / Quit) are visual → verified LIVE, not here.
+static class TrayTest
+{
+    public static int Run()
+    {
+        int failures = 0;
+        void Check(string name, bool cond)
+        {
+            if (cond) Console.WriteLine($"  ✅ {name}");
+            else { Console.WriteLine($"  ❌ {name}"); failures++; }
+        }
+
+        Console.WriteLine("=== MockTeacher --traytest (TrayPresenter state→glyph/tooltip mapping) ===");
+
+        var dis = TrayPresenter.Describe(WireStatus.Disconnected, false, "172.20.10.7");
+        Check("disconnected → Disconnected kind", dis.kind == TrayPresenter.Kind.Disconnected);
+        Check("disconnected → status line 'Disconnected'", dis.statusLine == "Disconnected");
+
+        var con = TrayPresenter.Describe(WireStatus.Connecting, false, "1.2.3.4");
+        Check("connecting → Connecting kind", con.kind == TrayPresenter.Kind.Connecting);
+        var rec = TrayPresenter.Describe(WireStatus.Reconnecting, false, "1.2.3.4");
+        Check("reconnecting → Connecting kind", rec.kind == TrayPresenter.Kind.Connecting);
+
+        var ok = TrayPresenter.Describe(WireStatus.Connected, false, "172.20.10.7");
+        Check("connected → Connected kind", ok.kind == TrayPresenter.Kind.Connected);
+        Check("connected → status line has IP", ok.statusLine.StartsWith("Connected") && ok.statusLine.Contains("172.20.10.7"));
+        Check("connected → tooltip has IP", ok.tooltip.Contains("172.20.10.7"));
+
+        var lockedUp = TrayPresenter.Describe(WireStatus.Connected, true, "172.20.10.7");
+        Check("locked over CONNECTED → Locked wins", lockedUp.kind == TrayPresenter.Kind.Locked);
+        Check("locked → status line shows Locked", lockedUp.statusLine.Contains("Locked"));
+
+        var lockedDown = TrayPresenter.Describe(WireStatus.Disconnected, true, "");
+        Check("locked over DISCONNECTED → Locked wins (enforced status is salient)", lockedDown.kind == TrayPresenter.Kind.Locked);
+
+        Console.WriteLine(failures == 0
+            ? "\n=== TRAYTEST PASS ✅ — connect/connecting/disconnect mapping + lock-precedence + IP in status ==="
+            : $"\n=== TRAYTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
     }
 }
