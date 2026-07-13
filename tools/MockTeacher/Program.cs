@@ -27,7 +27,7 @@ using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false;
+bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -38,11 +38,13 @@ for (int i = 0; i < args.Length; i++)
         case "--streamtest-h264": streamTestH264 = true; break;
         case "--cameratest": cameraTest = true; break;
         case "--audiotest": audioTest = true; break;
+        case "--locktest": lockTest = true; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (lockTest) return await LockTest.RunAsync();
 if (audioTest) return await AudioTest.RunAsync(teacherId);
 if (cameraTest) return await CameraTest.RunAsync(teacherId);
 if (streamTestH264) return await StreamTest.RunAsync(teacherId, VideoCodec.H264);
@@ -779,5 +781,85 @@ static class AudioTest
             ? "\n=== AUDIOTEST PASS ✅ — Mac emits well-formed PCM talkback + consumes teacher audio (both directions) ==="
             : "\n=== AUDIOTEST FAIL ❌ ===");
         return ok ? 0 : 1;
+    }
+}
+
+
+// ───────────────────────────── screen-lock dead-man self-test ─────────────────────────────
+// Drives the REAL LockService (Sandbox assembly) with simulated WireClient status
+// transitions to prove the four-layer dead-man switch — specifically the disconnect-grace
+// blip-vs-death distinction and the continuous (non-reset) window. Uses a SHRUNK grace
+// (3s) but the SAME transition logic. No AppKit main loop runs here, so the native shield
+// never actually renders (DispatchQueue.main.async is never pumped) — zero screen-takeover
+// risk; nty_lock_is_shown() tracks LockService's show/hide decisions (the dead-man logic).
+static class LockTest
+{
+    public static async Task<int> RunAsync()
+    {
+        int failures = 0;
+        void Check(string name, bool cond)
+        {
+            if (cond) Console.WriteLine($"  ✅ {name}");
+            else { Console.WriteLine($"  ❌ {name}"); failures++; }
+        }
+
+        // Inject a flag-tracking shield backend (NO AppKit) — proves the dead-man LOGIC
+        // with zero windowing/main-loop dependency + zero screen-takeover risk. The native
+        // shield rendering is proven separately (30-B auto-hide harness + 30-F LIVE).
+        int shieldFlag = 0;
+        var svc = new LockService(graceMs: 3000, maxDurationMs: 600_000,
+            shieldShow: _ => System.Threading.Interlocked.Exchange(ref shieldFlag, 1),
+            shieldHide: () => System.Threading.Interlocked.Exchange(ref shieldFlag, 0),
+            shieldIsShown: () => System.Threading.Volatile.Read(ref shieldFlag) == 1);
+        int shownFlag = 0;
+        svc.LockStateChanged += up => System.Threading.Volatile.Write(ref shownFlag, up ? 1 : 0);
+        svc.Log += m => Console.WriteLine($"        [lock] {m}");
+        bool Shown() => svc.ShieldShown();           // injected backend flag
+        bool Evt() => System.Threading.Volatile.Read(ref shownFlag) == 1; // event-tracked
+
+        Console.WriteLine("=== MockTeacher --locktest (grace=3000ms; injected shield backend — dead-man LOGIC proof, no AppKit) ===");
+
+        // ── CASE A: Wi-Fi blip → lock HOLDS (exploit-prevention proof) ──
+        Console.WriteLine("\n-- CASE A: Wi-Fi blip (reconnect within grace) --");
+        svc.Lock(null);
+        Check("A: shield shown after LockScreen", Shown() && Evt());
+        svc.OnConnectionStatus(WireStatus.Reconnecting);        // t0: grace starts
+        await Task.Delay(1000);
+        svc.OnConnectionStatus(WireStatus.Connected);           // t1.0: reconnect within grace → cancel
+        await Task.Delay(300);
+        Check("A: HELD immediately after reconnect", Shown() && Evt());
+        await Task.Delay(2500);                                 // t3.8: past the original 3s window
+        Check("A: STILL HELD past original grace (blip did NOT unlock)", Shown() && Evt());
+        svc.Unlock();
+        Check("A: explicit Unlock hides", !Shown() && !Evt());
+
+        // ── CASE B: teacher-death → auto-unlock ──
+        Console.WriteLine("\n-- CASE B: teacher-death (sustained disconnect > grace) --");
+        svc.Lock(null);
+        Check("B: shield shown", Shown());
+        svc.OnConnectionStatus(WireStatus.Reconnecting);        // t0
+        await Task.Delay(500);
+        svc.OnConnectionStatus(WireStatus.Disconnected);        // t0.5: continuous
+        Check("B: still shown mid-grace", Shown());
+        await Task.Delay(3200);                                 // t3.7 from t0
+        Check("B: AUTO-UNLOCKED (grace fired at ~3s)", !Shown() && !Evt());
+
+        // ── CASE C: no-reset (continuous window) ──
+        Console.WriteLine("\n-- CASE C: no-reset (timer NOT restarted on Reconnecting→Disconnected) --");
+        svc.Lock(null);
+        svc.OnConnectionStatus(WireStatus.Reconnecting);        // t0: grace starts
+        await Task.Delay(1000);
+        svc.OnConnectionStatus(WireStatus.Disconnected);        // t1.0: must NOT restart
+        await Task.Delay(1600);                                 // t2.6: before 3s-from-t0
+        Check("C: still shown at t=2.6s (has NOT fired early)", Shown());
+        await Task.Delay(900);                                  // t3.5: past 3s-from-t0, before 4s (reset-bug would fire at t4.0)
+        Check("C: AUTO-UNLOCKED by t=3.5s → window ran from FIRST departure, not from Disconnected", !Shown() && !Evt());
+
+        svc.Unlock();   // belt-and-suspenders: ensure hidden at end
+
+        Console.WriteLine(failures == 0
+            ? "\n=== LOCKTEST PASS ✅ — dead-man grace: blip HOLDS, teacher-death UNLOCKS, window is CONTINUOUS ==="
+            : $"\n=== LOCKTEST FAIL ❌ ({failures} check(s)) ===");
+        return failures == 0 ? 0 : 1;
     }
 }

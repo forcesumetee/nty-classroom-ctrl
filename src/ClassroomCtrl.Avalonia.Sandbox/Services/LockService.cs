@@ -32,8 +32,35 @@ public sealed partial class LockService
     [LibraryImport(Lib)] private static partial void nty_lock_hide();
     [LibraryImport(Lib)] private static partial int nty_lock_is_shown();
 
-    private const int GraceMs = 45_000;            // disconnect grace (Wi-Fi blip vs teacher-death)
-    private const int MaxDurationMs = 30 * 60_000; // max-duration cap
+    private readonly int _graceMs;         // disconnect grace (Wi-Fi blip vs teacher-death)
+    private readonly int _maxDurationMs;   // max-duration cap
+    private readonly Action<string> _shieldShow;   // shield backend (native by default)
+    private readonly Action _shieldHide;
+    private readonly Func<bool> _shieldIsShown;
+
+    public static bool IsSupported => OperatingSystem.IsMacOS();
+
+    /// <summary>Production: 45 s grace, 30 min cap, NATIVE shield.</summary>
+    public LockService(int graceMs = 45_000, int maxDurationMs = 30 * 60_000)
+        : this(graceMs, maxDurationMs,
+               static m => { if (IsSupported) nty_lock_show(m); },
+               static () => { if (IsSupported) nty_lock_hide(); },
+               static () => IsSupported && nty_lock_is_shown() == 1)
+    { }
+
+    /// <summary>Test seam: inject a shield backend so the FOUR-LAYER DEAD-MAN LOGIC can
+    /// be proven (shrunk timers, flag-tracking backend) with ZERO AppKit involvement —
+    /// no window, no main-loop dependency, no screen-takeover risk. The native shield
+    /// RENDERING is proven separately (30-B auto-hide harness + 30-F LIVE).</summary>
+    public LockService(int graceMs, int maxDurationMs,
+                       Action<string> shieldShow, Action shieldHide, Func<bool> shieldIsShown)
+    {
+        _graceMs = graceMs;
+        _maxDurationMs = maxDurationMs;
+        _shieldShow = shieldShow;
+        _shieldHide = shieldHide;
+        _shieldIsShown = shieldIsShown;
+    }
 
     private readonly object _gate = new();
     private bool _locked;      // teacher intends locked (LockScreen received, no Unlock/auto-unlock yet)
@@ -41,8 +68,6 @@ public sealed partial class LockService
     private string _message = "Locked by teacher";
     private Timer? _graceTimer;
     private Timer? _capTimer;
-
-    public static bool IsSupported => OperatingSystem.IsMacOS();
 
     /// <summary>Raised when the shield goes up (true) / comes down (false), incl. auto-unlock.
     /// Fires on the caller's or a timer thread — marshal to the UI thread.</summary>
@@ -106,7 +131,7 @@ public sealed partial class LockService
     {
         if (_graceTimer != null) return;       // already counting — do NOT restart
         Log?.Invoke("grace start (45s, silent)");
-        _graceTimer = new Timer(_ => OnGraceFired(), null, GraceMs, Timeout.Infinite);
+        _graceTimer = new Timer(_ => OnGraceFired(), null, _graceMs, Timeout.Infinite);
     }
 
     private void CancelGrace()
@@ -135,7 +160,7 @@ public sealed partial class LockService
     private void StartCap()
     {
         CancelCap();
-        _capTimer = new Timer(_ => OnCapFired(), null, MaxDurationMs, Timeout.Infinite);
+        _capTimer = new Timer(_ => OnCapFired(), null, _maxDurationMs, Timeout.Infinite);
     }
 
     private void CancelCap()
@@ -158,19 +183,19 @@ public sealed partial class LockService
         }
     }
 
-    // ── native shield (called under _gate) ───────────────────────────────────────
+    // ── shield backend (called under _gate) ──────────────────────────────────────
     private void ShowShield()
     {
-        if (IsSupported) nty_lock_show(_message);
+        _shieldShow(_message);
         if (!_shieldUp) { _shieldUp = true; LockStateChanged?.Invoke(true); }
     }
 
     private void HideShield()
     {
-        if (IsSupported) nty_lock_hide();
+        _shieldHide();
         if (_shieldUp) { _shieldUp = false; LockStateChanged?.Invoke(false); }
     }
 
-    /// <summary>Native truth (1 if the shield is up) — for tests/verification.</summary>
-    public bool ShieldShown() => IsSupported ? nty_lock_is_shown() == 1 : _shieldUp;
+    /// <summary>Shield-backend truth (1 if the shield is up) — for tests/verification.</summary>
+    public bool ShieldShown() => _shieldIsShown();
 }
