@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ClassroomCtrl.Avalonia.Teacher.MainWindow"
+        Width="960" Height="720"
+        Background="#1F1F23"
+        Title="NTY ClassroomCtrl — Teacher (macOS)">
+    <Panel>
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+            <TextBlock Text="NTY ClassroomCtrl — Teacher"
+                       FontSize="26" FontWeight="SemiBold" Foreground="#E5E7EB"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="TT-2-B skeleton — the live student grid arrives in TT-2-C/D."
+                       FontSize="14" Foreground="#9CA3AF" HorizontalAlignment="Center"/>
+        </StackPanel>
+    </Panel>
+</Window>

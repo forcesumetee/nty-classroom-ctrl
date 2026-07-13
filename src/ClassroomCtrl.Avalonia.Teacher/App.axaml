@@ -1,0 +1,10 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ClassroomCtrl.Avalonia.Teacher.App"
+             RequestedThemeVariant="Dark">
+    <!-- TT-2-B skeleton: FluentTheme only. The ported Classroom/Conference theme
+         dictionaries (for StudentCard) are copied in from the Sandbox in TT-2-C. -->
+    <Application.Styles>
+        <FluentTheme />
+    </Application.Styles>
+</Application>

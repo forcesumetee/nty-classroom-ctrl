@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- TT-2 (Teacher track) — the windowed macOS Teacher app. Unlike the Student
+       Sandbox (a menubar LSUIElement app), this is a normal windowed app: it
+       shows the student grid. References Teacher.Core (transport + router +
+       roster); the grid VMs/views arrive in TT-2-C/D (StudentCard + converter +
+       theme copied from the Sandbox, which stays untouched). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ClassroomCtrl.Avalonia.Teacher</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClassroomCtrl.Teacher.Core\ClassroomCtrl.Teacher.Core.csproj" />
+  </ItemGroup>
+</Project>
