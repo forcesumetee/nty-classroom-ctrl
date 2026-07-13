@@ -1,6 +1,10 @@
 # Teacher Track Roadmap — macOS ClassroomCtrl Teacher (Avalonia)
 
-**Status:** PLAN ONLY — no Teacher code written yet. Hand-off doc for a parallel shift.
+**Status:** TT-0…TT-3 COMPLETE + LIVE-confirmed (2026-07-14) — MockStudent harness · Teacher.Core
+(transport + router + roster) · windowed Teacher (live student grid) · per-student **live screen view
+(MJPEG)**, all proven against a shipped, unmodified Windows Student. **The SCALE GATE is CLOSED** —
+student screens are on-demand (1–4 concurrent), not a 40-tile wall (see §7). **TT-4 next** (H.264
+decode — now additive). TT-5…TT-13 remain PLAN. Hand-off doc for a parallel shift.
 **Author context:** drafted 2026-07-13 after Phase 31-B (Student track), grounded in a
 structural map of the shipped Windows Teacher (`/Users/fewfee/Dev/nty-classroom-macos`,
 v1.2.1, .NET 10 / WPF). **That shipped repo is READ-ONLY — copy from it, never modify it.**
@@ -106,7 +110,7 @@ lock/policy + bulk).
 | **TT-1** | **Server + roster + Hello/Ping/Pong** | no | **M** | Windows Student connects → appears in roster; liveness + stale-sweep |
 | **TT-2** | **Student grid UI (tiles)** | no | **M** | Windows Students show as live tiles; join/leave updates |
 | **TT-3** | **Receive + display student screens — MJPEG** | no | **M** | Request a Windows Student's screen → see it live (MJPEG) |
-| **TT-4** | **H.264 student-screen DECODE (VTDecompressionSession)** | **YES** | **L** | Windows Student streaming H.264 → decoded + displayed |
+| **TT-4** | **H.264 student-screen DECODE (VTDecompressionSession)** | **YES** | **M** (was L) | Windows Student streaming H.264 → decoded + displayed |
 | **TT-5** | **Core commands: lock/unlock, policy, power** | no | **M** | Mac Teacher locks/policies/logs-off a Windows Student |
 | **TT-6** | **Multi-select + bulk actions (v1.2)** | no | **M** | Select N Windows Students → bulk lock/policy/mute/file/power |
 | TT-7 | Chat + notifications + hand-raise + reactions | no | M | Two-way chat; hand-raise/reaction surfaces on the Mac Teacher |
@@ -141,13 +145,20 @@ live join/leave.
 `BitmapImage`); render in tile thumbnails + a full-screen `StudentScreenWindow`. *LIVE:* request a
 Windows Student's screen (set the student to MJPEG) → live thumbnail + full-screen.
 
-**TT-4 — H.264 student-screen DECODE (the main new native piece).** Investigation-first (mirror the
-M18 encoder investigation). Add to the dylib: `nty_h264_decode_start/feed/stop` — Annex-B NAL →
-`VTDecompressionSession` → BGRA callback (GC-rooted, §20 template) → Avalonia. Replaces
-`Shared/Codec/H264DecoderWrapper.cs` (OpenH264). Note the shipped student H.264 is
-OpenH264-Baseline; confirm VideoToolbox decodes that SPS/PPS. *Structural:* MockStudent streams
-H.264 (loopback encode→decode round-trip). *LIVE:* Windows Student in H.264 mode → decoded on the
-Mac Teacher. **This is the highest-risk phase — schedule an investigation sub-phase.**
+**TT-4 — H.264 student-screen DECODE (the one big new native piece — now ADDITIVE).** As of TT-3 the
+whole pipeline is proven and LIVE (request → receive → decode → Image → stop, MJPEG), and the render is
+a **codec-dispatch `RenderFrame` with an H.264 stub already in place** (TT-3-C). So TT-4 fills **only**
+the `VideoCodec.H264` branch + the native decoder: add to the dylib `nty_h264_decode_start/feed/stop` —
+Annex-B NAL → `VTDecompressionSession` → CVPixelBuffer (BGRA) callback (GC-rooted, §20 template) →
+`WriteableBitmap.Lock()` + `Marshal.Copy` → return a fresh `WriteableBitmap` (verified assignable to the
+`Bitmap? CurrentFrame` target — `WriteableBitmap : Bitmap`). Replaces `Shared/Codec/H264DecoderWrapper.cs`
+(OpenH264). The subscription, studentId filter, request/stop lifecycle, and UI-thread marshal are
+**untouched**. **Scale is a phantom** (§7): streams are on-demand, 1–4 concurrent, so there is **no
+×40-decode requirement** and **no downscale/decode-on-demand mitigation needed**. The **remaining** risk
+is narrow and technical — does VideoToolbox decode the shipped student's **OpenH264-Baseline** SPS/PPS/NAL
+shape? Investigate that first (the M18 encoder findings are the template). *Structural:* MockStudent
+streams H.264 (loopback encode→decode round-trip). *LIVE:* a Windows Student in H.264 mode → decoded on
+the Mac Teacher. `--classroom 40` stays a **stress test, not a gate**.
 
 **TT-5 — Core commands.** Port the send-sites: `BroadcastLockAsync`/`LockOneAsync` (`0x0300/0x0301`),
 `BroadcastPolicyAsync`/`ApplyPolicyToOneAsync`/revert (`0x0400/0x0401`), `BroadcastPowerAsync`
@@ -199,9 +210,12 @@ grants persist across relaunch, full session with Windows Students.
 
 ## 6. Genuinely-new native pieces (everything else is reuse)
 
-1. **H.264 DECODE — VTDecompressionSession (TT-4).** The single biggest new native effort;
-   symmetric to the proven M18 encoder. Risk: decoding OpenH264-Baseline streams from Windows
-   students. Investigate the SPS/PPS/NAL shape first (the M18 findings are the template).
+1. **H.264 DECODE — VTDecompressionSession (TT-4).** The one genuinely-new native piece; symmetric to
+   the proven M18 encoder. As of TT-3 it is **additive** — the receive/decode/render/stop pipeline is
+   LIVE and the codec-dispatch render seam already has the H.264 slot (TT-3-C), so TT-4 = fill that
+   branch + the decoder. **Scale is NOT a factor** (streams are on-demand, 1–4 concurrent — §7). The
+   remaining risk is narrow: decoding the shipped student's **OpenH264-Baseline** SPS/PPS/NAL shape.
+   Investigate that first (the M18 findings are the template).
 2. **Multi-student audio mix (TT-9).** Extends M20 playback from one stream to a mixed bus with
    per-student jitter buffers. Medium risk (mixing + drift, not new frameworks).
 3. **System-audio loopback capture (TT-10, "Share Computer Audio") — the real gap.** Windows uses
@@ -222,9 +236,15 @@ Everything else (screen capture, H.264 encode, camera, mic capture, single-strea
 - **`ClassroomCtrl.Shared` is not platform-clean on Windows** (it sets `UseWPF=true` and pulls
   H264Sharp/Vortice). The Avalonia side already vendors a clean `Shared.Wire`; when porting
   `ControlServer`/VMs, pull only the protocol/model types, not the WPF/codec deps.
-- **Scale/perf** — a Windows classroom is 30–40 students; H.264-decoding + rendering that many
-  tiles on a MacBook Air M2 needs a perf pass (downscale thumbnails, decode-on-demand for the
-  focused tile). Validate with MockStudent `--students 40`.
+- **Scale/perf — RESOLVED (gate CLOSED, not deferred; TT-3, 2026-07-14).** Student screen streams are
+  **on-demand**, not always-on: traced from the shipped code (`ViewStudentScreen` → targeted
+  `StudentStreamStart` for ONE student; no all-student loop; tiles never stream — thumbnails come only
+  from a manual screenshot), and confirmed with sales that customer B expects the shipped
+  one-at-a-time behavior, **not** a live thumbnail wall. So the Teacher decodes **1–4 concurrent**
+  streams, **never 40** — the "×40 tiles decoding" perf pass (downscale thumbnails / decode-on-demand)
+  is **unnecessary and is dropped**. `--classroom 40` (MockStudent) stays as a **stress test, not a
+  gate**. *If* a live-thumbnail-wall feature is ever requested, it is a NEW feature that would
+  reintroduce this gate — a scoped request with known cost, not a bug. See `docs/TT-3-FINDINGS.md`.
 - **Deferred/optional features** (not on the shippable-Teacher path; port later if wanted): remote
   control (`0x0480-0x0486`), demo/annotation/screen-pen (`0x0440-0x0452`), net movie
   (`0x0470-0x0473`), recording (NReco/ffmpeg → AVAssetWriter), breakout rooms (`0x0600-0x0625`),

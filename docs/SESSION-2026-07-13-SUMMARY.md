@@ -292,17 +292,31 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 
 ## Next-session priority queue
 1. **Teacher track (macOS Teacher, Avalonia)** — roadmap **TT-0…TT-13** in
-   `docs/TEACHER-TRACK-ROADMAP.md`. **TT-0 (MockStudent harness) + TT-1 (Teacher.Core: transport +
-   router + roster) + TT-2 (windowed Teacher app — live student grid) COMPLETE + LIVE-confirmed
-   2026-07-14.** Scenario 3 (Mac T + Win S) proven: a shipped, **unmodified Windows Student joined the
-   Mac Teacher's roster (TT-1) and appears as a live TILE in a real Mac Teacher window (TT-2)** —
-   including the **network-cut → 15 s stale-sweep → tile-gone** path, zero changes to the shipped
-   product. See `docs/TT-1-*` + `docs/TT-2-*`. Headless gates: `MockStudent --teacherselftest` **20/20**
-   + the Avalonia-headless UI suites (incl. the background→UI-thread `Dispatcher.UIThread.Post` marshal
-   proof). The roster namespace-gap bug (both customers exposed) is fixed in the port + logged for the
-   Windows team. **Next: TT-3** (per-student screen-view UI) → **TT-4** (H.264 **decode** — the one big
-   new native piece + the SCALE gate, 30–40 tiles). **The critical path for customer B (Mac teacher +
-   Mac students, 50 seats).**
+   `docs/TEACHER-TRACK-ROADMAP.md`. **TT-0 (MockStudent) + TT-1 (Teacher.Core: transport + router +
+   roster) + TT-2 (windowed Teacher — live student grid) + TT-3 (per-student live screen view, MJPEG)
+   COMPLETE + LIVE-confirmed 2026-07-14.** Scenario 3 (Mac T + Win S) now spans the whole chain: a
+   shipped, **unmodified Windows Student joins the Mac Teacher's roster (TT-1), appears as a live TILE
+   (TT-2), and its SCREEN renders live in the Mac Teacher (TT-3, MJPEG)** — plus the **network-cut →
+   15 s stale-sweep → tile-gone** path, zero changes to the shipped product. See `docs/TT-1-*` …
+   `docs/TT-3-*`. Headless gates: `MockStudent --teacherselftest` **20/20** + the Avalonia **Skia**-headless
+   UI suites (TT-3-B/C **36/36**, incl. the background→UI `Dispatcher.UIThread.Post` marshal proof, the
+   studentId filter, and real exact-dimension decode). The roster namespace-gap bug (both customers
+   exposed) is fixed in the port + logged for the Windows team.
+
+   **🔴 THE SCALE GATE IS CLOSED (not deferred).** Traced from shipped code + confirmed with sales:
+   student screen streams are **ON-DEMAND** (targeted `StudentStreamStart`, one per open screen-view
+   window; tiles never stream — thumbnails only from a manual screenshot), so the Teacher decodes **1–4
+   concurrent** streams, never 40 — `VTDecompressionSession ×40` was never the real shape. Customer B
+   expects the shipped one-at-a-time behavior, **not** a live thumbnail wall. So the roadmap's
+   downscale/decode-on-demand mitigation is **dropped**, and **TT-4 collapses to "add one decoder to a
+   working pipeline."** The render seam is already in place (codec-dispatch `RenderFrame`; H.264 is a
+   clean stub; type verified — `WriteableBitmap : Bitmap`). A live thumbnail wall, if ever wanted, is a
+   NEW feature that reintroduces scale — a scoped request, not a bug. See `docs/TT-3-FINDINGS.md`.
+
+   **The Mac Teacher now:** server + roster + live grid + **live screen view (MJPEG)**. **Next: TT-4**
+   (H.264 **decode** — now a small additive phase into a proven pipeline, not the risk it was thought
+   to be; `--classroom 40` stays a stress test, not a gate). **The critical path for customer B (Mac
+   teacher + Mac students, 50 seats).**
 2. **Phase 35 — Distribution** — Developer ID codesign + notarization (stops the ad-hoc-rebuild TCC
    re-prompt; a *relaunch* of the same built bundle already keeps grants) + `.pkg`/`.dmg` installer +
    self-contained runtime bundling (for .NET-less lab Macs). Makes the Student track deployable at scale.
