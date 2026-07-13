@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ClassroomCtrl.Avalonia.Teacher.ViewModels"
+        x:Class="ClassroomCtrl.Avalonia.Teacher.Views.ScreenViewWindow"
+        x:DataType="vm:ScreenViewModel"
+        Width="960" Height="640"
+        Title="{Binding Title}"
+        Background="#0D1224">
+
+    <!-- TT-3-B — the per-student live screen view. An Image whose Source is the
+         VM's CurrentFrame (updated per frame, marshaled to the UI thread) + a status
+         strip. Literal colors (no Conf* resources) so the window renders standalone,
+         including in the headless Skia test harness. -->
+
+    <Grid RowDefinitions="*,Auto">
+        <!-- Uniform keeps the student's aspect ratio; the dark plate letterboxes. -->
+        <Image Grid.Row="0" x:Name="ScreenImage" Source="{Binding CurrentFrame}"
+               Stretch="Uniform" Margin="8"/>
+
+        <!-- Status strip: "Connecting…" → "Live — W×H" → error/disconnect text. -->
+        <Border Grid.Row="1" Background="#151B2E" Padding="12,8">
+            <TextBlock x:Name="StatusText" Text="{Binding StatusText}"
+                       FontSize="12" Foreground="#9AA0A6"/>
+        </Border>
+    </Grid>
+</Window>

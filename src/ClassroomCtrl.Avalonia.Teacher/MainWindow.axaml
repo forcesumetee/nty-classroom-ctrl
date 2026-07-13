@@ -34,7 +34,9 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:StudentTileViewModel">
-                            <views:StudentCard Margin="0,0,14,14"/>
+                            <!-- TT-3-B: double-tap a tile → open its live screen view
+                                 (the context menu affordance is deferred). -->
+                            <views:StudentCard Margin="0,0,14,14" DoubleTapped="Card_DoubleTapped"/>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

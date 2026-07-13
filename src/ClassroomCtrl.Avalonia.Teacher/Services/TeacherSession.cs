@@ -21,7 +21,7 @@ namespace ClassroomCtrl.Avalonia.Teacher.Services;
 /// Extracted (not inlined in App) so the socket-teardown is unit-testable — the
 /// same "never leave :7777 bound" discipline as TeacherHost / the TT-1 self-tests.
 /// </summary>
-public sealed class TeacherSession : IDisposable
+public sealed class TeacherSession : IDisposable, IStudentStreamSource
 {
     private readonly ControlServer _server;
     private bool _disposed;
@@ -42,6 +42,22 @@ public sealed class TeacherSession : IDisposable
     public Task StartAsync() => _server.StartAsync(CancellationToken.None);
 
     public int? BoundPort => _server.BoundPort;
+
+    // ─────── TT-3-B: IStudentStreamSource — the screen-view seam ───────
+    // Pure re-exposure of the already-ported ControlServer frame flow (TT-1-C) so a
+    // ScreenViewModel depends on the interface, not the concrete server.
+
+    public event EventHandler<(Guid StudentId, ScreenStreamFrameMessage Frame)>? StudentStreamFrameReceived
+    {
+        add => _server.StudentStreamFrameReceived += value;
+        remove => _server.StudentStreamFrameReceived -= value;
+    }
+
+    public Task RequestStudentStreamAsync(Guid studentId, VideoCodec codec, CancellationToken ct)
+        => _server.RequestStudentStreamAsync(studentId, codec, ct);
+
+    public Task StopStudentStreamAsync(Guid studentId, CancellationToken ct)
+        => _server.StopStudentStreamAsync(studentId, ct);
 
     public string ListenAddress
     {
