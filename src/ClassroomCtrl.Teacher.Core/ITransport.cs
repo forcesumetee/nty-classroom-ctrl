@@ -6,6 +6,8 @@ public interface ITransport : IDisposable
 {
     event EventHandler<Envelope>? MessageReceived;
     event EventHandler<Guid>? PeerConnected;
+    /// <summary>TT-1-D (macOS port) — carries the departed student's app-level
+    /// EndpointId, not the transport peerId (see TcpControlServer).</summary>
     event EventHandler<Guid>? PeerDisconnected;
 
     Task StartAsync(CancellationToken ct);

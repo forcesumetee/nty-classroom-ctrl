@@ -22,7 +22,8 @@ public class TcpControlServer : ITransport
     /// to ping every 5 s; 15 s gives a comfortable 3× margin for jitter, GC
     /// pauses, and brief Wi-Fi reconnects without false-positive disconnects.
     /// </summary>
-    private const int StaleAfterMs = 15_000;
+    // TT-1-D — internal (was private) so ControlServer can mirror the default.
+    internal const int StaleAfterMs = 15_000;
 
     /// <summary>How often to sweep for stale peers.</summary>
     private static readonly TimeSpan StaleSweepInterval = TimeSpan.FromSeconds(2);
@@ -36,11 +37,25 @@ public class TcpControlServer : ITransport
     // Privacy.  This is the ONLY deviation from the verbatim Windows transport.
     private readonly IPAddress _bindAddress;
     private readonly ConcurrentDictionary<Guid, PeerConnection> _peers = new();
+    // TT-1-D (macOS port) — bridge the transport↔app identity namespace gap.
+    // The transport keys connections by peerId (per TCP-accept); the app keys
+    // students by their Hello EndpointId (== Envelope.SenderId). This maps each
+    // app EndpointId to its CURRENT connection so a disconnect can be reported
+    // by student identity, and a stale old-socket drop can't evict a student who
+    // has already reconnected on a newer socket.
+    private readonly ConcurrentDictionary<Guid, Guid> _endpointToPeer = new();
+    // TT-1-D — injectable stale window (default = shipped 15 s). The headless
+    // self-test shortens it to prove stale-sweep eviction without a 15 s wait.
+    private readonly int _staleAfterMs;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
 
     public event EventHandler<Envelope>? MessageReceived;
+    /// <summary>Transport peerId at TCP-accept (before the student identifies via Hello).</summary>
     public event EventHandler<Guid>? PeerConnected;
+    /// <summary>TT-1-D (macOS port) — the departed student's app-level EndpointId
+    /// (NOT the transport peerId). Fires only for an identified student whose
+    /// CURRENT connection dropped; a superseded stale socket is suppressed.</summary>
     public event EventHandler<Guid>? PeerDisconnected;
 
     public IReadOnlyList<Guid> ConnectedPeers => _peers.Keys.ToList();
@@ -63,12 +78,13 @@ public class TcpControlServer : ITransport
         }
     }
 
-    public TcpControlServer(ILogger<TcpControlServer> logger, int port = NetworkConstants.ControlTcpPort, IPAddress? bindAddress = null)
+    public TcpControlServer(ILogger<TcpControlServer> logger, int port = NetworkConstants.ControlTcpPort, IPAddress? bindAddress = null, int staleAfterMs = StaleAfterMs)
     {
         _logger = logger;
         _port = port;
         // Default preserves the shipped Windows behavior (bind all interfaces).
         _bindAddress = bindAddress ?? IPAddress.Any;
+        _staleAfterMs = staleAfterMs;
     }
 
     public Task StartAsync(CancellationToken ct)
@@ -126,7 +142,7 @@ public class TcpControlServer : ITransport
             foreach (var (id, conn) in _peers)
             {
                 var idleMs = nowTicks - conn.LastSeenTickMs;
-                if (idleMs > StaleAfterMs)
+                if (idleMs > _staleAfterMs)
                 {
                     _logger.LogWarning("Peer {Id} stale ({Idle} ms since last frame); closing.", id, idleMs);
                     try { conn.Dispose(); } catch { }
@@ -148,10 +164,33 @@ public class TcpControlServer : ITransport
         MessageReceived?.Invoke(this, env);
     }
 
-    internal void HandleDisconnect(Guid peerId)
+    // TT-1-D (macOS port) — called by a PeerConnection when it first learns its
+    // app-level EndpointId (from the Hello). Records this connection as the
+    // CURRENT one for that student; a later reconnect (new peerId, same
+    // EndpointId) overwrites it so the newest socket owns the student.
+    internal void RegisterEndpoint(Guid peerId, Guid endpointId)
+    {
+        if (endpointId != Guid.Empty) _endpointToPeer[endpointId] = peerId;
+    }
+
+    // TT-1-D (macOS port) — fixes the shipped Windows roster bug (ControlServer
+    // fired StudentLeft with the transport peerId, which never matched the
+    // app-keyed roster → it fell back to removing the LAST tile). We now report
+    // the departed student by EndpointId. Guard: only report the leave if THIS
+    // connection is still the current owner of the endpoint — a stale old-socket
+    // drop (e.g. surfaced 15 s later by the stale-sweep after a fast reconnect)
+    // must NOT evict the freshly-reconnected student. A peer that dropped before
+    // sending Hello has EndpointId Empty and no roster presence → nothing fired.
+    internal void HandleDisconnect(Guid peerId, Guid endpointId)
     {
         _peers.TryRemove(peerId, out _);
-        PeerDisconnected?.Invoke(this, peerId);
+        if (endpointId == Guid.Empty) return;
+        if (_endpointToPeer.TryGetValue(endpointId, out var current) && current == peerId)
+        {
+            _endpointToPeer.TryRemove(endpointId, out _);
+            PeerDisconnected?.Invoke(this, endpointId);
+        }
+        // else: superseded by a newer connection for the same student → suppress.
     }
 
     public async Task SendAsync(Guid peerId, Envelope env, CancellationToken ct)
@@ -374,6 +413,11 @@ internal class PeerConnection : IDisposable
     /// <summary>Phase 10.21 — exposed so BroadcastReliableAsync can log per-peer failures.</summary>
     public Guid Id => _id;
 
+    // TT-1-D (macOS port) — the app-level EndpointId this connection identified
+    // as (from the first envelope's SenderId; the Hello is always first). Empty
+    // until identified. Lets a disconnect be reported by student identity.
+    internal Guid EndpointId { get; private set; } = Guid.Empty;
+
     // Phase 22.3-E — "Fix 8" drop-counter fields removed.  _droppedFrames
     // was declared + read at the end of WriterLoopAsync but never
     // incremented anywhere, so the "total dropped frames" log line was
@@ -517,6 +561,17 @@ internal class PeerConnection : IDisposable
                     continue;
                 }
 
+                // TT-1-D (macOS port) — learn this connection's app-level
+                // EndpointId from the first envelope that carries one (the Hello
+                // is always first). Register it so a disconnect is reported by
+                // student identity, and a reconnect claims ownership of the
+                // student from any older lingering socket.
+                if (EndpointId == Guid.Empty && env.SenderId != Guid.Empty)
+                {
+                    EndpointId = env.SenderId;
+                    _server.RegisterEndpoint(_id, EndpointId);
+                }
+
                 // Fix 7 — auto-reply Pong inside the connection so user code
                 // never sees keepalive traffic.
                 if (env.Type == MessageType.Ping)
@@ -535,7 +590,7 @@ internal class PeerConnection : IDisposable
         }
         finally
         {
-            _server.HandleDisconnect(_id);
+            _server.HandleDisconnect(_id, EndpointId);
             Dispose();
         }
     }

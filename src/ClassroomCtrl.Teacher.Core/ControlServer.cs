@@ -46,6 +46,9 @@ public class ControlServer : IDisposable
     private readonly HashSet<Guid> _micMonitorTargets = new();
 
     public event EventHandler<HelloMessage>? StudentJoined;
+    /// <summary>TT-1-D (macOS port) — carries the departed student's app-level
+    /// EndpointId (was the transport peerId in the shipped Windows Teacher; that
+    /// mismatch is the roster bug this port fixes).</summary>
     public event EventHandler<Guid>? StudentLeft;
     public event EventHandler<ChatMessage>? ChatReceived;
     public event EventHandler<HandRaiseMessage>? HandRaiseReceived;
@@ -110,14 +113,16 @@ public class ControlServer : IDisposable
     public Guid? CurrentDemoSourceId => _currentDemoSourceId;
 
     public ControlServer(ILogger<ControlServer> logger, ILoggerFactory factory, IPAddress localIp,
-        int port = NetworkConstants.ControlTcpPort, IPAddress? bindAddress = null)
+        int port = NetworkConstants.ControlTcpPort, IPAddress? bindAddress = null,
+        int staleAfterMs = TcpControlServer.StaleAfterMs)
     {
         _logger = logger;
-        // TT-1-C (macOS port) — thread the injectable bind through to the
-        // transport so the headless self-test hosts on Loopback:0 (ephemeral,
-        // no :7777 collision, not LAN-visible, no LNP). Defaults preserve the
-        // shipped Windows behavior (Any:7777).
-        _tcp = new TcpControlServer(factory.CreateLogger<TcpControlServer>(), port, bindAddress);
+        // TT-1-C/D (macOS port) — thread the injectable bind + stale window
+        // through to the transport so the headless self-test hosts on Loopback:0
+        // (ephemeral, no :7777 collision, not LAN-visible, no LNP) and can prove
+        // stale-sweep eviction fast. Defaults preserve shipped behavior
+        // (Any:7777, 15 s stale).
+        _tcp = new TcpControlServer(factory.CreateLogger<TcpControlServer>(), port, bindAddress, staleAfterMs);
 
         _tcp.MessageReceived += OnMessage;
         _tcp.PeerConnected += (_, id) =>
@@ -131,7 +136,14 @@ public class ControlServer : IDisposable
         };
         _tcp.PeerDisconnected += (_, id) =>
         {
-            _logger.LogInformation("Peer {Id} TCP disconnected", id);
+            // TT-1-D (macOS port) — `id` is now the departed student's app-level
+            // EndpointId (the transport translates peerId→EndpointId with an
+            // ownership guard). THIS is the roster fix: _activeConferenceCamSenders
+            // is keyed by EndpointId (== env.SenderId) and StudentLeft consumers
+            // key by EndpointId — both were silently no-op / wrong when fed the
+            // raw peerId in the shipped Windows Teacher.
+            if (id == Guid.Empty) return; // never-identified peer; no roster impact
+            _logger.LogInformation("Student {Id} disconnected", id);
             // Phase 16-C — if the disconnecting peer was broadcasting a
             // Conference cam, drop their entry so a future late joiner
             // doesn't get a phantom Start replay for someone who's gone.
