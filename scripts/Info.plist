@@ -3,36 +3,46 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>ClassroomCtrl Sandbox</string>
+    <string>NTY ClassroomCtrl</string>
     <key>CFBundleDisplayName</key>
-    <string>ClassroomCtrl Sandbox</string>
+    <string>NTY ClassroomCtrl</string>
+    <!-- STABLE bundle id: TCC binds permissions (Screen/Camera/Mic/Accessibility) to this id.
+         It must not change between releases or every grant re-prompts. Matches the LaunchAgent
+         label (32-E). NOTE (M22/M16 finding): TCC also binds to the code signature, so an ad-hoc
+         (unsigned) build re-prompts after a REBUILD even though the id is stable — that dev caveat
+         is fixed by P35's real Developer ID signature + notarization. A RELAUNCH of the SAME built
+         bundle keeps its grants. -->
     <key>CFBundleIdentifier</key>
-    <string>com.nty.classroom.sandbox</string>
+    <string>com.nty.classroomctrl.student</string>
     <key>CFBundleVersion</key>
-    <string>27.0</string>
+    <string>1.2.32</string>
     <key>CFBundleShortVersionString</key>
-    <string>27.0</string>
+    <string>1.2</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <!-- Must match the .NET apphost name (assembly name). -->
     <key>CFBundleExecutable</key>
     <string>ClassroomCtrl.Avalonia.Sandbox</string>
+    <!-- ScreenCaptureKit minimum (the dylib targets arm64-apple-macos12.3). -->
     <key>LSMinimumSystemVersion</key>
     <string>12.3</string>
     <key>NSHighResolutionCapable</key>
     <true/>
-    <!-- Screen Recording (unlike camera/mic) does not actually consume a usage-
-         description string — the TCC prompt text is system-generated. Included for
-         intent/documentation; harmless. See PHASE-27-A-FINDINGS. -->
+    <!-- 32-C/32-F: menubar-only accessory app (no Dock icon). The window is hidden by default;
+         the tray's "Show Debug Window" brings the Sandbox tabs back for testing. -->
+    <key>LSUIElement</key>
+    <true/>
+    <!-- Screen Recording (unlike camera/mic) does not actually consume a usage-description string —
+         the TCC prompt text is system-generated. Included for intent/documentation; harmless. -->
     <key>NSScreenCaptureUsageDescription</key>
     <string>ClassroomCtrl needs to capture your screen to share it with the teacher.</string>
-    <!-- Camera (Phase 28-B): UNLIKE Screen Recording, this text IS shown to the
-         user in the system permission dialog, and the grant is effective
-         immediately (no relaunch). -->
+    <!-- Camera (M19): this text IS shown in the system dialog; grant is effective immediately. -->
     <key>NSCameraUsageDescription</key>
     <string>NTY ClassroomCtrl uses your camera for classroom video conferencing sessions with the teacher and other students.</string>
-    <!-- Microphone (Phase 29-B): shown to the user; grant effective immediately. -->
+    <!-- Microphone (M20): shown to the user; grant effective immediately. -->
     <key>NSMicrophoneUsageDescription</key>
     <string>NTY ClassroomCtrl uses your microphone so the teacher can listen to you and for classroom voice.</string>
+    <!-- Accessibility (M22): intentionally has NO usage-description key — it is gated by
+         AXIsProcessTrusted (System Settings ▸ Privacy ▸ Accessibility), not an Info.plist string. -->
 </dict>
 </plist>

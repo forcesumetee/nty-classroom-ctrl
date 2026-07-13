@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -30,14 +31,21 @@ public partial class App : Application
             // the Dock icon + window stay, and the full Sandbox tabs remain reachable for testing.
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+            // Menubar-only when launched from the packaged .app (LSUIElement, 32-F): don't auto-show
+            // the window — the tray is the UI and "Show Debug Window" reveals the Sandbox tabs on
+            // demand. In `dotnet run` dev, show the full window as before (for tab testing).
+            bool bundled = (Environment.ProcessPath ?? "").Contains("/Contents/MacOS/", StringComparison.Ordinal);
+
             var window = new MainWindow();
-            desktop.MainWindow = window;
 
             // Keep the window alive on close so "Show Debug Window" can bring it back.
             window.Closing += (_, e) =>
             {
                 if (!_exiting) { e.Cancel = true; window.Hide(); }
             };
+
+            if (!bundled)
+                desktop.MainWindow = window;   // dev: the classic lifetime shows it on start
 
             var conn = ((MainWindowViewModel)window.DataContext!).Connection;
             _tray = new TrayController(
