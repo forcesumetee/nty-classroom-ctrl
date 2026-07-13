@@ -34,6 +34,7 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
     private Bitmap? _pendingDispose;   // the frame CurrentFrame just replaced; freed one cycle later, past the compositor
     private bool _started;
     private bool _disposed;
+    private bool _warnedUnsupportedCodec;   // surface a non-MJPEG stream once, not per frame
 
     /// <summary>The student whose frames this view renders — the filter key.</summary>
     public Guid StudentId { get; }
@@ -93,8 +94,12 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
     private void OnFrame(object? sender, (Guid StudentId, ScreenStreamFrameMessage Frame) e)
     {
         if (e.StudentId != StudentId) return;    // FILTER — one window renders one student
-        var bmp = DecodeFrame(e.Frame);          // decode off the UI thread (JPEG decode is not cheap)
-        if (bmp is null) return;
+        var bmp = RenderFrame(e.Frame);          // codec dispatch + decode, OFF the UI thread
+        if (bmp is null)
+        {
+            NoteIfUnsupportedCodec(e.Frame.Codec);   // H.264 today = clean no-op; surface why, once
+            return;
+        }
         int w = e.Frame.Width, h = e.Frame.Height;
         Dispatcher.UIThread.Post(() =>           // marshal the Image.Source swap onto the UI thread
         {
@@ -107,15 +112,41 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
         });
     }
 
-    // TT-3-B: MJPEG only. TT-3-C turns this into `switch (frame.Codec)` with a
-    // VideoCodec.H264 branch (VTDecompressionSession, TT-4). Returns null on a
-    // bad/empty payload so one corrupt frame never tears down the view.
-    private static Bitmap? DecodeFrame(ScreenStreamFrameMessage frame)
+    // ─────── The codec fork — mirrors the shipped Windows OnStudentFrame →
+    // RenderMjpeg / RenderH264. TT-3 decodes MJPEG; TT-4 fills the H.264 branch. ───────
+    //
+    // THE SEAM (why TT-4 is additive): TT-4 fills ONLY the VideoCodec.H264 case —
+    // VTDecompressionSession → CVPixelBuffer (BGRA) → WriteableBitmap.Lock() +
+    // Marshal.Copy → return a FRESH WriteableBitmap per frame (the proven
+    // ScreenCaptureViewModel seam). WriteableBitmap derives from Bitmap (verified),
+    // so this return type and CurrentFrame / Image.Source already accommodate it. The
+    // subscription, studentId filter, request/stop lifecycle, UI-thread marshal, and
+    // the dispose-previous-frame logic above are ALL untouched by TT-4.
+    private static Bitmap? RenderFrame(ScreenStreamFrameMessage frame) => frame.Codec switch
     {
-        var data = frame.FrameData;
+        VideoCodec.Mjpeg => DecodeMjpeg(frame.FrameData),
+        VideoCodec.H264  => null,   // TT-4: VTDecompressionSession → BGRA → WriteableBitmap → fresh WB
+        _ => null,
+    };
+
+    // MJPEG: the shipped RenderMjpeg equivalent (new Bitmap over the JPEG payload).
+    // Returns null on a bad/empty payload so one corrupt frame never tears down the view.
+    private static Bitmap? DecodeMjpeg(byte[]? data)
+    {
         if (data is null || data.Length == 0) return null;
         try { using var ms = new MemoryStream(data); return new Bitmap(ms); }
         catch { return null; }
+    }
+
+    // H.264 (and any not-yet-supported codec) renders nothing today — no crash, no
+    // garbage. Surface WHY once (not per frame) on the status strip so a blank view
+    // reads as "decoder coming" rather than "broken". A null from a MALFORMED MJPEG
+    // frame is a dropped frame, not an unsupported codec — don't warn for that.
+    private void NoteIfUnsupportedCodec(VideoCodec codec)
+    {
+        if (codec == VideoCodec.Mjpeg || _warnedUnsupportedCodec) return;
+        _warnedUnsupportedCodec = true;
+        Dispatcher.UIThread.Post(() => StatusText = $"{codec} stream — decoder arrives in TT-4");
     }
 
     public void Dispose()
