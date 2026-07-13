@@ -27,7 +27,7 @@ using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false;
+bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -37,11 +37,13 @@ for (int i = 0; i < args.Length; i++)
         case "--streamtest": streamTest = true; break;
         case "--streamtest-h264": streamTestH264 = true; break;
         case "--cameratest": cameraTest = true; break;
+        case "--audiotest": audioTest = true; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (audioTest) return await AudioTest.RunAsync(teacherId);
 if (cameraTest) return await CameraTest.RunAsync(teacherId);
 if (streamTestH264) return await StreamTest.RunAsync(teacherId, VideoCodec.H264);
 if (streamTest) return await StreamTest.RunAsync(teacherId, VideoCodec.Mjpeg);
@@ -570,6 +572,212 @@ static class CameraTest
         Console.WriteLine(ok
             ? "\n=== CAMERATEST PASS ✅ — Mac emits well-formed ConferenceCameraFrames + clean start/stop ==="
             : "\n=== CAMERATEST FAIL ❌ ===");
+        return ok ? 0 : 1;
+    }
+}
+
+
+// ───────────────────────────── audio self-test ─────────────────────────────
+// Drives the REAL WireClient + AudioStreamer + AudioCaptureService (Sandbox assembly)
+// against an in-process mock Teacher, exercising BOTH audio directions:
+//   Path B (capture): server sends MicMonitorStart → the Mac captures its mic → sends
+//     StudentAudioStreamStart + StudentAudioStreamFrame(PCM) → server validates format,
+//     seq, RMS, routing → server sends MicMonitorStop → expects StudentAudioStreamStop.
+//   Path A (playback): server sends AudioStreamStart + synthetic AudioStreamFrame(tone)
+//     → the Mac decodes + enqueues for playback → server sends AudioStreamStop.
+// NOTE: capture uses the physical mic, so the process needs Microphone permission
+// (the .app bundle grant is bound to the bundle id, not the `dotnet` CLI host).
+static class AudioTest
+{
+    static byte[] SyntheticTone(int seq)
+    {
+        var pcm = new byte[3200]; // 1600 samples, 16-bit LE
+        const double step = 2.0 * Math.PI * 440.0 / 16000.0;
+        for (int i = 0; i < 1600; i++)
+        {
+            short s = (short)(0.2 * 32767 * Math.Sin((seq * 1600 + i) * step));
+            pcm[i * 2] = (byte)(s & 0xFF);
+            pcm[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
+        }
+        return pcm;
+    }
+
+    static double Rms(byte[] pcm)
+    {
+        int n = pcm.Length / 2;
+        if (n == 0) return 0;
+        double sum = 0;
+        for (int i = 0; i < n; i++) { short s = (short)(pcm[i * 2] | (pcm[i * 2 + 1] << 8)); double v = s / 32768.0; sum += v * v; }
+        return Math.Sqrt(sum / n);
+    }
+
+    public static async Task<int> RunAsync(Guid teacherId)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        Console.WriteLine($"=== MockTeacher --audiotest (loopback:{port}) ===");
+        const int captureTarget = 15, playbackTarget = 12;
+
+        // capture-path (B) state
+        int rxB = 0, validB = 0, seqOk = 0, endpointOk = 0, nonSilent = 0, lastSeq = 0;
+        long totalWireBytes = 0, totalPcmBytes = 0;
+        Guid helloEndpoint = Guid.Empty;
+        bool gotStartB = false, gotStopB = false, micLiveTrue = false, micLiveFalse = false;
+        DateTime tFirst = default, tLast = default;
+        var framesB = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopB = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // playback-path (A) state
+        int consumedA = 0;
+        var playbackA = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var serverTask = Task.Run(async () =>
+        {
+            var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            while (true)
+            {
+                var env = await Frame.ReadAsync(stream);
+                if (env == null) return;
+                switch (env.Type)
+                {
+                    case MessageType.Hello:
+                        helloEndpoint = MessagePackSerializer.Deserialize<HelloMessage>(env.Payload).EndpointId;
+                        Console.WriteLine($"  [Hello] ep={helloEndpoint.ToString()[..8]} → sending MicMonitorStart");
+                        await Frame.SendAsync(stream, MessageType.MicMonitorStart, Array.Empty<byte>(), teacherId);
+                        break;
+                    case MessageType.Ping:
+                        await Frame.SendAsync(stream, MessageType.Pong, Array.Empty<byte>(), teacherId);
+                        break;
+                    case MessageType.StudentAudioStreamStart:
+                        gotStartB = true;
+                        Console.WriteLine("  [StudentAudioStreamStart] (0x032B)");
+                        break;
+                    case MessageType.MicStateUpdate:
+                    {
+                        var m = MessagePackSerializer.Deserialize<MicStateUpdateMessage>(env.Payload);
+                        if (m.MicLive) micLiveTrue = true; else micLiveFalse = true;
+                        Console.WriteLine($"  [MicStateUpdate] MicLive={m.MicLive}");
+                        break;
+                    }
+                    case MessageType.StudentAudioStreamFrame:
+                    {
+                        var f = MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(env.Payload);
+                        rxB++;
+                        totalPcmBytes += f.PcmData.Length;
+                        totalWireBytes += env.Serialize().Length + 4; // body + 4-byte length prefix
+                        bool fmtOk = f.PcmData.Length == 3200 && f.SampleRate == 16000 && f.Channels == 1 && f.BitsPerSample == 16;
+                        if (fmtOk) validB++;
+                        if (f.FrameSeq == lastSeq + 1) seqOk++;
+                        lastSeq = f.FrameSeq;
+                        if (env.SenderId == helloEndpoint) endpointOk++;  // routing is via Envelope.SenderId
+                        if (Rms(f.PcmData) > 0.0005) nonSilent++;
+                        if (rxB == 1) tFirst = DateTime.UtcNow;
+                        tLast = DateTime.UtcNow;
+                        if (rxB <= 2 || rxB % 10 == 0)
+                            Console.WriteLine($"  [AudioFrame B] #{rxB} seq={f.FrameSeq} {f.PcmData.Length}B {f.SampleRate}/{f.Channels}/{f.BitsPerSample} rms={Rms(f.PcmData):0.000}");
+                        if (rxB >= captureTarget) framesB.TrySetResult();
+                        break;
+                    }
+                    case MessageType.StudentAudioStreamStop:
+                        gotStopB = true;
+                        Console.WriteLine("  [StudentAudioStreamStop] (0x032D) → driving playback path A");
+                        stopB.TrySetResult();
+                        _ = Task.Run(async () =>
+                        {
+                            await Frame.SendAsync(stream, MessageType.AudioStreamStart, Array.Empty<byte>(), teacherId);
+                            for (int i = 0; i < 14; i++)
+                            {
+                                await Frame.SendAsync(stream, MessageType.AudioStreamFrame,
+                                    MessagePackSerializer.Serialize(new AudioStreamFrameMessage
+                                    {
+                                        PcmData = SyntheticTone(i), SampleRate = 16000, Channels = 1, BitsPerSample = 16,
+                                        TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), FrameSeq = i + 1,
+                                    }), teacherId);
+                                await Task.Delay(100);
+                            }
+                            await Frame.SendAsync(stream, MessageType.AudioStreamStop, Array.Empty<byte>(), teacherId);
+                        });
+                        break;
+                }
+
+                if (rxB >= captureTarget && !stopB.Task.IsCompleted && gotStopB == false && env.Type == MessageType.StudentAudioStreamFrame && rxB == captureTarget)
+                {
+                    Console.WriteLine("  → capture target reached; sending MicMonitorStop");
+                    await Frame.SendAsync(stream, MessageType.MicMonitorStop, Array.Empty<byte>(), teacherId);
+                }
+            }
+        });
+
+        // Mac student: real WireClient + AudioStreamer (capture) + AudioCaptureService (playback).
+        var wire = new WireClient();
+        var audioStreamer = new AudioStreamer();
+        var playback = new AudioCaptureService();
+        wire.EnvelopeReceived += env =>
+        {
+            switch (env.Type)
+            {
+                case MessageType.MicMonitorStart:
+                    audioStreamer.StartAsync(wire, wire.EndpointId).ContinueWith(t =>
+                    { if (t.Result != 0) Console.WriteLine($"  [client] mic start rc={t.Result} (Microphone permission for this process?)"); });
+                    break;
+                case MessageType.MicMonitorStop:
+                    _ = audioStreamer.StopAsync();
+                    break;
+                case MessageType.AudioStreamStart:
+                    _ = playback.StartPlaybackAsync(16000, 1);
+                    break;
+                case MessageType.AudioStreamFrame:
+                    try
+                    {
+                        var m = MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(env.Payload);
+                        playback.EnqueuePcm(m.PcmData);
+                        if (System.Threading.Interlocked.Increment(ref consumedA) >= playbackTarget) playbackA.TrySetResult();
+                    }
+                    catch { }
+                    break;
+                case MessageType.AudioStreamStop:
+                    _ = playback.StopPlaybackAsync();
+                    break;
+            }
+        };
+        using var cts = new CancellationTokenSource();
+        var run = wire.RunAsync("127.0.0.1", port, "AudioTest Mac", cts.Token);
+
+        int failures = 0;
+
+        // ── Path B: capture ──
+        var doneB = await Task.WhenAny(framesB.Task, Task.Delay(20000));
+        if (doneB != framesB.Task) { Console.WriteLine("  ❌ timed out waiting for capture frames (Microphone permission for this process?)"); failures++; }
+        await Task.WhenAny(stopB.Task, Task.Delay(5000));
+
+        double seconds = (tLast - tFirst).TotalSeconds;
+        double wireKbps = seconds > 0 ? totalWireBytes * 8.0 / seconds / 1000.0 : 0;
+        double pcmKbps = seconds > 0 ? totalPcmBytes * 8.0 / seconds / 1000.0 : 0;
+
+        // ── Path A: playback — the server emits AudioStreamStart/Frame/Stop once capture
+        //    stops (see the StudentAudioStreamStop case); the client consumes + enqueues. ──
+        var doneA = await Task.WhenAny(playbackA.Task, Task.Delay(8000));
+        if (doneA != playbackA.Task) { Console.WriteLine($"  ⚠ playback consumed {consumedA}/{playbackTarget} frames"); }
+
+        await audioStreamer.StopAsync();
+        await playback.StopPlaybackAsync();
+        cts.Cancel();
+        try { await run; } catch { }
+        listener.Stop();
+
+        Console.WriteLine($"\n  [B capture] frames={rxB} validFmt={validB}/{rxB} seq↑={seqOk}/{rxB} "
+                        + $"endpoint={endpointOk}/{rxB} nonSilent={nonSilent}/{rxB}");
+        Console.WriteLine($"  [B lifecycle] Start={gotStartB} Stop={gotStopB} MicLive(true→false)={micLiveTrue}/{micLiveFalse}");
+        Console.WriteLine($"  [A playback] consumed={consumedA}/{playbackTarget}");
+        Console.WriteLine($"  [bandwidth] wire ~{wireKbps:0} kbit/s · raw PCM ~{pcmKbps:0} kbit/s · avg {(rxB > 0 ? totalWireBytes / rxB : 0)} B/frame on wire (PCM 3200 B)");
+
+        bool ok = failures == 0 && rxB >= captureTarget && validB == rxB && seqOk == rxB
+                  && endpointOk == rxB && nonSilent > 0 && gotStartB && gotStopB
+                  && micLiveTrue && micLiveFalse && consumedA >= playbackTarget;
+        Console.WriteLine(ok
+            ? "\n=== AUDIOTEST PASS ✅ — Mac emits well-formed PCM talkback + consumes teacher audio (both directions) ==="
+            : "\n=== AUDIOTEST FAIL ❌ ===");
         return ok ? 0 : 1;
     }
 }

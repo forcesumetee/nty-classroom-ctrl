@@ -518,6 +518,35 @@ int errors = 0;
         Pass("T26: ConferenceShareResponseMessage Approve/Deny/Revoke round-trip preserved (3 keys)");
 }
 
+// ──────── Test 27 (Phase 29 / M20 audio): AudioStreamFrameMessage byte-compat ────────
+//          The Phase 4 broadcast/talkback frame DTO (0x0329 / 0x032C) — the ONE
+//          video/audio frame type not previously wire-tested.  Raw PCM + self-
+//          describing rate/channels/depth + seq.  Round-trip all 6 keys, incl. the
+//          3200-byte 100 ms/16 k/mono payload the Mac emits.
+{
+    var pcm = new byte[3200];
+    for (int i = 0; i < pcm.Length; i++) pcm[i] = (byte)(i * 7 & 0xFF);   // deterministic pattern
+    var msg = new AudioStreamFrameMessage
+    {
+        PcmData = pcm,
+        SampleRate = 16000,
+        Channels = 1,
+        BitsPerSample = 16,
+        TimestampUtcMs = 1_700_000_000_123,
+        FrameSeq = 42,
+    };
+    var bytes = MessagePackSerializer.Serialize(msg);
+    var back = MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(bytes);
+    if (back.PcmData.Length != 3200 || !back.PcmData.AsSpan().SequenceEqual(pcm))
+        errors += Fail("T27: PcmData mismatch (3200-byte payload)");
+    else if (back.SampleRate != 16000) errors += Fail("T27: SampleRate mismatch");
+    else if (back.Channels != 1) errors += Fail("T27: Channels mismatch");
+    else if (back.BitsPerSample != 16) errors += Fail("T27: BitsPerSample mismatch");
+    else if (back.TimestampUtcMs != msg.TimestampUtcMs) errors += Fail("T27: TimestampUtcMs mismatch");
+    else if (back.FrameSeq != 42) errors += Fail("T27: FrameSeq mismatch");
+    else Pass("T27: AudioStreamFrameMessage round-trip preserved (6 keys, 3200-byte PCM)");
+}
+
 if (errors > 0)
 {
     Console.Error.WriteLine($"\n{errors} test(s) FAILED — wire-compat broken.");
