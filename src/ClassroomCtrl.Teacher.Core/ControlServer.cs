@@ -1,0 +1,1916 @@
+﻿using ClassroomCtrl.Networking;
+using ClassroomCtrl.Shared.Protocol;
+using Microsoft.Extensions.Logging;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Security.Cryptography;
+
+namespace ClassroomCtrl.Teacher.Services;
+
+public class ControlServer : IDisposable
+{
+    private readonly ILogger<ControlServer> _logger;
+    private readonly TcpControlServer _tcp;
+    private readonly Guid _teacherId = Guid.NewGuid();
+
+    /// <summary>Phase 15-C — public accessor for the teacher's endpoint id.
+    /// Used by MainViewModel.RebuildConferenceGallery to tag the self-tile.</summary>
+    public Guid TeacherEndpointId => _teacherId;
+
+    // TT-1-C (macOS port) — passthrough to the transport's bound port so a
+    // headless self-test that hosts on Loopback:0 can discover the ephemeral
+    // port the OS assigned. Null before Start / after Dispose.
+    public int? BoundPort => _tcp.BoundPort;
+
+    // Breakout state: endpointId → roomId (null/missing = main classroom)
+    private readonly Dictionary<Guid, Guid?> _studentRoomMap = new();
+    private readonly Dictionary<Guid, string> _roomNames = new();
+    // Phase 8.5: roomId → hostStudentId. Missing key = no host.
+    private readonly Dictionary<Guid, Guid> _roomHostMap = new();
+
+    // Phase 13-B (Tier 1) — breakout extensions: which group (if any) the
+    // teacher is currently joined to + which group (if any) is the active
+    // target for teacher screen-share.  Both null = teacher is in whole-class
+    // mode; mutually exclusive with the existing whole-class screen broadcast.
+    private Guid? _teacherJoinedGroupId;
+    private Guid? _activeGroupShareGroupId;
+
+    // Phase 9.1: Student Demonstration — at most one source student is broadcasting to peers
+    // at a time. While set, every StudentStreamFrame from this sender is also rebroadcast as
+    // a DemoFrame to all students.
+    private Guid? _currentDemoSourceId;
+    private string _currentDemoSourceName = "";
+
+    // Phase 4.6: Live Mic Monitor — students whose audio the teacher is listening to.
+    private readonly HashSet<Guid> _micMonitorTargets = new();
+
+    public event EventHandler<HelloMessage>? StudentJoined;
+    public event EventHandler<Guid>? StudentLeft;
+    public event EventHandler<ChatMessage>? ChatReceived;
+    public event EventHandler<HandRaiseMessage>? HandRaiseReceived;
+    public event EventHandler<ScreenshotResponseMessage>? ScreenshotReceived;
+    /// <summary>Phase 4 Part 2: Frame received from a student that's streaming back to teacher.</summary>
+    public event EventHandler<(Guid StudentId, ScreenStreamFrameMessage Frame)>? StudentStreamFrameReceived;
+
+    /// <summary>Phase 4 Part 3b: Student turned mic on (talkback).</summary>
+    public event EventHandler<Guid>? StudentAudioStreamStarted;
+    /// <summary>Phase 4 Part 3b: Audio frame received from a student.</summary>
+    public event EventHandler<(Guid StudentId, AudioStreamFrameMessage Frame)>? StudentAudioFrameReceived;
+    /// <summary>Phase 4 Part 3b: Student turned mic off.</summary>
+    public event EventHandler<Guid>? StudentAudioStreamStopped;
+
+    /// <summary>Phase 4 Part 5: Per-student reception quality report (every ~2 seconds).</summary>
+    public event EventHandler<(Guid StudentId, ScreenStreamQualityReportMessage Report)>? QualityReportReceived;
+
+    // TT-1-C (macOS port) — DEFERRED: quiz relay. The Exam.Shared wire POCOs
+    // (Exam / Quiz*Payload) aren't in the Avalonia repo yet, and porting them
+    // would touch the frozen Shared.Wire or add a project outside TT-1's
+    // roster/liveness scope. Restore this event + the 3 quiz Broadcast/Unlock
+    // methods + the QuizAnswerSubmit dispatch case together when the quiz phase
+    // ports ClassroomCtrl.Exam.Shared. (MessageType.Quiz* tags already exist in
+    // Shared.Wire — only the payload types are missing.)
+#if false
+    /// <summary>Phase 13: Student submitted quiz answers.</summary>
+    public event EventHandler<ClassroomCtrl.Exam.Shared.QuizAnswerSubmitPayload>? QuizSubmissionReceived;
+#endif
+
+    /// <summary>Phase 8.5: Host of a breakout room changed (or cleared). Args = (roomId, newHostId|null).</summary>
+    public event EventHandler<(Guid RoomId, Guid? NewHostId)>? HostChanged;
+
+    /// <summary>Phase 13-D (Tier 3) — per-student mic-state heartbeat from
+    /// Tier 3 voice chat.  Args = (studentId, latest state).  Teacher UI
+    /// subscribes (Step 7) to drive the per-student mic indicator.</summary>
+    public event EventHandler<(Guid StudentId, MicStateUpdateMessage State)>? MicStateUpdated;
+
+    /// <summary>Phase 13-D (Tier 3) — latest mic state per student.  Filled
+    /// by the MicStateUpdate handler; teacher UI reads on demand.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, MicStateUpdateMessage> _micStates = new();
+    public bool TryGetMicState(Guid studentId, out MicStateUpdateMessage state) => _micStates.TryGetValue(studentId, out state!);
+
+    /// <summary>Phase 14-B (Tier 1) — per-student webcam-state heartbeat from
+    /// the new WebcamDeviceWatcher.  Args = (studentId, latest state).  Teacher
+    /// UI subscribes to drive the per-student "has-cam" indicator + decide
+    /// whether to pre-flight cam-control affordances in Tier 2.</summary>
+    public event EventHandler<(Guid StudentId, WebcamStateUpdateMessage State)>? WebcamStateUpdated;
+
+    /// <summary>Phase 14-B (Tier 1) — latest webcam state per student.  Filled
+    /// by the WebcamStateUpdate handler; teacher UI reads on demand.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, WebcamStateUpdateMessage> _webcamStates = new();
+    public bool TryGetWebcamState(Guid studentId, out WebcamStateUpdateMessage state) => _webcamStates.TryGetValue(studentId, out state!);
+
+    /// <summary>Phase 13-B (Tier 1) — fired whenever the canonical breakout state
+    /// changes (group created/renamed/dissolved, member added/removed, host
+    /// set, teacher join/leave).  ViewModels rebuild their Rooms collection.</summary>
+    public event EventHandler? RoomsChanged;
+
+    /// <summary>Phase 9.1: Student demo started/stopped. Null = stopped.</summary>
+    public event EventHandler<(Guid? SourceId, string SourceName)>? DemoStateChanged;
+
+    public Guid? CurrentDemoSourceId => _currentDemoSourceId;
+
+    public ControlServer(ILogger<ControlServer> logger, ILoggerFactory factory, IPAddress localIp,
+        int port = NetworkConstants.ControlTcpPort, IPAddress? bindAddress = null)
+    {
+        _logger = logger;
+        // TT-1-C (macOS port) — thread the injectable bind through to the
+        // transport so the headless self-test hosts on Loopback:0 (ephemeral,
+        // no :7777 collision, not LAN-visible, no LNP). Defaults preserve the
+        // shipped Windows behavior (Any:7777).
+        _tcp = new TcpControlServer(factory.CreateLogger<TcpControlServer>(), port, bindAddress);
+
+        _tcp.MessageReceived += OnMessage;
+        _tcp.PeerConnected += (_, id) =>
+        {
+            _logger.LogInformation("Peer {Id} TCP connected", id);
+            // Phase 11-B inc4 — late-joiner hook.  Forwarded to subscribers (the
+            // ScreenBroadcaster) so a student that connects mid-share can be
+            // sent ScreenStreamStart + a forced IDR without waiting for the
+            // next teacher-initiated Start.
+            PeerConnected?.Invoke(this, id);
+        };
+        _tcp.PeerDisconnected += (_, id) =>
+        {
+            _logger.LogInformation("Peer {Id} TCP disconnected", id);
+            // Phase 16-C — if the disconnecting peer was broadcasting a
+            // Conference cam, drop their entry so a future late joiner
+            // doesn't get a phantom Start replay for someone who's gone.
+            // Also fire ConferenceCameraStopReceived so the local gallery
+            // tile clears its cam-live flag without waiting for a Stop
+            // envelope that will never arrive.
+            if (_activeConferenceCamSenders.Remove(id))
+            {
+                try { ConferenceCameraStopReceived?.Invoke(this, id); } catch { }
+                _logger.LogInformation("ConferenceCamera implicit STOP for disconnected {Id}", id);
+            }
+            StudentLeft?.Invoke(this, id);
+        };
+    }
+
+    // TT-1-C (macOS port) — the Windows Teacher logged diagnostics through its
+    // static App.LogDebug sink; Teacher.Core has no App. Route the same raw
+    // strings to the injected logger, passed as a structured arg (NOT a message
+    // template) so stray braces in filenames / exception text can't trip
+    // ILogger's {placeholder} parser.
+    private void LogDebug(string message) => _logger.LogDebug("{DebugMessage}", message);
+
+    /// <summary>Phase 11-B inc4 — forwarded TCP peer-connect event.  Subscribers
+    /// receive the new peer's id; used by <c>ScreenBroadcaster</c> to deliver a
+    /// late-joiner <c>ScreenStreamStart</c> + forced IDR during an active share.</summary>
+    public event EventHandler<Guid>? PeerConnected;
+
+    /// <summary>Phase 11-B inc4 — send <c>ScreenStreamStart</c> to ONE peer.
+    /// Used by the late-joiner path so existing viewers don't get a duplicate
+    /// Start event.  The broadcaster pairs this with a <c>ForceKeyframe</c> so
+    /// the next outgoing frame is an IDR the new joiner can decode immediately.</summary>
+    public Task SendScreenStreamStartToPeerAsync(Guid peerId, CancellationToken ct)
+    {
+        var env = Envelope.Create(MessageType.ScreenStreamStart, Array.Empty<byte>(), _teacherId);
+        _logger.LogInformation("Late-joiner {Id}: sending ScreenStreamStart", peerId);
+        return _tcp.SendAsync(peerId, env, ct);
+    }
+
+    public Task StartAsync(CancellationToken ct) => _tcp.StartAsync(ct);
+
+    public Task BroadcastChatAsync(string text, CancellationToken ct, FileAttachment? attachment = null)
+    {
+        var msg = new ChatMessage
+        {
+            SenderId = _teacherId,
+            SenderName = "Teacher",
+            Text = text,
+            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            // Phase 19 (v1.1) — inline attachment (see ChatMessage [Key(7)]
+            // remark for the design choice rationale).
+            Attachment = attachment,
+        };
+
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.ChatBroadcast, bytes, _teacherId), ct);
+    }
+
+    /// <summary>Phase 16-X (Bug G fix, 2026-06-01) — broadcast a chat composed
+    /// inside the Conference sidebar.  Same wire shape as
+    /// <see cref="BroadcastChatAsync"/> + IsConferenceContext=true so
+    /// receivers route to their Conference chat pane only.  Older
+    /// receivers ignore the new key and would fall back to the
+    /// Classroom rail; for the current customer (Teacher+Student on
+    /// matched binaries) every receiver knows the field after this
+    /// commit.</summary>
+    public Task BroadcastConferenceChatAsync(string text, string senderName, CancellationToken ct, FileAttachment? attachment = null)
+    {
+        var msg = new ChatMessage
+        {
+            SenderId = _teacherId,
+            SenderName = string.IsNullOrWhiteSpace(senderName) ? "Teacher" : senderName,
+            Text = text,
+            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            IsConferenceContext = true,
+            Attachment = attachment,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.ChatBroadcast, bytes, _teacherId), ct);
+    }
+
+    /// <summary>
+    /// v1.2.1 — dispatch a targeted control envelope on the appropriate channel.
+    /// <paramref name="reliable"/>=false → lossy <c>_outbox</c> (cap 16, DropOldest)
+    /// as before (fine for a single frame). <paramref name="reliable"/>=true →
+    /// <c>BroadcastReliableAsync</c> (FullMode.Wait, cap 4), which back-pressures
+    /// the producer at TCP-drain rate so a BURST of per-student targeted frames
+    /// (bulk lock/policy/power over a big selection) can't overflow the lossy
+    /// queue and silently drop.  This is the root-cause fix for the "18/50 locked"
+    /// bug: targeted ops fan out to every peer + rely on IsForMe filtering, so N
+    /// selected students = N broadcast frames — enough to blow past the cap-16
+    /// DropOldest queue.  Reliable callers MUST await so the back-pressure applies.
+    /// </summary>
+    private Task SendTargetedAsync(Envelope env, CancellationToken ct, bool reliable)
+        => reliable ? _tcp.BroadcastReliableAsync(env, ct) : _tcp.BroadcastAsync(env, ct);
+
+    /// <summary>Send a direct message to ONE student (Phase 3 — Direct Messages 1:1).</summary>
+    public Task SendDirectMessageAsync(Guid endpointId, string text, CancellationToken ct, FileAttachment? attachment = null, bool reliable = false)
+    {
+        var msg = new ChatMessage
+        {
+            SenderId = _teacherId,
+            SenderName = "Teacher",
+            RecipientId = endpointId,
+            Text = text,
+            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Attachment = attachment,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.ChatDirect, bytes, _teacherId, endpointId);
+        _logger.LogInformation("DM → {Endpoint}: {Text}", endpointId, text);
+        return SendTargetedAsync(env, ct, reliable);
+    }
+
+    public Task BroadcastLockAsync(bool locked, CancellationToken ct)
+    {
+        var env = Envelope.Create(
+            locked ? MessageType.LockScreen : MessageType.UnlockScreen,
+            Array.Empty<byte>(),
+            _teacherId);
+        _logger.LogInformation("Broadcasting {Type} to all students",
+            locked ? "LockScreen" : "UnlockScreen");
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    // ─────── Phase 6: Power commands (broadcast + per-student) ───────
+
+    /// <summary>Broadcast a force power command to all students. Type must be ForceShutdown/ForceRestart/ForceLogoff.</summary>
+    public Task BroadcastPowerAsync(MessageType type, CancellationToken ct)
+    {
+        var env = Envelope.Create(type, Array.Empty<byte>(), _teacherId);
+        _logger.LogWarning("Broadcasting {Type} to all students", type);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Send a force power command to a single student.</summary>
+    public Task PowerOneAsync(Guid endpointId, MessageType type, CancellationToken ct, bool reliable = false)
+    {
+        var env = Envelope.CreateTargeted(type, Array.Empty<byte>(), _teacherId, endpointId);
+        _logger.LogWarning("Targeted {Type} -> {Endpoint}", type, endpointId);
+        return SendTargetedAsync(env, ct, reliable);
+    }
+
+    public Task LockOneAsync(Guid endpointId, bool locked, CancellationToken ct, bool reliable = false)
+    {
+        var env = Envelope.CreateTargeted(
+            locked ? MessageType.LockScreen : MessageType.UnlockScreen,
+            Array.Empty<byte>(),
+            _teacherId,
+            endpointId);
+
+        _logger.LogInformation("Targeted {Type} -> {Endpoint}",
+            locked ? "LockScreen" : "UnlockScreen", endpointId);
+        return SendTargetedAsync(env, ct, reliable);
+    }
+
+    public Task BroadcastPolicyAsync(PolicyApplyMessage policy, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(policy);
+        var env = Envelope.Create(MessageType.PolicyApply, bytes, _teacherId);
+        _logger.LogInformation("Broadcasting policy: USB={Usb} Optical={Cd} Print={Pr} Procs={Pc} Hosts={Hc}",
+            policy.BlockUsbStorage, policy.BlockOpticalDrive, policy.BlockPrinting,
+            policy.BlockedProcessNames.Count, policy.BlockedHostnames.Count);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    public Task BroadcastPolicyRevertAsync(CancellationToken ct)
+    {
+        var env = Envelope.Create(MessageType.PolicyRevert, Array.Empty<byte>(), _teacherId);
+        _logger.LogInformation("Broadcasting policy revert");
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Per-student policy override (Spec §6.11).</summary>
+    public Task ApplyPolicyToOneAsync(Guid endpointId, PolicyApplyMessage policy, CancellationToken ct, bool reliable = false)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(policy);
+        var env = Envelope.CreateTargeted(MessageType.PolicyApply, bytes, _teacherId, endpointId);
+        _logger.LogInformation("Targeted policy → {Endpoint}: USB={Usb} CD={Cd} Print={Pr} Apps={Ac} Hosts={Hc}",
+            endpointId, policy.BlockUsbStorage, policy.BlockOpticalDrive, policy.BlockPrinting,
+            policy.BlockedProcessNames.Count, policy.BlockedHostnames.Count);
+        return SendTargetedAsync(env, ct, reliable);
+    }
+
+    public Task RevertPolicyForOneAsync(Guid endpointId, CancellationToken ct, bool reliable = false)
+    {
+        var env = Envelope.CreateTargeted(MessageType.PolicyRevert, Array.Empty<byte>(), _teacherId, endpointId);
+        _logger.LogInformation("Targeted policy revert → {Endpoint}", endpointId);
+        return SendTargetedAsync(env, ct, reliable);
+    }
+
+    // ─────── Phase 4 Part 1: Teacher → all students screen broadcast ───────
+
+    /// <summary>Send Start/Stop control message for screen sharing.</summary>
+    public Task BroadcastScreenStreamControlAsync(bool start, CancellationToken ct)
+    {
+        var type = start ? MessageType.ScreenStreamStart : MessageType.ScreenStreamStop;
+        var env = Envelope.Create(type, Array.Empty<byte>(), _teacherId);
+        _logger.LogInformation("Screen stream {Type}", start ? "START" : "STOP");
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Send a single screen frame to all students.</summary>
+    public Task BroadcastScreenFrameAsync(ScreenStreamFrameMessage frame, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(frame);
+        var env = Envelope.Create(MessageType.ScreenStreamFrame, bytes, _teacherId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — send a single screen frame to one group only.
+    /// Routes via Envelope.TargetGroupId so the Service-side IsForMe filter drops
+    /// the frame for non-member students before crossing IPC.  Frame payload is
+    /// the same <see cref="ScreenStreamFrameMessage"/> shape; only the MessageType
+    /// (GroupScreenStreamFrame, 0x0624) and the TargetGroupId differ.</summary>
+    public Task BroadcastScreenFrameToGroupAsync(ScreenStreamFrameMessage frame, Guid groupId, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(frame);
+        var env = Envelope.CreateGroupTargeted(MessageType.GroupScreenStreamFrame, bytes, _teacherId, groupId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    // ─────── Phase 16-B+ : In-frame Conference screen share ───────
+
+    /// <summary>Phase 16-B+ — send the ConferenceShareStart signal that opens
+    /// the in-frame share view on every in-Conference participant.  Reliable
+    /// channel.  Distinct from <see cref="BroadcastScreenStreamControlAsync"/>
+    /// (Classroom full-takeover); this stays inside the Conference window.
+    /// Also stamps <c>_activeConferenceSharerId</c> so the Hello-ack snapshot
+    /// path can replay the Start envelope to late-joining participants.</summary>
+    public Task BroadcastConferenceShareStartAsync(string sourceName, CancellationToken ct)
+    {
+        var msg = new ConferenceShareStartMessage
+        {
+            SourceEndpointId = _teacherId,
+            SourceName = sourceName ?? "",
+        };
+        _activeConferenceSharerId = _teacherId;
+        _activeConferenceSharerName = msg.SourceName;
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.ConferenceShareStart, bytes, _teacherId);
+        _logger.LogInformation("ConferenceShare START ({Name})", sourceName);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 16-B+ — send one ConferenceShareFrame to all in-Conference
+    /// peers.  Frame payload uses the new <see cref="ConferenceShareFrameMessage"/>
+    /// DTO (mirrors ScreenStreamFrameMessage shape + SourceEndpointId).
+    /// Receiver-side self-loopback filter on Envelope.SenderId == own endpoint id
+    /// drops the teacher's echo from the share view.</summary>
+    public Task BroadcastConferenceShareFrameAsync(ConferenceShareFrameMessage frame, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(frame);
+        var env = Envelope.Create(MessageType.ConferenceShareFrame, bytes, _teacherId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 16-B+ — send the ConferenceShareStop signal that returns
+    /// every participant's gallery to tile-mode.  Reliable channel.  Clears
+    /// <c>_activeConferenceSharerId</c> so late joiners after this point
+    /// won't receive a stale Start replay.</summary>
+    public Task BroadcastConferenceShareStopAsync(CancellationToken ct)
+    {
+        var msg = new ConferenceShareStopMessage { SourceEndpointId = _teacherId };
+        _activeConferenceSharerId = null;
+        _activeConferenceSharerName = "";
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.ConferenceShareStop, bytes, _teacherId);
+        _logger.LogInformation("ConferenceShare STOP");
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    // ─────── Phase 4 Part 2: Student → Teacher view (on-demand) ───────
+
+    /// <summary>Tell a specific student to start streaming their screen back to teacher with the given codec.</summary>
+    public Task RequestStudentStreamAsync(Guid studentId, VideoCodec codec, CancellationToken ct)
+    {
+        var req = new StudentStreamStartRequest { Codec = codec };
+        var payload = MessagePack.MessagePackSerializer.Serialize(req);
+        var env = Envelope.CreateTargeted(MessageType.StudentStreamStart, payload, _teacherId, studentId);
+        _logger.LogInformation("Request student {Id} to start streaming ({Codec})", studentId, codec);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Tell a specific student to stop streaming their screen.</summary>
+    public Task StopStudentStreamAsync(Guid studentId, CancellationToken ct)
+    {
+        var env = Envelope.CreateTargeted(MessageType.StudentStreamStop, Array.Empty<byte>(), _teacherId, studentId);
+        _logger.LogInformation("Stop student {Id} streaming", studentId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    // ─────── Phase 9.1: Student Demonstration ───────
+
+    /// <summary>
+    /// Designate <paramref name="sourceId"/> as the demonstrator. Sends DemoStart to every
+    /// student so non-source students open a peer-view window, and asks the source student
+    /// to start broadcasting their screen (MJPEG to avoid BUG-001).
+    /// </summary>
+    public async Task BroadcastDemoStartAsync(Guid sourceId, string sourceName, CancellationToken ct)
+    {
+        // Stop any in-flight previous demo first.
+        if (_currentDemoSourceId.HasValue && _currentDemoSourceId.Value != sourceId)
+            await BroadcastDemoStopAsync(ct).ConfigureAwait(false);
+
+        _currentDemoSourceId = sourceId;
+        _currentDemoSourceName = sourceName ?? "";
+
+        var msg = new DemoStartMessage { SourceStudentId = sourceId, SourceName = _currentDemoSourceName };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.DemoStart, bytes, _teacherId);
+        _logger.LogInformation("Demo START source={Id} ({Name})", sourceId, sourceName);
+        await _tcp.BroadcastAsync(env, ct).ConfigureAwait(false);
+
+        // Begin the source student's stream — frames will arrive as StudentStreamFrame and
+        // be relayed automatically by OnMessage while _currentDemoSourceId is set.
+        try { await RequestStudentStreamAsync(sourceId, VideoCodec.Mjpeg, ct).ConfigureAwait(false); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Demo: failed to start source stream"); }
+
+        DemoStateChanged?.Invoke(this, (sourceId, _currentDemoSourceName));
+    }
+
+    // ─────── Phase 9.5: Camera Broadcast ───────
+    //
+    // Phase 14-B step 2 — Start + Stop promoted to BroadcastReliableAsync so a
+    // single dropped control envelope no longer leaves a student stuck with
+    // either no CameraViewWindow (Start lost) or a CameraViewWindow that
+    // never closes (Stop lost).  Frames stay on BroadcastAsync (lossy _outbox):
+    // dropping a stale frame is fine; dropping Start/Stop = stuck UI.
+
+    public Task BroadcastCameraStartAsync(CameraStartMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.CameraStart, bytes, _teacherId), ct);
+    }
+
+    public Task BroadcastCameraFrameAsync(CameraFrameMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        // Phase 15-C — also surface the JPEG locally so the Conference gallery's
+        // self-tile can render the teacher's own cam.  Fired on the broadcast
+        // thread; subscriber (MainViewModel) marshals to UI dispatcher.
+        try { TeacherCameraFrameSent?.Invoke(this, msg.JpegData); } catch { }
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.CameraFrame, bytes, _teacherId), ct);
+    }
+
+    /// <summary>Phase 15-C — fired on every teacher cam broadcast so the
+    /// Conference gallery's self-tile can render the same JPEG locally
+    /// without a round-trip through the wire.  Subscribers marshal to UI.</summary>
+    public event EventHandler<byte[]>? TeacherCameraFrameSent;
+
+    public Task BroadcastCameraStopAsync(CancellationToken ct)
+        => _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.CameraStop, Array.Empty<byte>(), _teacherId), ct);
+
+    // ─────── Phase 16-C : Peer cam routing (Conference Mode) ───────
+
+    /// <summary>Phase 16-C — start signal for the teacher's own cam stream
+    /// inside a Conference.  Distinct from <see cref="BroadcastCameraStartAsync"/>
+    /// (9.5) which is Classroom-mode unidirectional and pops a cam window;
+    /// this stays inside the gallery surface.  Reliable channel.  Also stamps
+    /// the in-process <see cref="_activeConferenceCamSenders"/> tracker so
+    /// the Hello-ack snapshot path can replay Start envelopes to
+    /// late-joining peers.</summary>
+    public Task BroadcastConferenceCameraStartAsync(ConferenceCameraStartMessage msg, CancellationToken ct)
+    {
+        msg.SourceEndpointId = _teacherId;
+        _activeConferenceCamSenders[_teacherId] = msg;
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.ConferenceCameraStart, bytes, _teacherId);
+        _logger.LogInformation("ConferenceCamera START (teacher, {W}x{H}@{F})", msg.Width, msg.Height, msg.Fps);
+        return _tcp.BroadcastReliableAsync(env, ct);
+    }
+
+    /// <summary>Phase 16-C — one frame of the teacher's own Conference cam.
+    /// Lossy via _outbox same as 9.5 0x0461.  Also fires
+    /// <see cref="TeacherConferenceCameraFrameSent"/> so the teacher's local
+    /// Conference gallery self-tile renders without a wire round-trip
+    /// (mirrors <see cref="TeacherCameraFrameSent"/> for the 9.5 path).</summary>
+    public Task BroadcastConferenceCameraFrameAsync(ConferenceCameraFrameMessage msg, CancellationToken ct)
+    {
+        msg.SourceEndpointId = _teacherId;
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        try { TeacherConferenceCameraFrameSent?.Invoke(this, msg.JpegData); } catch { }
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.ConferenceCameraFrame, bytes, _teacherId), ct);
+    }
+
+    /// <summary>Phase 16-C — fired on every teacher Conference cam broadcast
+    /// so the local Conference gallery self-tile can render the same JPEG
+    /// without a round-trip through the wire.  Subscribers marshal to UI.</summary>
+    public event EventHandler<byte[]>? TeacherConferenceCameraFrameSent;
+
+    /// <summary>Phase 16-C — stop signal for the teacher's own Conference cam.
+    /// Reliable channel.  Clears the in-process tracker so late joiners after
+    /// this point don't receive a stale Start replay.</summary>
+    public Task BroadcastConferenceCameraStopAsync(CancellationToken ct)
+    {
+        var msg = new ConferenceCameraStopMessage { SourceEndpointId = _teacherId };
+        _activeConferenceCamSenders.Remove(_teacherId);
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.ConferenceCameraStop, bytes, _teacherId);
+        _logger.LogInformation("ConferenceCamera STOP (teacher)");
+        return _tcp.BroadcastReliableAsync(env, ct);
+    }
+
+    /// <summary>Phase 16-C — endpoint→Start payload map of every participant
+    /// currently broadcasting a Conference cam.  Hello-ack snapshot path
+    /// (Step 3) reads this to replay Start envelopes to late joiners so a
+    /// participant joining mid-Conference sees existing cams populate tiles
+    /// without waiting for the next cam toggle from each peer.</summary>
+    private readonly Dictionary<Guid, ConferenceCameraStartMessage> _activeConferenceCamSenders = new();
+
+    /// <summary>Phase 16-C — fires when a ConferenceCameraStart envelope
+    /// arrives.  Teacher MainViewModel hooks in Step 5 to ensure the
+    /// matching gallery tile exists / picks up display name.  Today the
+    /// teacher's own cam doesn't bounce through this path (TCP doesn't
+    /// echo to self); only peer-cam Start envelopes from students fire it.</summary>
+    public event EventHandler<(Guid SourceId, ConferenceCameraStartMessage Msg)>? ConferenceCameraStartReceived;
+
+    /// <summary>Phase 16-C — fires when a ConferenceCameraFrame envelope
+    /// arrives.  Teacher subscribes in Step 5 to decode + route to the
+    /// matching gallery tile.</summary>
+    public event EventHandler<(Guid SourceId, ConferenceCameraFrameMessage Msg)>? ConferenceCameraFrameReceived;
+
+    /// <summary>Phase 16-C — fires when a ConferenceCameraStop envelope
+    /// arrives.  Receivers clear the matching tile's IsCamLive flag so the
+    /// cam-off placeholder swaps in.</summary>
+    public event EventHandler<Guid>? ConferenceCameraStopReceived;
+
+    // ─────── Phase 15-B (MVP): Conference Mode session lifecycle ───────
+    //
+    // Both Start and End ride BroadcastReliableAsync (Wait, cap 4) because a
+    // dropped Start/End leaves clients in the wrong mode for the duration of
+    // the session.  Frames + voice/cam payloads scoped to the conference will
+    // continue to use their existing lossy/voice channels (Phase 15-C/D).
+
+    public Task BroadcastConferenceStartAsync(ConferenceStartMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.ConferenceStart, bytes, _teacherId), ct);
+    }
+
+    public Task BroadcastConferenceEndAsync(CancellationToken ct)
+        => _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.ConferenceEnd, Array.Empty<byte>(), _teacherId), ct);
+
+    // ─────── Phase 9.6: Net Movie sync ───────
+
+    public Task BroadcastMoviePlayAsync(MoviePlayMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.MoviePlay, bytes, _teacherId), ct);
+    }
+
+    public Task BroadcastMoviePauseAsync(MovieSeekMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.MoviePause, bytes, _teacherId), ct);
+    }
+
+    public Task BroadcastMovieSeekAsync(MovieSeekMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.MovieSeek, bytes, _teacherId), ct);
+    }
+
+    public Task BroadcastMovieStopAsync(CancellationToken ct)
+        => _tcp.BroadcastAsync(Envelope.Create(MessageType.MovieStop, Array.Empty<byte>(), _teacherId), ct);
+
+    // ─────── Phase 6.5: Remote Control ───────
+    // Phase 12-B (Tier 1) — all 6 Remote* sends now route through the targeted,
+    // lossless _inputOutbox channel via TcpControlServer.SendInputAsync.  The
+    // legacy BroadcastAsync path put input on the same DropOldest cap-16
+    // _outbox as 20 FPS video frames, so under post-inc4 load a key-up or
+    // mouse-up could be evicted → stuck modifier / button on the student.
+    // TargetEndpointId is retained on the envelope for the student-side
+    // IsForMe filter (no longer needed for routing, harmless defense-in-depth).
+
+    public Task SendRemoteControlStartAsync(Guid studentId, CancellationToken ct)
+        => _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteControlStart, Array.Empty<byte>(), _teacherId, studentId), ct);
+
+    public Task SendRemoteControlEndAsync(Guid studentId, CancellationToken ct)
+        => _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteControlEnd, Array.Empty<byte>(), _teacherId, studentId), ct);
+
+    public Task SendRemoteMouseMoveAsync(Guid studentId, RemoteMouseMoveMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteMouseMove, bytes, _teacherId, studentId), ct);
+    }
+
+    public Task SendRemoteMouseClickAsync(Guid studentId, RemoteMouseClickMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteMouseClick, bytes, _teacherId, studentId), ct);
+    }
+
+    public Task SendRemoteMouseScrollAsync(Guid studentId, RemoteMouseScrollMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteMouseScroll, bytes, _teacherId, studentId), ct);
+    }
+
+    public Task SendRemoteKeyAsync(Guid studentId, RemoteKeyMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteKey, bytes, _teacherId, studentId), ct);
+    }
+
+    // Phase 12-C step 2 — Unicode text channel for Thai/IME.  Same routing
+    // shape as the other Remote* methods: targeted envelope on the lossless
+    // _inputOutbox.  Student replays via KEYEVENTF_UNICODE SendInput pairs.
+    public Task SendRemoteTextAsync(Guid studentId, RemoteTextMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.SendInputAsync(studentId, Envelope.CreateTargeted(MessageType.RemoteText, bytes, _teacherId, studentId), ct);
+    }
+
+    // ─────── Phase 4.6: Live Mic Monitor (per-student start/stop) ───────
+
+    public Task SendMicMonitorStartAsync(Guid studentId, CancellationToken ct)
+        => _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.MicMonitorStart, Array.Empty<byte>(), _teacherId, studentId), ct);
+
+    public Task SendMicMonitorStopAsync(Guid studentId, CancellationToken ct)
+        => _tcp.BroadcastAsync(Envelope.CreateTargeted(MessageType.MicMonitorStop, Array.Empty<byte>(), _teacherId, studentId), ct);
+
+    // ─────── Phase 13-D (Tier 3) — teacher mute / PTT mode controls ───────
+
+    /// <summary>Phase 13-D (Tier 3) — teacher force-mute (or unmute) one
+    /// student.  Reliable channel.  The student-side Agent honors the request
+    /// and emits an immediate MicStateUpdate so the teacher's per-student
+    /// indicator (Step 7) confirms the new state within one round trip.</summary>
+    public Task SendMicMuteRequestAsync(Guid studentId, bool muted, string reason, CancellationToken ct, bool reliable = false)
+    {
+        var msg = new MicMuteRequestMessage { TargetEndpointId = studentId, Muted = muted, Reason = reason ?? "" };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.MicMuteRequest, bytes, _teacherId, studentId);
+        return SendTargetedAsync(env, ct, reliable);
+    }
+
+    /// <summary>Phase 13-D (Tier 3) — switch one student between PTT and
+    /// always-on mode and (optionally) set a new PTT hotkey.</summary>
+    public Task SendMicPttSetAsync(Guid studentId, bool pttMode, ushort hotkeyVk, CancellationToken ct)
+    {
+        var msg = new MicPttSetMessage { TargetEndpointId = studentId, PttMode = pttMode, HotkeyVk = hotkeyVk };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.MicPttSet, bytes, _teacherId, studentId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 15-E step 3 — teacher Recognize action.  Sends a
+    /// targeted 0x0111 HandLower at the named student; the student-side
+    /// dispatch arm (Student.Agent.MainWindow OnIpcMessage HandLower case)
+    /// drops the local raised flag.  HandLower is normally student-initiated
+    /// (S→T) so the payload's StudentId is set on receive from
+    /// Envelope.SenderId; we mirror the same shape here for grep-friendly
+    /// auditing.  Reliable channel.</summary>
+    public Task SendHandLowerAsync(Guid studentId, CancellationToken ct)
+    {
+        var msg = new HandRaiseMessage
+        {
+            StudentId = studentId,
+            StudentName = "",
+            IsRaised = false,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.HandLower, bytes, _teacherId, studentId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 15-E step 4 — teacher reaction broadcast.  Reliable; the
+    /// envelope's SenderId is _teacherId so the receiver-side animation
+    /// targets the teacher's self-tile.  Student-originated reactions
+    /// arrive via the inbound dispatch path and are re-broadcast in the
+    /// switch arm so all peers see the floating emoji.</summary>
+    public Task BroadcastReactionAsync(ReactionMessage msg, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.Create(MessageType.Reaction, bytes, _teacherId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Phase 15-E step 4 — fires when a Reaction envelope arrives.
+    /// Originator is in Envelope.SenderId; the MainViewModel handler finds
+    /// the matching Conference tile and spawns a floating animation.</summary>
+    public event EventHandler<(Guid SenderId, ReactionMessage Msg)>? ReactionReceived;
+
+    /// <summary>Phase 20 (v1.1) — fires when a student sends a share-screen
+    /// request envelope (0x0686).  The MainViewModel surfaces an Approve /
+    /// Deny notification card; the response routes through
+    /// <see cref="SendConferenceShareResponseAsync"/>.</summary>
+    public event EventHandler<ConferenceShareRequestMessage>? ConferenceShareRequestReceived;
+
+    /// <summary>Phase 20 (v1.1) — send a targeted Approve / Deny / Revoke
+    /// to a single student.  Revoke uses Approved=false with a non-null
+    /// RevokeRequestId so the student VM can disambiguate "your request
+    /// was denied" from "the teacher pulled your share".</summary>
+    public Task SendConferenceShareResponseAsync(Guid targetStudentId, bool approved, Guid? revokeRequestId, CancellationToken ct)
+    {
+        var msg = new ConferenceShareResponseMessage
+        {
+            RequesterEndpointId = targetStudentId,
+            Approved = approved,
+            RevokeRequestId = revokeRequestId,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.ConferenceShareResponse, bytes, _teacherId, targetStudentId);
+        _logger.LogInformation("ConferenceShareResponse → {Target}: Approved={Approved} Revoke={Revoke}",
+            targetStudentId, approved, revokeRequestId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    // ─────── Phase 16-B+ : In-frame Conference share — receiver side ───────
+
+    /// <summary>Phase 16-B+ — fires when a ConferenceShareStart envelope
+    /// arrives.  Today the teacher's own UI flips ActiveShareEndpointId
+    /// locally on ToggleShareScreen so this event isn't subscribed in
+    /// teacher MainViewModel; the relay below preserves Envelope.SenderId
+    /// for foundation completeness so future student-initiated Conference
+    /// share works without another ControlServer pass.</summary>
+    public event EventHandler<(Guid SourceId, ConferenceShareStartMessage Msg)>? ConferenceShareStartReceived;
+
+    /// <summary>Phase 16-B+ — fires when a ConferenceShareFrame envelope
+    /// arrives.  Receiver-side gallery decode + push happens in the UI
+    /// layer (Student.Agent.MainWindow or Teacher.MainViewModel —
+    /// today only Student.Agent subscribes for student-side rendering of
+    /// the teacher's share).</summary>
+    public event EventHandler<(Guid SourceId, ConferenceShareFrameMessage Msg)>? ConferenceShareFrameReceived;
+
+    /// <summary>Phase 16-B+ — fires when a ConferenceShareStop envelope
+    /// arrives.  Receivers clear ActiveShareEndpointId + swap the gallery
+    /// layout back from share-mode to tile-mode.</summary>
+    public event EventHandler<Guid>? ConferenceShareStopReceived;
+
+    /// <summary>Phase 16-B+ — endpoint id of the participant currently
+    /// sharing, or null when no Conference share is in flight.  Tracks the
+    /// last Start / Stop seen on the wire so the Hello-ack snapshot path
+    /// can replay the Start envelope to a late-joining participant.</summary>
+    private Guid? _activeConferenceSharerId;
+    private string _activeConferenceSharerName = "";
+
+    // ─────── Phase 9.2: Screen Pen — annotation overlay ───────
+
+    public Task BroadcastDrawingStrokeAsync(DrawingStrokeMessage stroke, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(stroke);
+        var env = Envelope.Create(MessageType.DrawingStroke, bytes, _teacherId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    public Task BroadcastDrawingClearAsync(CancellationToken ct)
+    {
+        var env = Envelope.Create(MessageType.DrawingClear, Array.Empty<byte>(), _teacherId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    public Task BroadcastDrawingUndoAsync(CancellationToken ct)
+    {
+        var env = Envelope.Create(MessageType.DrawingUndo, Array.Empty<byte>(), _teacherId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>End the current demonstration (no-op if none active).</summary>
+    public async Task BroadcastDemoStopAsync(CancellationToken ct)
+    {
+        var sourceId = _currentDemoSourceId;
+        _currentDemoSourceId = null;
+        _currentDemoSourceName = "";
+
+        var env = Envelope.Create(MessageType.DemoStop, Array.Empty<byte>(), _teacherId);
+        _logger.LogInformation("Demo STOP (was source={Id})", sourceId);
+        await _tcp.BroadcastAsync(env, ct).ConfigureAwait(false);
+
+        if (sourceId.HasValue)
+        {
+            try { await StopStudentStreamAsync(sourceId.Value, ct).ConfigureAwait(false); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Demo: failed to stop source stream"); }
+        }
+
+        DemoStateChanged?.Invoke(this, (null, ""));
+    }
+
+    // ─────── Phase 4 Part 3a: Teacher → all students audio broadcast ───────
+
+    /// <summary>Send Start/Stop control message for audio broadcast.</summary>
+    public Task BroadcastAudioStreamControlAsync(bool start, CancellationToken ct)
+    {
+        var type = start ? MessageType.AudioStreamStart : MessageType.AudioStreamStop;
+        var env = Envelope.Create(type, Array.Empty<byte>(), _teacherId);
+        _logger.LogInformation("Audio stream {Type}", start ? "START" : "STOP");
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Send a single audio frame to all students.
+    /// Phase 11-C — routed through the dedicated audio channel (separate from
+    /// the lossy video queue) so a 20 FPS H.264 burst can't evict un-played
+    /// audio.  See <see cref="TcpControlServer.BroadcastAudioAsync"/> for the
+    /// queue-policy rationale.</summary>
+    public Task BroadcastAudioFrameAsync(AudioStreamFrameMessage frame, CancellationToken ct)
+    {
+        var bytes = MessagePack.MessagePackSerializer.Serialize(frame);
+        var env = Envelope.Create(MessageType.AudioStreamFrame, bytes, _teacherId);
+        return _tcp.BroadcastAudioAsync(env, ct);
+    }
+
+    // ─────── Phase 4 Part 3c: Master mute ───────
+
+    /// <summary>Broadcast a force-mute command to all students. Students with mic on must turn off.</summary>
+    public Task BroadcastForceMuteAllAsync(CancellationToken ct)
+    {
+        var env = Envelope.Create(MessageType.ForceMuteStudentMic, Array.Empty<byte>(), _teacherId);
+        _logger.LogInformation("Broadcasting ForceMuteStudentMic to all students");
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    // ─────── Phase 13: Exam System ───────
+    // TT-1-C (macOS port) — DEFERRED (see the QuizSubmissionReceived note above):
+    // these 3 methods need ClassroomCtrl.Exam.Shared. Restore with the event +
+    // dispatch case when that wire library is ported.
+#if false
+    /// <summary>Send Exam to all students. Each student's lockdown window opens on receipt.</summary>
+    public Task BroadcastQuizStartAsync(ClassroomCtrl.Exam.Shared.Exam exam, Guid sessionId, CancellationToken ct)
+    {
+        var payload = new ClassroomCtrl.Exam.Shared.QuizStartPayload
+        {
+            SessionId = sessionId,
+            Exam = exam,
+            StartedAtUtc = DateTime.UtcNow,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(payload);
+        var env = Envelope.Create(MessageType.QuizStart, bytes, _teacherId);
+        _logger.LogInformation("QuizStart broadcast: {Title} ({Q} questions, {Min} min)",
+            exam.Title, exam.Questions.Count, exam.TimeLimitMinutes);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Tell all students that the exam ended (closes their lockdown window).</summary>
+    public Task BroadcastQuizEndAsync(Guid sessionId, bool showResults, CancellationToken ct)
+    {
+        var payload = new ClassroomCtrl.Exam.Shared.QuizEndPayload
+        {
+            SessionId = sessionId,
+            ShowResultsToStudents = showResults,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(payload);
+        var env = Envelope.Create(MessageType.QuizEnd, bytes, _teacherId);
+        _logger.LogInformation("QuizEnd broadcast (session {Id})", sessionId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>Unlock one student early (e.g. they finished or had a problem).</summary>
+    public Task UnlockOneFromQuizAsync(Guid endpointId, Guid sessionId, CancellationToken ct)
+    {
+        var payload = new ClassroomCtrl.Exam.Shared.QuizEndPayload
+        {
+            SessionId = sessionId,
+            ShowResultsToStudents = true,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(payload);
+        var env = Envelope.CreateTargeted(MessageType.QuizUnlockEarly, bytes, _teacherId, endpointId);
+        _logger.LogInformation("QuizUnlockEarly → {Endpoint}", endpointId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+#endif
+
+    // ─────── Phase 8: Breakout Rooms ───────
+
+    /// <summary>Assign student to a breakout room. roomId=null removes from any room.
+    /// Phase 13-B (Tier 1) — also broadcasts an atomic GroupSnapshot + fires
+    /// RoomsChanged so the teacher UI rebuilds.  Per-student BreakoutAssign
+    /// stays the primary student-visible signal; the snapshot is the recovery
+    /// path for late joiners + the authoritative refresh for the teacher UI.</summary>
+    public async Task AssignToRoomAsync(Guid endpointId, Guid? roomId, string roomName, CancellationToken ct)
+    {
+        _studentRoomMap[endpointId] = roomId;
+        if (roomId.HasValue && !_roomNames.ContainsKey(roomId.Value))
+            _roomNames[roomId.Value] = roomName;
+
+        // Carry the current host for this room if any (Phase 8.5).
+        Guid? hostId = null;
+        if (roomId.HasValue && _roomHostMap.TryGetValue(roomId.Value, out var h)) hostId = h;
+
+        var msg = new BreakoutAssignMessage
+        {
+            RoomId = roomId ?? Guid.Empty,
+            RoomName = roomName ?? "",
+            HostStudentId = hostId,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.BreakoutAssign, bytes, _teacherId, endpointId);
+
+        _logger.LogInformation("Breakout assign → {Endpoint}: room={Room} ({Name}) host={Host}",
+            endpointId, roomId, roomName, hostId);
+        await _tcp.BroadcastAsync(env, ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        RoomsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ─────── Phase 8.5: Host assignment + actions ───────
+
+    /// <summary>Set or clear the host of a breakout room. Re-broadcasts BreakoutAssign to every member.</summary>
+    public async Task SetRoomHostAsync(Guid roomId, Guid? newHostId, CancellationToken ct)
+    {
+        if (roomId == Guid.Empty) return;
+        if (newHostId.HasValue) _roomHostMap[roomId] = newHostId.Value;
+        else _roomHostMap.Remove(roomId);
+
+        var name = _roomNames.TryGetValue(roomId, out var n) ? n : "";
+        var members = _studentRoomMap.Where(kv => kv.Value == roomId).Select(kv => kv.Key).ToList();
+        foreach (var ep in members)
+        {
+            await AssignToRoomAsync(ep, roomId, name, ct);
+        }
+        HostChanged?.Invoke(this, (roomId, newHostId));
+        _logger.LogInformation("Host of room {Room} → {Host} (members={Count})", roomId, newHostId, members.Count);
+    }
+
+    private Guid? FindRoomWhereHostIs(Guid endpointId)
+    {
+        foreach (var kv in _roomHostMap)
+            if (kv.Value == endpointId) return kv.Key;
+        return null;
+    }
+
+    /// <summary>Broadcast a chat from "Host of {RoomName}" to students NOT in the host's room.</summary>
+    public Task BroadcastHostMessageToMainAsync(Guid hostId, string text, CancellationToken ct)
+    {
+        var roomId = FindRoomWhereHostIs(hostId);
+        if (roomId == null) return Task.CompletedTask;
+        var roomName = _roomNames.TryGetValue(roomId.Value, out var n) ? n : "Group";
+
+        var chat = new ChatMessage
+        {
+            SenderId = hostId,
+            SenderName = $"Host of {roomName}",
+            Text = text,
+            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(chat);
+
+        // Send to all students NOT in the host's room (i.e. main classroom).
+        foreach (var (ep, rid) in _studentRoomMap)
+        {
+            if (rid == roomId.Value) continue;
+            var env = Envelope.CreateTargeted(MessageType.ChatBroadcast, bytes, _teacherId, ep);
+            _ = _tcp.BroadcastAsync(env, ct);
+        }
+        // Also raise locally so MainViewModel logs it in teacher chat.
+        ChatReceived?.Invoke(this, chat);
+        _logger.LogInformation("Host {Host} of room {Room} → main: {Text}", hostId, roomId, text);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Targeted force-mute by host on a peer in same room. Reuses existing ForceMuteStudentMic.</summary>
+    public Task HostMutePeerAsync(Guid hostId, Guid targetId, CancellationToken ct)
+    {
+        var hostRoom = FindRoomWhereHostIs(hostId);
+        if (hostRoom == null) return Task.CompletedTask;
+        // Verify target is in same room.
+        if (!_studentRoomMap.TryGetValue(targetId, out var targetRoom) || targetRoom != hostRoom)
+        {
+            _logger.LogWarning("HostMute denied: target {T} not in host {H}'s room", targetId, hostId);
+            return Task.CompletedTask;
+        }
+        var env = Envelope.CreateTargeted(MessageType.ForceMuteStudentMic, Array.Empty<byte>(), _teacherId, targetId);
+        _logger.LogInformation("HostMute {Host} → {Target}", hostId, targetId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    // ─────── Phase 5b: Per-student recording PDPA notify ───────
+
+    public Task NotifyStudentRecordingAsync(Guid studentId, bool isRecording, CancellationToken ct)
+    {
+        var msg = new StudentRecordingNotifyMessage { IsRecording = isRecording };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateTargeted(MessageType.StudentRecordingNotify, bytes, _teacherId, studentId);
+        _logger.LogInformation("StudentRecordingNotify → {Endpoint}: {State}", studentId, isRecording);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    // ─────── Phase 6.6: One-shot screenshot capture ───────
+
+    /// <summary>
+    /// Send RequestScreenshot to one student and await the matching ScreenshotResponse.
+    /// Returns null on timeout. Caller is responsible for the PDPA notify after success.
+    /// </summary>
+    public Task<ScreenshotResponseMessage?> RequestScreenshotAsync(Guid studentId, int timeoutMs, CancellationToken ct)
+    {
+        var tcs = new TaskCompletionSource<ScreenshotResponseMessage?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        EventHandler<ScreenshotResponseMessage>? handler = null;
+        handler = (_, msg) =>
+        {
+            if (msg.StudentId != studentId) return;
+            try { ScreenshotReceived -= handler!; } catch { }
+            tcs.TrySetResult(msg);
+        };
+        ScreenshotReceived += handler;
+
+        var env = Envelope.CreateTargeted(MessageType.RequestScreenshot, Array.Empty<byte>(), _teacherId, studentId);
+        _ = _tcp.BroadcastAsync(env, ct);
+
+        // Timeout watchdog: cancel the wait + unsubscribe.
+        _ = Task.Delay(timeoutMs, ct).ContinueWith(_ =>
+        {
+            if (!tcs.Task.IsCompleted)
+            {
+                try { ScreenshotReceived -= handler!; } catch { }
+                tcs.TrySetResult(null);
+            }
+        }, TaskScheduler.Default);
+
+        _logger.LogInformation("RequestScreenshot → {Endpoint} (timeout {Ms}ms)", studentId, timeoutMs);
+        return tcs.Task;
+    }
+
+    /// <summary>PDPA balloon notify — fires after a successful capture.</summary>
+    public Task NotifyStudentScreenshotAsync(Guid studentId, CancellationToken ct)
+    {
+        var env = Envelope.CreateTargeted(MessageType.StudentScreenshotNotify, Array.Empty<byte>(), _teacherId, studentId);
+        _logger.LogInformation("StudentScreenshotNotify → {Endpoint}", studentId);
+        return _tcp.BroadcastAsync(env, ct);
+    }
+
+    /// <summary>End breakout — send everyone back to main classroom.</summary>
+    public async Task DissolveAllRoomsAsync(CancellationToken ct)
+    {
+        var endpoints = _studentRoomMap.Keys.ToList();
+        foreach (var ep in endpoints)
+        {
+            await AssignToRoomAsync(ep, null, "", ct);
+        }
+        _studentRoomMap.Clear();
+        _roomNames.Clear();
+        _roomHostMap.Clear();
+        // Phase 13-B (Tier 1) — explicit BreakoutDissolve broadcast (grep-friendly
+        // for incident triage) + final atomic GroupSnapshot.
+        var msg = new BreakoutDissolveMessage { GroupId = Guid.Empty };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutDissolve, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        RoomsChanged?.Invoke(this, EventArgs.Empty);
+        _logger.LogInformation("All breakout rooms dissolved");
+    }
+
+    public Guid? GetStudentRoom(Guid endpointId) =>
+        _studentRoomMap.TryGetValue(endpointId, out var rid) ? rid : null;
+
+    public IReadOnlyDictionary<Guid, string> Rooms => _roomNames;
+
+    // ─────── Phase 13-B (Tier 1) — group lifecycle + teacher join + group share ───────
+
+    /// <summary>Phase 13-B (Tier 1) — read-only view of the canonical group state.
+    /// Built on demand from <see cref="_studentRoomMap"/> + <see cref="_roomNames"/> +
+    /// <see cref="_roomHostMap"/>.  Used by <see cref="BroadcastGroupSnapshotAsync"/>
+    /// and by teacher UI rebuild.</summary>
+    public List<GroupDescriptor> BuildGroupDescriptors()
+    {
+        var byRoom = new Dictionary<Guid, List<Guid>>();
+        foreach (var (ep, rid) in _studentRoomMap)
+        {
+            if (!rid.HasValue) continue;
+            if (!byRoom.TryGetValue(rid.Value, out var list))
+                byRoom[rid.Value] = list = new List<Guid>();
+            list.Add(ep);
+        }
+        // Include empty groups too (created without any members yet).
+        foreach (var rid in _roomNames.Keys)
+            if (!byRoom.ContainsKey(rid)) byRoom[rid] = new List<Guid>();
+        return byRoom.Select(kv => new GroupDescriptor
+        {
+            Id = kv.Key,
+            Name = _roomNames.TryGetValue(kv.Key, out var n) ? n : "",
+            MemberIds = kv.Value,
+            HostId = _roomHostMap.TryGetValue(kv.Key, out var h) ? h : (Guid?)null,
+        }).ToList();
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — broadcast atomic group state to everyone.
+    /// Cheap (snapshot size at class scale ≈ a few hundred bytes); fires on
+    /// every mutation so clients always converge to the same view.</summary>
+    public Task BroadcastGroupSnapshotAsync(CancellationToken ct)
+    {
+        var msg = new GroupSnapshotMessage
+        {
+            Groups = BuildGroupDescriptors(),
+            TeacherJoinedGroupId = _teacherJoinedGroupId,
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        return _tcp.BroadcastAsync(Envelope.Create(MessageType.GroupSnapshot, bytes, _teacherId), ct);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — create a new group with optional initial
+    /// members.  Each member is assigned via the existing per-student
+    /// BreakoutAssign path.  Emits an explicit BreakoutCreate envelope (grep-
+    /// friendly) and the post-state GroupSnapshot.</summary>
+    public async Task CreateGroupAsync(string name, IList<Guid> members, CancellationToken ct)
+    {
+        var groupId = Guid.NewGuid();
+        _roomNames[groupId] = name ?? "";
+
+        var msg = new BreakoutCreateMessage { GroupId = groupId, Name = name ?? "" };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutCreate, bytes, _teacherId), ct);
+
+        foreach (var ep in members)
+            await AssignToRoomAsync(ep, groupId, name ?? "", ct);
+
+        // AssignToRoomAsync already fires snapshot per call; if there were no
+        // members, fire once now so the empty-group state propagates.
+        if (members.Count == 0)
+        {
+            await BroadcastGroupSnapshotAsync(ct);
+            RoomsChanged?.Invoke(this, EventArgs.Empty);
+        }
+        _logger.LogInformation("Group created: {Id} ({Name}) members={Count}", groupId, name, members.Count);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — delete one group.  Members fall back to
+    /// main classroom (null room).  If teacher was joined to this group, leave.</summary>
+    public async Task DeleteGroupAsync(Guid groupId, CancellationToken ct)
+    {
+        if (groupId == Guid.Empty || !_roomNames.ContainsKey(groupId)) return;
+
+        // Fall the joined-teacher flag back to whole-class if we deleted the active group.
+        if (_teacherJoinedGroupId == groupId) await TeacherLeaveGroupAsync(ct);
+        if (_activeGroupShareGroupId == groupId) await StopGroupScreenShareAsync(ct);
+
+        var members = _studentRoomMap.Where(kv => kv.Value == groupId).Select(kv => kv.Key).ToList();
+        foreach (var ep in members) await AssignToRoomAsync(ep, null, "", ct);
+        _roomNames.Remove(groupId);
+        _roomHostMap.Remove(groupId);
+
+        var msg = new BreakoutDissolveMessage { GroupId = groupId };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutDissolve, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        RoomsChanged?.Invoke(this, EventArgs.Empty);
+        _logger.LogInformation("Group deleted: {Id} (members reassigned to main)", groupId);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — rename a group; re-broadcast per-member
+    /// BreakoutAssign (so each student sees the new name in their toast) and
+    /// the snapshot.</summary>
+    public async Task RenameGroupAsync(Guid groupId, string newName, CancellationToken ct)
+    {
+        if (!_roomNames.ContainsKey(groupId)) return;
+        _roomNames[groupId] = newName ?? "";
+
+        var members = _studentRoomMap.Where(kv => kv.Value == groupId).Select(kv => kv.Key).ToList();
+        foreach (var ep in members) await AssignToRoomAsync(ep, groupId, newName ?? "", ct);
+        if (members.Count == 0)
+        {
+            await BroadcastGroupSnapshotAsync(ct);
+            RoomsChanged?.Invoke(this, EventArgs.Empty);
+        }
+        _logger.LogInformation("Group renamed: {Id} → '{Name}'", groupId, newName);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — wraps the existing Phase 8.5 SetRoomHostAsync
+    /// + emits an explicit BreakoutHostSet envelope + the snapshot.
+    /// Phase 13-C (Tier 2) — also emits StudentGroupScreenStreamStop (for any
+    /// outgoing host) and StudentGroupScreenStreamStart (for the new host), so
+    /// the in-group peers' GroupPeerView opens/closes and the new host's
+    /// StudentBroadcaster starts presenting.  Both control envelopes are
+    /// group-targeted; the new/old host receives them via TargetGroupId
+    /// loopback and self-detects via payload.PresenterId == own EndpointId.
+    /// <paramref name="newHostName"/> is the new host's DisplayName, looked up
+    /// by the caller (e.g. GroupManagerView from MainViewModel.Students) so
+    /// the GroupPeerView title-bar label is correct.  Pass empty for null
+    /// new-host (clear).</summary>
+    public async Task SetGroupHostAsync(Guid groupId, Guid? hostId, string newHostName, CancellationToken ct)
+    {
+        // Capture outgoing host BEFORE SetRoomHostAsync mutates _roomHostMap.
+        Guid? oldHostId = _roomHostMap.TryGetValue(groupId, out var prior) ? prior : (Guid?)null;
+
+        await SetRoomHostAsync(groupId, hostId, ct);  // Phase 8.5 — handles per-member re-assign
+        var msg = new BreakoutHostSetMessage { GroupId = groupId, HostStudentId = hostId };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.BreakoutHostSet, bytes, _teacherId), ct);
+
+        // Phase 13-C — Tier 2 host-presenter signals.
+        if (oldHostId.HasValue && (!hostId.HasValue || oldHostId.Value != hostId.Value))
+        {
+            var stopCtrl = new StudentGroupScreenStreamControlMessage
+            {
+                GroupId = groupId,
+                PresenterId = oldHostId.Value,
+                PresenterName = "",
+                Start = false,
+                Codec = VideoCodec.Mjpeg,
+            };
+            var stopBytes = MessagePack.MessagePackSerializer.Serialize(stopCtrl);
+            var stopEnv = Envelope.CreateGroupTargeted(
+                MessageType.StudentGroupScreenStreamStop, stopBytes, _teacherId, groupId);
+            await _tcp.BroadcastAsync(stopEnv, ct);
+            _logger.LogInformation("StudentGroupScreenStreamStop → group={Group} oldHost={Host}", groupId, oldHostId.Value);
+        }
+        if (hostId.HasValue && (!oldHostId.HasValue || oldHostId.Value != hostId.Value))
+        {
+            var startCtrl = new StudentGroupScreenStreamControlMessage
+            {
+                GroupId = groupId,
+                PresenterId = hostId.Value,
+                PresenterName = newHostName ?? "",
+                Start = true,
+                Codec = VideoCodec.Mjpeg,
+            };
+            var startBytes = MessagePack.MessagePackSerializer.Serialize(startCtrl);
+            var startEnv = Envelope.CreateGroupTargeted(
+                MessageType.StudentGroupScreenStreamStart, startBytes, _teacherId, groupId);
+            await _tcp.BroadcastAsync(startEnv, ct);
+            _logger.LogInformation("StudentGroupScreenStreamStart → group={Group} newHost={Host} ({Name})", groupId, hostId.Value, newHostName);
+        }
+
+        await BroadcastGroupSnapshotAsync(ct);
+        RoomsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — alias for the existing DissolveAllRoomsAsync,
+    /// kept for symmetry with the design-doc naming.</summary>
+    public Task DissolveAllAsync(CancellationToken ct) => DissolveAllRoomsAsync(ct);
+
+    /// <summary>Phase 13-B (Tier 1) — teacher joins a group.  Pure signaling +
+    /// state stamp; does NOT change group membership.  Decision #6: only one
+    /// joined group at a time — emits an implicit Leave if already joined to
+    /// another.</summary>
+    public async Task TeacherJoinGroupAsync(Guid groupId, CancellationToken ct)
+    {
+        if (groupId == Guid.Empty || !_roomNames.ContainsKey(groupId)) return;
+        if (_teacherJoinedGroupId.HasValue && _teacherJoinedGroupId != groupId)
+            await TeacherLeaveGroupAsync(ct);
+
+        _teacherJoinedGroupId = groupId;
+        var name = _roomNames.TryGetValue(groupId, out var n) ? n : "";
+        var msg = new GroupTeacherJoinedMessage { GroupId = groupId, GroupName = name };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.GroupTeacherJoined, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        _logger.LogInformation("Teacher joined group {Id} ({Name})", groupId, name);
+    }
+
+    public async Task TeacherLeaveGroupAsync(CancellationToken ct)
+    {
+        if (!_teacherJoinedGroupId.HasValue) return;
+        var leaving = _teacherJoinedGroupId.Value;
+        _teacherJoinedGroupId = null;
+        var msg = new GroupTeacherLeftMessage { GroupId = leaving };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        await _tcp.BroadcastAsync(Envelope.Create(MessageType.GroupTeacherLeft, bytes, _teacherId), ct);
+        await BroadcastGroupSnapshotAsync(ct);
+        _logger.LogInformation("Teacher left group {Id}", leaving);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — start group-targeted teacher screen share.
+    /// Emits the Start control envelope; actual frame routing changes inside
+    /// ScreenBroadcaster (Step 5).  Mutually exclusive with whole-class share.</summary>
+    public async Task StartGroupScreenShareAsync(Guid groupId, VideoCodec codec, CancellationToken ct)
+    {
+        if (groupId == Guid.Empty || !_roomNames.ContainsKey(groupId)) return;
+        _activeGroupShareGroupId = groupId;
+        var msg = new GroupScreenStreamControlMessage { GroupId = groupId, Start = true, Codec = codec };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateGroupTargeted(MessageType.GroupScreenStreamStart, bytes, _teacherId, groupId);
+        await _tcp.BroadcastAsync(env, ct);
+        _logger.LogInformation("Group screen share START → group {Id} codec={Codec}", groupId, codec);
+    }
+
+    public async Task StopGroupScreenShareAsync(CancellationToken ct)
+    {
+        if (!_activeGroupShareGroupId.HasValue) return;
+        var stopping = _activeGroupShareGroupId.Value;
+        _activeGroupShareGroupId = null;
+        var msg = new GroupScreenStreamControlMessage { GroupId = stopping, Start = false, Codec = VideoCodec.Mjpeg };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
+        var env = Envelope.CreateGroupTargeted(MessageType.GroupScreenStreamStop, bytes, _teacherId, stopping);
+        await _tcp.BroadcastAsync(env, ct);
+        _logger.LogInformation("Group screen share STOP (was → group {Id})", stopping);
+    }
+
+    /// <summary>Phase 13-B (Tier 1) — read-only accessor for the currently
+    /// joined group; teacher UI surfaces this as a status chip.</summary>
+    public Guid? TeacherJoinedGroupId => _teacherJoinedGroupId;
+
+    /// <summary>Phase 13-B (Tier 1) — read-only accessor for the active
+    /// group-targeted screen share, if any.</summary>
+    public Guid? ActiveGroupShareGroupId => _activeGroupShareGroupId;
+
+    /// <summary>Phase 9.8: Send a teacher-authored chat message to all members of one breakout room.</summary>
+    public async Task BroadcastChatToRoomAsync(Guid roomId, string text, CancellationToken ct)
+    {
+        var roomName = _roomNames.TryGetValue(roomId, out var n) ? n : "";
+        var chat = new ChatMessage
+        {
+            SenderId = _teacherId,
+            SenderName = "Teacher",
+            RoomId = roomId,
+            Text = text,
+            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(chat);
+        foreach (var (ep, rid) in _studentRoomMap)
+        {
+            if (rid != roomId) continue;
+            var env = Envelope.CreateTargeted(MessageType.ChatRoom, bytes, _teacherId, ep);
+            await _tcp.BroadcastAsync(env, ct);
+        }
+        _logger.LogInformation("Multi-room chat: teacher → room {Room} ({Name})", roomId, roomName);
+    }
+
+    /// <summary>Route a room chat to all students in the same room as the sender.</summary>
+    public async Task RouteRoomChatAsync(ChatMessage chat, Guid senderEndpointId, CancellationToken ct)
+    {
+        var senderRoom = GetStudentRoom(senderEndpointId);
+        if (!senderRoom.HasValue) return;
+
+        chat.RoomId = senderRoom;
+        var bytes = MessagePack.MessagePackSerializer.Serialize(chat);
+
+        foreach (var (ep, rid) in _studentRoomMap)
+        {
+            if (ep == senderEndpointId) continue;
+            if (rid != senderRoom) continue;
+            var env = Envelope.CreateTargeted(MessageType.ChatRoom, bytes, _teacherId, ep);
+            await _tcp.BroadcastAsync(env, ct);
+        }
+        _logger.LogInformation("Room chat routed: {Sender} → room {Room}", senderEndpointId, senderRoom);
+    }
+
+    public async Task BroadcastFileAsync(string filePath, CancellationToken ct)
+    {
+        const int ChunkSize = 64 * 1024;
+        var fileInfo = new FileInfo(filePath);
+        if (!fileInfo.Exists) throw new FileNotFoundException(filePath);
+
+        var transferId = Guid.NewGuid();
+        var fileName = fileInfo.Name;
+        var size = fileInfo.Length;
+        var chunkCount = (int)((size + ChunkSize - 1) / ChunkSize);
+
+        // Phase 10.20 — Net Movie investigation showed the Serilog _logger output
+        // landed in %PROGRAMDATA%\NTY\ClassroomCtrl\logs\teacher-*.log and the dev
+        // was checking %TEMP%\teacher-debug.log instead, so the entire feature
+        // looked silent.  Mirror the milestones to App.LogDebug so future
+        // investigators see the activity in either log file.
+        LogDebug($"[BroadcastFile] start: file='{fileName}' size={size} chunks={chunkCount} transferId={transferId}");
+
+        string sha256Hex;
+        using (var fs = File.OpenRead(filePath))
+        using (var sha = SHA256.Create())
+        {
+            var hash = await sha.ComputeHashAsync(fs, ct);
+            sha256Hex = Convert.ToHexString(hash);
+        }
+
+        var announce = new FileAnnounceMessage
+        {
+            TransferId = transferId,
+            FileName = fileName,
+            SizeBytes = size,
+            Sha256Hex = sha256Hex,
+            ChunkCount = chunkCount,
+            UseMulticast = false,
+        };
+        var announceBytes = MessagePack.MessagePackSerializer.Serialize(announce);
+        // Phase 10.21 — file transfer MUST use the reliable broadcast path.
+        // Phase 10.10 Fix 8 introduced a DropOldest bounded channel per peer
+        // sized for screen-share frames (16 slots); FileAnnounce/Chunk/Complete
+        // were being silently evicted under any sustained burst, which
+        // truncated received files to ~10 MB regardless of original size
+        // (root cause of the Phase 10.21 "Net Movie plays only first third"
+        // report).  Reliable path is FullMode.Wait per peer, so the producer
+        // here is back-pressured by the slowest student's TCP drain rate
+        // instead of corrupting the stream.
+        await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileAnnounce, announceBytes, _teacherId), ct);
+        _logger.LogInformation("File announce: {Name} ({Size} bytes, {Chunks} chunks)",
+            fileName, size, chunkCount);
+        LogDebug($"[BroadcastFile] FileAnnounce sent: sha256={sha256Hex[..16]}...");
+
+        using (var fs = File.OpenRead(filePath))
+        {
+            var buffer = new byte[ChunkSize];
+            int idx = 0;
+            int read;
+            while ((read = await fs.ReadAsync(buffer.AsMemory(0, ChunkSize), ct)) > 0)
+            {
+                var chunkData = new byte[read];
+                Buffer.BlockCopy(buffer, 0, chunkData, 0, read);
+
+                var chunk = new FileChunkMessage
+                {
+                    TransferId = transferId,
+                    ChunkIndex = idx,
+                    Data = chunkData,
+                };
+                var chunkBytes = MessagePack.MessagePackSerializer.Serialize(chunk);
+                await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileChunk, chunkBytes, _teacherId), ct);
+                idx++;
+            }
+        }
+
+        var complete = new FileCompleteMessage { TransferId = transferId, FileName = fileName };
+        var completeBytes = MessagePack.MessagePackSerializer.Serialize(complete);
+        await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileComplete, completeBytes, _teacherId), ct);
+        _logger.LogInformation("File transfer complete: {Name}", fileName);
+        LogDebug($"[BroadcastFile] complete: file='{fileName}' chunksSent={chunkCount}");
+    }
+
+    private void OnMessage(object? sender, Envelope env)
+    {
+        switch (env.Type)
+        {
+            case MessageType.Hello:
+                var hello = MessagePack.MessagePackSerializer.Deserialize<HelloMessage>(env.Payload);
+                _logger.LogInformation("Student joined: {Name} ({Machine}) endpoint={Id}",
+                    hello.DisplayName, hello.MachineName, hello.EndpointId);
+                StudentJoined?.Invoke(this, hello);
+                // Phase 13-B (Tier 1) — push the current GroupSnapshot to the
+                // joining peer so a late student / reconnect-after-teacher-restart
+                // converges to canonical state immediately.  Targeted via the
+                // student's application EndpointId; receiver-side IsForMe matches.
+                if (_roomNames.Count > 0 || _teacherJoinedGroupId.HasValue)
+                {
+                    try
+                    {
+                        var snapMsg = new GroupSnapshotMessage
+                        {
+                            Groups = BuildGroupDescriptors(),
+                            TeacherJoinedGroupId = _teacherJoinedGroupId,
+                        };
+                        var snapBytes = MessagePack.MessagePackSerializer.Serialize(snapMsg);
+                        var snapEnv = Envelope.CreateTargeted(MessageType.GroupSnapshot, snapBytes, _teacherId, hello.EndpointId);
+                        _ = _tcp.BroadcastAsync(snapEnv, System.Threading.CancellationToken.None);
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Hello-ack snapshot send failed"); }
+                }
+                // Phase 16-B+ — late-joiner replay for an active Conference
+                // share.  A participant connecting mid-share missed the
+                // initial ConferenceShareStart broadcast; without this replay
+                // their gallery would stay in tile-mode and frames would
+                // arrive at a layout that ignores them.  SenderId on the
+                // replay envelope is the ORIGINAL sharer so the receiver
+                // attributes the share correctly even when the relay path
+                // had us in between.
+                if (_activeConferenceSharerId.HasValue)
+                {
+                    try
+                    {
+                        var replayMsg = new ConferenceShareStartMessage
+                        {
+                            SourceEndpointId = _activeConferenceSharerId.Value,
+                            SourceName = _activeConferenceSharerName,
+                        };
+                        var replayBytes = MessagePack.MessagePackSerializer.Serialize(replayMsg);
+                        var replayEnv = Envelope.CreateTargeted(
+                            MessageType.ConferenceShareStart,
+                            replayBytes,
+                            _activeConferenceSharerId.Value,
+                            hello.EndpointId);
+                        _ = _tcp.BroadcastAsync(replayEnv, System.Threading.CancellationToken.None);
+                        _logger.LogInformation("ConferenceShare late-joiner replay → {Peer} (source={Source})",
+                            hello.EndpointId, _activeConferenceSharerId.Value);
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceShare late-joiner replay failed"); }
+                }
+                // Phase 16-C — late-joiner replay for every active Conference
+                // cam.  A participant joining mid-Conference would otherwise
+                // only see cams of peers who happen to toggle next; this
+                // replay seeds their gallery with all current cams.  Each
+                // replayed Start envelope preserves the ORIGINAL sender id
+                // (not _teacherId) so the receiver routes frames correctly
+                // by sender once they start arriving via the normal relay.
+                if (_activeConferenceCamSenders.Count > 0)
+                {
+                    foreach (var kv in _activeConferenceCamSenders)
+                    {
+                        try
+                        {
+                            var camReplayBytes = MessagePack.MessagePackSerializer.Serialize(kv.Value);
+                            var camReplayEnv = Envelope.CreateTargeted(
+                                MessageType.ConferenceCameraStart,
+                                camReplayBytes,
+                                kv.Key,
+                                hello.EndpointId);
+                            _ = _tcp.BroadcastAsync(camReplayEnv, System.Threading.CancellationToken.None);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "ConferenceCamera late-joiner replay failed for {Source}", kv.Key);
+                        }
+                    }
+                    _logger.LogInformation("ConferenceCamera late-joiner replay → {Peer} ({Count} active cams)",
+                        hello.EndpointId, _activeConferenceCamSenders.Count);
+                }
+                break;
+
+            case MessageType.HandRaise:
+            case MessageType.HandLower:
+                var hr = MessagePack.MessagePackSerializer.Deserialize<HandRaiseMessage>(env.Payload);
+                hr.StudentId = env.SenderId;
+                hr.IsRaised = env.Type == MessageType.HandRaise;
+                _logger.LogInformation("Hand {State} from {Student}",
+                    hr.IsRaised ? "RAISED" : "lowered", hr.StudentName);
+                HandRaiseReceived?.Invoke(this, hr);
+                break;
+
+            case MessageType.Reaction:
+                {
+                    var rxn = MessagePack.MessagePackSerializer.Deserialize<ReactionMessage>(env.Payload);
+                    _logger.LogInformation("Reaction '{Emoji}' from {Sender}", rxn.Emoji, env.SenderId);
+                    ReactionReceived?.Invoke(this, (env.SenderId, rxn));
+                    // Re-broadcast to all peers so other students also see
+                    // the floating emoji over the sender's tile.  Rebuild
+                    // the envelope so SenderId stays the original sender
+                    // (rather than _teacherId).
+                    var relay = Envelope.Create(MessageType.Reaction, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(relay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceShareRequest:
+                {
+                    var req = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareRequestMessage>(env.Payload);
+                    // SenderId in the envelope is the authoritative requester
+                    // id — the payload field is duplicated for diagnostics
+                    // but may be stale if the student VM raced its own
+                    // re-identification.  Trust the envelope, overwrite the
+                    // payload field before dispatching upstream so the
+                    // MainViewModel handler doesn't see a mismatch.
+                    req.RequesterEndpointId = env.SenderId;
+                    _logger.LogInformation("ConferenceShareRequest from {Sender} ({Name})",
+                        env.SenderId, req.RequesterName);
+                    try { ConferenceShareRequestReceived?.Invoke(this, req); }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "ConferenceShareRequestReceived handler failed for {Sender}", env.SenderId);
+                    }
+                }
+                break;
+
+            // ─────── Phase 16-B+ : In-frame Conference share ───────
+            // Today only the teacher initiates a Conference share — those
+            // envelopes go out via BroadcastConferenceShare*Async above and
+            // never come back here (TCP doesn't echo to self).  The dispatch
+            // arms below are foundation work: when a future tier lands
+            // student-initiated Conference share, these arms relay frames to
+            // all peers != sender + fire local events for the teacher's UI.
+            //
+            // SenderId is preserved on the relay envelope so receivers know
+            // which tile the share originates from.
+
+            case MessageType.ConferenceShareStart:
+                {
+                    try
+                    {
+                        var startMsg = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareStartMessage>(env.Payload);
+                        _logger.LogInformation("ConferenceShareStart from {Sender} ({Name})", env.SenderId, startMsg.SourceName);
+                        _activeConferenceSharerId = env.SenderId;
+                        _activeConferenceSharerName = startMsg.SourceName;
+                        ConferenceShareStartReceived?.Invoke(this, (env.SenderId, startMsg));
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceShareStart decode failed"); }
+                    var startRelay = Envelope.Create(MessageType.ConferenceShareStart, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(startRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceShareFrame:
+                {
+                    try
+                    {
+                        var frameMsg = MessagePack.MessagePackSerializer.Deserialize<ConferenceShareFrameMessage>(env.Payload);
+                        ConferenceShareFrameReceived?.Invoke(this, (env.SenderId, frameMsg));
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceShareFrame decode failed"); }
+                    // Relay frames to all peers — receiver self-loopback
+                    // filter (env.SenderId == own endpoint id) drops the
+                    // sender's own echo at the gallery layer.
+                    var frameRelay = Envelope.Create(MessageType.ConferenceShareFrame, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(frameRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceShareStop:
+                {
+                    _logger.LogInformation("ConferenceShareStop from {Sender}", env.SenderId);
+                    if (_activeConferenceSharerId == env.SenderId)
+                    {
+                        _activeConferenceSharerId = null;
+                        _activeConferenceSharerName = "";
+                    }
+                    ConferenceShareStopReceived?.Invoke(this, env.SenderId);
+                    var stopRelay = Envelope.Create(MessageType.ConferenceShareStop, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(stopRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            // ─────── Phase 16-C : Peer cam routing ───────
+            // Star topology: each participant emits Start/Frame/Stop, teacher
+            // relays to all peers != sender.  Sender's SenderId is preserved
+            // on the relay envelope so receivers route by sender to the
+            // matching tile.  Tracks _activeConferenceCamSenders so the
+            // Hello-ack replay path can give a late joiner the full set of
+            // currently-broadcasting cams in one shot.
+
+            case MessageType.ConferenceCameraStart:
+                {
+                    try
+                    {
+                        var startMsg = MessagePack.MessagePackSerializer.Deserialize<ConferenceCameraStartMessage>(env.Payload);
+                        _logger.LogInformation("ConferenceCameraStart from {Sender} ({Name}, {W}x{H}@{F})",
+                            env.SenderId, startMsg.SourceName, startMsg.Width, startMsg.Height, startMsg.Fps);
+                        startMsg.SourceEndpointId = env.SenderId;
+                        _activeConferenceCamSenders[env.SenderId] = startMsg;
+                        ConferenceCameraStartReceived?.Invoke(this, (env.SenderId, startMsg));
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceCameraStart decode failed"); }
+                    var startRelay = Envelope.Create(MessageType.ConferenceCameraStart, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(startRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceCameraFrame:
+                {
+                    try
+                    {
+                        var frameMsg = MessagePack.MessagePackSerializer.Deserialize<ConferenceCameraFrameMessage>(env.Payload);
+                        ConferenceCameraFrameReceived?.Invoke(this, (env.SenderId, frameMsg));
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "ConferenceCameraFrame decode failed"); }
+                    // Relay frames to all peers; receiver-side self-loopback
+                    // filter (env.SenderId == own endpoint id) drops the
+                    // sender's own echo at the gallery layer.
+                    var frameRelay = Envelope.Create(MessageType.ConferenceCameraFrame, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(frameRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ConferenceCameraStop:
+                {
+                    _logger.LogInformation("ConferenceCameraStop from {Sender}", env.SenderId);
+                    _activeConferenceCamSenders.Remove(env.SenderId);
+                    ConferenceCameraStopReceived?.Invoke(this, env.SenderId);
+                    var stopRelay = Envelope.Create(MessageType.ConferenceCameraStop, env.Payload, env.SenderId);
+                    _ = _tcp.BroadcastAsync(stopRelay, System.Threading.CancellationToken.None);
+                }
+                break;
+
+            case MessageType.ChatBroadcast:
+            case MessageType.ChatDirect:
+                {
+                    var chat = MessagePack.MessagePackSerializer.Deserialize<ChatMessage>(env.Payload);
+                    ChatReceived?.Invoke(this, chat);
+                }
+                break;
+
+            case MessageType.ChatRoom:
+                {
+                    var roomChat = MessagePack.MessagePackSerializer.Deserialize<ChatMessage>(env.Payload);
+                    roomChat.SenderId = env.SenderId;
+                    _ = RouteRoomChatAsync(roomChat, env.SenderId, CancellationToken.None);
+                    ChatReceived?.Invoke(this, roomChat);
+                }
+                break;
+
+            case MessageType.ScreenshotResponse:
+                try
+                {
+                    var shot = MessagePack.MessagePackSerializer.Deserialize<ScreenshotResponseMessage>(env.Payload);
+                    shot.StudentId = env.SenderId;
+                    ScreenshotReceived?.Invoke(this, shot);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode ScreenshotResponse");
+                }
+                break;
+
+            case MessageType.StudentStreamFrame:
+                try
+                {
+                    var frame = MessagePack.MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(env.Payload);
+
+                    // Phase 10.15 BUG-001 — log every received student stream frame at the TCP
+                    // boundary so we can see whether frames make it across the network at all.
+                    // Includes the post-deserialize codec field so we catch a wrong-codec bug
+                    // (e.g. default falling back to Mjpeg if the field is lost on the wire).
+                    // ScreenStreamFrameMessage.FrameData has `= Array.Empty<byte>()` initializer
+                    // so it's never null on the receive side after deserialize.
+                    int previewLen = Math.Min(16, frame.FrameData.Length);
+                    var preview = previewLen > 0 ? frame.FrameData.AsSpan(0, previewLen).ToArray() : Array.Empty<byte>();
+                    var hex = previewLen > 0 ? BitConverter.ToString(preview).Replace("-", " ") : "(empty)";
+                    if (frame.FrameSeq <= 5 || frame.IsKeyframe)
+                    {
+                        LogDebug($"[ControlServer.RX] StudentStreamFrame sender={env.SenderId} seq={frame.FrameSeq} codec={frame.Codec} bytes={frame.FrameData.Length} keyframe={frame.IsKeyframe} first16=[{hex}]");
+                    }
+
+                    StudentStreamFrameReceived?.Invoke(this, (env.SenderId, frame));
+
+                    // Phase 9.1: if this sender is the demo source, rebroadcast as DemoFrame.
+                    if (_currentDemoSourceId.HasValue && env.SenderId == _currentDemoSourceId.Value)
+                    {
+                        var relay = Envelope.Create(MessageType.DemoFrame, env.Payload, _teacherId);
+                        _ = _tcp.BroadcastAsync(relay, CancellationToken.None);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode StudentStreamFrame");
+                    LogDebug($"[ControlServer.RX] StudentStreamFrame DESERIALIZE FAILED: {ex.GetType().Name}: {ex.Message}");
+                }
+                break;
+
+            // ─────── Phase 13-C (Tier 2) — student host-presenter relay ───────
+            //
+            // The host's StudentBroadcaster emits StudentGroupScreenStreamFrame
+            // envelopes (in addition to the existing StudentStreamFrame upstream
+            // path).  Teacher's job is pure relay: fan out to all peers via the
+            // existing BroadcastAsync, with TargetGroupId preserved so the
+            // Service-side IsForMe filter on receivers drops out-of-group
+            // students.  The host receives a loopback envelope too (Service
+            // IsForMe matches: same group) — the host's Agent self-filters by
+            // env.SenderId == own EndpointId so GroupPeerView never opens for
+            // own broadcast.
+            //
+            // Authorization: this implementation TRUSTS the sender — any
+            // student claiming a TargetGroupId gets relayed.  Tier 2 first-cut.
+            // A hardening pass could check that env.SenderId == _roomHostMap
+            // [env.TargetGroupId] before relaying; deferred to a polish round.
+            case MessageType.StudentGroupScreenStreamStart:
+            case MessageType.StudentGroupScreenStreamFrame:
+            case MessageType.StudentGroupScreenStreamStop:
+                {
+                    if (!env.TargetGroupId.HasValue) break;
+                    if (env.Type == MessageType.StudentGroupScreenStreamStart
+                        || env.Type == MessageType.StudentGroupScreenStreamStop)
+                    {
+                        _logger.LogInformation("{Type} host={Host} group={Group}",
+                            env.Type, env.SenderId, env.TargetGroupId);
+                    }
+                    _ = _tcp.BroadcastAsync(env, CancellationToken.None);
+                }
+                break;
+
+            // ─────── Phase 13-D (Tier 3) — group voice relay + mic state ───────
+            //
+            // Star topology mirrors Tier 2 screen relay: voice frames arrive
+            // from the speaker with TargetGroupId set; teacher fans out via
+            // SendVoiceAsync (Step 2's _voiceOutbox).  Group-membership
+            // filtering is done at the receiver Service via IsForMe (same
+            // TargetGroupId match as Tier 1/2).  Sender receives a loopback
+            // copy too; the speaker's Agent self-filters in MainWindow via
+            // env.SenderId == _myEndpointId so the VoiceMixer doesn't echo
+            // back the speaker's own voice.
+            //
+            // Defensive group-membership check: validate that the sender is
+            // actually in the claimed group.  If the namespace is mismatched
+            // (sender not in any room, or in a different room), drop silently
+            // — first-cut auth, polish round can tighten further.
+            case MessageType.VoiceAudioFrame:
+                {
+                    if (!env.TargetGroupId.HasValue) break;
+                    if (_studentRoomMap.TryGetValue(env.SenderId, out var senderRoom)
+                        && senderRoom == env.TargetGroupId.Value)
+                    {
+                        _ = _tcp.SendVoiceAsync(env, CancellationToken.None);
+                    }
+                }
+                break;
+
+            case MessageType.MicStateUpdate:
+                try
+                {
+                    var s = MessagePack.MessagePackSerializer.Deserialize<MicStateUpdateMessage>(env.Payload);
+                    _micStates[env.SenderId] = s;
+                    MicStateUpdated?.Invoke(this, (env.SenderId, s));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode MicStateUpdate");
+                }
+                break;
+
+            // Phase 14-B (Tier 1) — webcam-state heartbeat from student
+            // (WebcamDeviceWatcher).  Tracks per-student cam presence; Tier 2
+            // will also light up CamLive + Mode when the student-side
+            // broadcaster lands.
+            case MessageType.WebcamStateUpdate:
+                try
+                {
+                    var s = MessagePack.MessagePackSerializer.Deserialize<WebcamStateUpdateMessage>(env.Payload);
+                    _webcamStates[env.SenderId] = s;
+                    WebcamStateUpdated?.Invoke(this, (env.SenderId, s));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode WebcamStateUpdate");
+                }
+                break;
+
+            case MessageType.StudentAudioStreamStart:
+                _logger.LogInformation("Student {Id} mic ON", env.SenderId);
+                StudentAudioStreamStarted?.Invoke(this, env.SenderId);
+                break;
+
+            case MessageType.StudentAudioStreamFrame:
+                try
+                {
+                    // Phase 13-B step 1: removed Phase 9.7 room-voice relay gate
+                    // (depended on _roomVoiceMembers which was never populated;
+                    //  branch was unreachable).  Tier 3 group voice replaces this
+                    //  with VoiceAudioFrame (0x0640) on a dedicated _voiceOutbox.
+                    var audio = MessagePack.MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(env.Payload);
+                    StudentAudioFrameReceived?.Invoke(this, (env.SenderId, audio));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode StudentAudioStreamFrame");
+                }
+                break;
+
+            case MessageType.StudentAudioStreamStop:
+                _logger.LogInformation("Student {Id} mic OFF", env.SenderId);
+                StudentAudioStreamStopped?.Invoke(this, env.SenderId);
+                break;
+
+            // ─────── Phase 8.5: Host action relay ───────
+            case MessageType.HostActionMute:
+                try
+                {
+                    var msg = MessagePack.MessagePackSerializer.Deserialize<HostActionMessage>(env.Payload);
+                    if (msg.TargetStudentId.HasValue)
+                        _ = HostMutePeerAsync(env.SenderId, msg.TargetStudentId.Value, CancellationToken.None);
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "HostActionMute decode failed"); }
+                break;
+
+            case MessageType.HostActionShare:
+                // v1: hard-coded permission denied. Notify host via DM-style chat in the future.
+                _logger.LogInformation("HostActionShare from {Sender} — denied (v1)", env.SenderId);
+                break;
+
+            case MessageType.HostActionMessageToMain:
+                try
+                {
+                    var msg = MessagePack.MessagePackSerializer.Deserialize<HostActionMessage>(env.Payload);
+                    var text = msg.TextOrPayload?.Trim() ?? "";
+                    if (text.Length > 0)
+                        _ = BroadcastHostMessageToMainAsync(env.SenderId, text, CancellationToken.None);
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "HostActionMessageToMain decode failed"); }
+                break;
+
+#if false // TT-1-C (macOS port) — DEFERRED: quiz relay (needs Exam.Shared; see note above)
+            case MessageType.QuizAnswerSubmit:
+                try
+                {
+                    var sub = MessagePack.MessagePackSerializer.Deserialize<ClassroomCtrl.Exam.Shared.QuizAnswerSubmitPayload>(env.Payload);
+                    sub.StudentEndpointId = env.SenderId;
+                    _logger.LogInformation("Quiz submission from {Id} ({Name}): {N} answers, auto={Auto}",
+                        sub.StudentEndpointId, sub.DisplayName, sub.Answers.Count, sub.IsAutoSubmitted);
+                    QuizSubmissionReceived?.Invoke(this, sub);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode QuizAnswerSubmit");
+                }
+                break;
+#endif
+
+            case MessageType.ScreenStreamQualityReport:
+                try
+                {
+                    var report = MessagePack.MessagePackSerializer.Deserialize<ScreenStreamQualityReportMessage>(env.Payload);
+                    QualityReportReceived?.Invoke(this, (env.SenderId, report));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to decode ScreenStreamQualityReport");
+                }
+                break;
+        }
+    }
+
+    public void Dispose() => _tcp.Dispose();
+}
