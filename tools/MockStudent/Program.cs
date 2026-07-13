@@ -110,18 +110,81 @@ static class Interactive
 {
     public static async Task<int> RunAsync(string ip, int port, string name)
     {
-        Console.WriteLine($"=== MockStudent → {ip}:{port} as \"{name}\" (Ctrl+C to quit) ===");
-        var client = new WireClient();
-        client.StatusChanged += s => Console.WriteLine($"  [status] {s}");
-        client.Traffic += (dir, label, size) => { if (dir != WireDirection.Rx) Console.WriteLine($"  [{dir}] {label} {size}B"); };
-        client.EnvelopeReceived += env => Console.WriteLine($"  [rx] received {Dispatch.Describe(env)}");
+        Console.WriteLine($"=== MockStudent → {ip}:{port} as \"{name}\" (real streamers on command; Ctrl+C to quit) ===");
+        var agent = new StudentAgent(m => Console.WriteLine($"  [rx] {m}"));
+        agent.Wire.StatusChanged += s => Console.WriteLine($"  [status] {s}");
+        agent.Wire.Traffic += (dir, label, size) => { if (dir == WireDirection.Tx) Console.WriteLine($"  [tx] {label} {size}B"); };
 
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-        try { await client.RunAsync(ip, port, name, cts.Token); }
+        try { await agent.Wire.RunAsync(ip, port, name, cts.Token); }
         catch (OperationCanceledException) { }
         return 0;
     }
+}
+
+
+// ───────────────────────────── the student agent: WireClient + REAL streamers ─────────────────────────────
+// TT-0-C — mirrors the Student's ConnectionViewModel dispatch EXACTLY (same streamer classes, no
+// fork), so MockStudent emits byte-identical wire frames to the real Mac Student. On the Teacher's
+// commands it drives ScreenStreamer / CameraStreamer / AudioStreamer; on disconnect it stops all.
+// (Streaming does real capture → needs Screen/Camera/Mic grants on THIS binary, same as MockTeacher's
+// --streamtest/--cameratest/--audiotest.)
+sealed class StudentAgent
+{
+    public WireClient Wire { get; } = new();
+    readonly ScreenStreamer _screen = new();
+    readonly CameraStreamer _camera = new();
+    readonly AudioStreamer _audio = new();
+    readonly Action<string> _log;
+
+    public StudentAgent(Action<string> log)
+    {
+        _log = log;
+        Wire.EnvelopeReceived += env => _ = DispatchAsync(env);
+        Wire.StatusChanged += s => { if (s == WireStatus.Disconnected) StopAll(); };
+    }
+
+    async Task DispatchAsync(Envelope env)
+    {
+        try
+        {
+            switch (env.Type)
+            {
+                case MessageType.StudentStreamStart:
+                    var codec = DecodeCodec(env.Payload);
+                    _log($"StudentStreamStart → ScreenStreamer ({codec})");
+                    await _screen.StartAsync(Wire, codec);
+                    break;
+                case MessageType.StudentStreamStop:
+                    await _screen.StopAsync(); _log("StudentStreamStop → stop"); break;
+                case MessageType.ConferenceStart:
+                    var sid = DecodeSession(env.Payload);
+                    _log($"ConferenceStart → CameraStreamer ({Short(sid)})");
+                    await _camera.StartAsync(Wire, Wire.EndpointId, sid, "MockStudent");
+                    break;
+                case MessageType.ConferenceEnd:
+                    await _camera.StopAsync(); _log("ConferenceEnd → stop"); break;
+                case MessageType.MicMonitorStart:
+                    _log("MicMonitorStart → AudioStreamer");
+                    await _audio.StartAsync(Wire, Wire.EndpointId);
+                    break;
+                case MessageType.MicMonitorStop:
+                    await _audio.StopAsync(); _log("MicMonitorStop → stop"); break;
+                default:
+                    _log($"received {Dispatch.Describe(env)}"); break;
+            }
+        }
+        catch (Exception ex) { _log($"dispatch error on {env.Type}: {ex.Message}"); }
+    }
+
+    void StopAll() { _ = _screen.StopAsync(); _ = _camera.StopAsync(); _ = _audio.StopAsync(); }
+
+    static VideoCodec DecodeCodec(byte[] p)
+    { try { return p.Length == 0 ? VideoCodec.Mjpeg : MessagePackSerializer.Deserialize<StudentStreamStartRequest>(p).Codec; } catch { return VideoCodec.Mjpeg; } }
+    static Guid DecodeSession(byte[] p)
+    { try { return p.Length == 0 ? Guid.Empty : MessagePackSerializer.Deserialize<ConferenceStartMessage>(p).SessionId; } catch { return Guid.Empty; } }
+    static string Short(Guid g) => g.ToString()[..8];
 }
 
 

@@ -30,6 +30,7 @@ using MessagePack;
 int port = 7777;
 bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false, trayTest = false, permTest = false, launchAgentTest = false;
 int holdSeconds = 20;
+string? recvMode = null;   // TT-0-C: --recv <screen|screen-h264|camera|audio> — receive + assert frames from an EXTERNAL student (MockStudent)
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -50,11 +51,13 @@ for (int i = 0; i < args.Length; i++)
         case "--traytest": trayTest = true; break;
         case "--permtest": permTest = true; break;
         case "--launchagenttest": launchAgentTest = true; break;
+        case "--recv": recvMode = args[++i]; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (recvMode != null) return await RecvTest.RunAsync(recvMode, port, teacherId);
 if (launchAgentTest) return LaunchAgentTest.Run();
 if (permTest) return PermTest.Run();
 if (trayTest) return TrayTest.Run();
@@ -1317,5 +1320,90 @@ static class LaunchAgentTest
             ? "\n=== LAUNCHAGENTTEST PASS ✅ — plist(RunAtLoad+KeepAlive=false, self-targeted) · enable→bootstrap · disable→bootout+REMOVED · dev-path refused ==="
             : $"\n=== LAUNCHAGENTTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
+    }
+}
+
+// ── TT-0-C — receive + assert frames from an EXTERNAL student (--recv <mode>) ──────
+// The inverse counterparty for MockStudent: the SERVER half of --streamtest/--cameratest/
+// --audiotest, but it LISTENS on a fixed port and WAITS for an external student (MockStudent)
+// instead of driving an in-process one. Proves MockStudent emits real, decodable frames over the
+// wire — i.e. that it's a faithful stand-in. Reuses the same Frame helpers + frame message types +
+// structural assertions as the Student-track tests.
+static class RecvTest
+{
+    public static async Task<int> RunAsync(string mode, int port, Guid teacherId)
+    {
+        int target = mode is "audio" or "camera" ? 8 : 12;
+        var listener = new TcpListener(IPAddress.Any, port);   // Any → a real remote student could connect too
+        listener.Start();
+        Console.WriteLine($"=== MockTeacher --recv {mode} (listening :{port}; waiting for an external student…) ===");
+
+        int received = 0, valid = 0;
+        var sessionId = Guid.NewGuid();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));   // deadline: never hang if the student can't capture
+        TcpClient conn;
+        try { conn = await listener.AcceptTcpClientAsync(cts.Token); }
+        catch (OperationCanceledException) { listener.Stop(); Console.WriteLine("\n=== RECV FAIL ❌ — no student connected within 20s ==="); return 1; }
+        using var _conn = conn;
+        var stream = conn.GetStream();
+        Console.WriteLine("  student connected.");
+
+        while (received < target)
+        {
+            Envelope? env;
+            try { env = await Frame.ReadAsync(stream, cts.Token); } catch { break; }
+            if (env is null) break;
+
+            if (env.Type == MessageType.Hello)
+            {
+                var hello = MessagePackSerializer.Deserialize<HelloMessage>(env.Payload);
+                Console.WriteLine($"  [Hello] {hello.DisplayName} ({hello.EndpointId.ToString()[..8]}) → sending start ({mode})");
+                switch (mode)
+                {
+                    case "screen":      await Frame.SendAsync(stream, MessageType.StudentStreamStart, Frame.StreamStartPayload(VideoCodec.Mjpeg), teacherId); break;
+                    case "screen-h264": await Frame.SendAsync(stream, MessageType.StudentStreamStart, Frame.StreamStartPayload(VideoCodec.H264), teacherId); break;
+                    case "camera":      await Frame.SendAsync(stream, MessageType.ConferenceStart, Frame.ConferenceStartPayload(sessionId), teacherId); break;
+                    case "audio":       await Frame.SendAsync(stream, MessageType.MicMonitorStart, Array.Empty<byte>(), teacherId); break;
+                    default: Console.WriteLine($"  ❌ unknown --recv mode '{mode}'"); listener.Stop(); return 1;
+                }
+            }
+            else if (env.Type == MessageType.Ping)
+                await Frame.SendAsync(stream, MessageType.Pong, Array.Empty<byte>(), teacherId);
+            else if ((mode is "screen" or "screen-h264") && env.Type == MessageType.StudentStreamFrame)
+            {
+                var f = MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(env.Payload);
+                received++;
+                var d = f.FrameData;
+                bool ok = mode == "screen-h264"
+                    ? d.Length > 4 && d[0] == 0 && d[1] == 0 && d[2] == 0 && d[3] == 1                    // Annex-B start code
+                    : d.Length > 3 && d[0] == 0xFF && d[1] == 0xD8 && d[^2] == 0xFF && d[^1] == 0xD9;     // JPEG SOI/EOI
+                if (ok) valid++;
+                if (received <= 3) Console.WriteLine($"  [frame {received}] seq={f.FrameSeq} {f.Width}x{f.Height} {d.Length}B key={f.IsKeyframe} ok={ok}");
+            }
+            else if (mode == "camera" && env.Type == MessageType.ConferenceCameraFrame)
+            {
+                var f = MessagePackSerializer.Deserialize<ConferenceCameraFrameMessage>(env.Payload);
+                received++;
+                var d = f.JpegData;
+                bool ok = d.Length > 3 && d[0] == 0xFF && d[1] == 0xD8 && d[^2] == 0xFF && d[^1] == 0xD9;
+                if (ok) valid++;
+                if (received <= 3) Console.WriteLine($"  [cam {received}] {d.Length}B jpeg={ok}");
+            }
+            else if (mode == "audio" && env.Type == MessageType.StudentAudioStreamFrame)
+            {
+                var f = MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(env.Payload);
+                received++;
+                bool ok = f.PcmData.Length == 3200 && f.SampleRate == 16000 && f.Channels == 1 && f.BitsPerSample == 16;
+                if (ok) valid++;
+                if (received <= 3) Console.WriteLine($"  [pcm {received}] {f.PcmData.Length}B {f.SampleRate}/{f.Channels}/{f.BitsPerSample} ok={ok}");
+            }
+        }
+        listener.Stop();
+
+        bool pass = received >= target && valid == received;
+        Console.WriteLine(pass
+            ? $"\n=== RECV PASS ✅ — {valid}/{received} valid {mode} frames from the external student (MockStudent = faithful stand-in) ==="
+            : $"\n=== RECV FAIL ❌ — {valid}/{received} valid {mode} frames (target {target}); did the student have the capture grant? ===");
+        return pass ? 0 : 1;
     }
 }
