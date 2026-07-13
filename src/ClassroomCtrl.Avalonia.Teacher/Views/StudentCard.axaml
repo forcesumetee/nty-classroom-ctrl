@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Avalonia.Teacher.ViewModels"
+             xmlns:conv="using:ClassroomCtrl.Avalonia.Teacher.Converters"
+             x:Class="ClassroomCtrl.Avalonia.Teacher.Views.StudentCard"
+             x:DataType="vm:StudentTileViewModel"
+             Width="220">
+
+    <!-- TT-2-C — adapted from the Sandbox StudentCard shell (Session-1 port). KEPT:
+         the card + selection border + Card_Pressed + the name/machine info bar + the
+         Conf* theme keys + HexToBrush. ADDED: the presence dot (the TT-2 scope
+         addition — a legible "connected" indicator). DEFERRED (return when wired):
+         the context menu, room/policy/hand/host/talking badges, REC + view buttons,
+         and the screen thumbnail (TT-3/TT-4, needs decode). -->
+
+    <UserControl.Resources>
+        <conv:HexToBrushConverter x:Key="HexToBrush"/>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- Base values in a style so the .selected class can override. -->
+        <Style Selector="Border#CardRoot">
+            <Setter Property="Background" Value="{StaticResource ConfTileBgBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource ConfBorderSubtleBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style Selector="Border#CardRoot.selected">
+            <Setter Property="BorderBrush" Value="#4285F4"/>
+            <Setter Property="BorderThickness" Value="3"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border x:Name="CardRoot" CornerRadius="12" ClipToBounds="True" Cursor="Hand"
+            Classes.selected="{Binding IsSelected}"
+            PointerPressed="Card_Pressed">
+        <Grid RowDefinitions="*,Auto">
+            <!-- Screen preview plate (thumbnail deferred to TT-3/TT-4). -->
+            <Border Grid.Row="0" Background="#0D1224" CornerRadius="11,11,0,0" ClipToBounds="True" MinHeight="124">
+                <Grid>
+                    <!-- Top-left: PRESENCE dot (green = connected) — the TT-2 presence affordance. -->
+                    <Border x:Name="PresenceDot" Width="12" Height="12" CornerRadius="6" Margin="8"
+                            HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Background="{Binding PresenceColorHex, Converter={StaticResource HexToBrush}}"
+                            ToolTip.Tip="Connected"/>
+                    <!-- Top-right: selection check (visual single-selection from the shell). -->
+                    <Border Width="22" Height="22" CornerRadius="11" Background="#4285F4" Margin="8"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            IsVisible="{Binding IsSelected}">
+                        <TextBlock Text="✓" Foreground="White" FontSize="12" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Info bar: name + machine. -->
+            <Border Grid.Row="1" Background="{StaticResource ConfTileBgBrush}" Padding="10,8">
+                <StackPanel>
+                    <TextBlock x:Name="NameText" Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource ConfTextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding MachineName}" FontSize="11"
+                               Foreground="{StaticResource ConfTextSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

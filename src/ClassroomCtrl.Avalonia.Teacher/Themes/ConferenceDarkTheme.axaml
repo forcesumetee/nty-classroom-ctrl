@@ -1,0 +1,206 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+    ═══════════════════════════════════════════════════════════════════════════
+    ConferenceDarkTheme — FULL port (36 keys) of
+    ClassroomCtrl.Shared.Wpf/Themes/ConferenceDarkTheme.xaml (Phase 25.0-B).
+
+    Centralized Conference Mode dark-theme design tokens.  Every Conference XAML
+    surface (Tile, Toolbar, Sidebar, ShareView, the student ConferenceGalleryWindow
+    chrome, the teacher ConferenceView chrome, the sharing pill) draws its colors /
+    spacing / radii from THIS file — no hardcoded hex outside it.
+
+    ORIGINAL KEY NAMES PRESERVED verbatim for cross-repo search/reference.
+
+    WPF → Avalonia notes:
+      • Root xmlns → https://github.com/avaloniaui
+      • <sys:Double> → <x:Double> (drops the mscorlib clr-namespace)
+      • SolidColorBrush + Opacity, CornerRadius, Thickness, FontFamily: 1:1.
+      • The two keyed <Style TargetType="Button"> entries become Avalonia
+        <ControlTheme> (see §STYLES) — applied via Theme="{StaticResource ...}"
+        (WPF applied via Style="{StaticResource ...}").  IsMouseOver trigger →
+        ':pointerover' pseudo-class selector; TemplateBinding is supported as-is.
+
+    Theme-swap note: internal references use {StaticResource} (matches the shipped
+    file — resolved once at load).  A future runtime light/dark swap would need
+    {DynamicResource} at the CONSUMER sites, not here; kept static to preserve
+    current behavior exactly.
+    ═══════════════════════════════════════════════════════════════════════════
+    -->
+
+    <!-- ============ BACKGROUNDS (9) ============ -->
+    <!-- Root Conference window background (student + teacher shells). -->
+    <SolidColorBrush x:Key="ConfWindowBgBrush"        Color="#1F1F23"/>
+    <!-- Custom title-bar strip background (darker than the window body). -->
+    <SolidColorBrush x:Key="ConfTitleBarBgBrush"      Color="#17171A"/>
+    <!-- Participant tile background when idle (no live video). Used: ConferenceTile OuterBorder base. -->
+    <SolidColorBrush x:Key="ConfTileBgBrush"          Color="#2D2D33"/>
+    <!-- Tile background when a video frame IS present (dimmer plate so the frame pops). Used: ConferenceTile .live class. -->
+    <SolidColorBrush x:Key="ConfTileLiveBgBrush"      Color="#1A1A1E"/>
+    <!-- Floating bottom toolbar pill background. Used: ConferenceToolbar. -->
+    <SolidColorBrush x:Key="ConfToolbarBgBrush"       Color="#28282E"/>
+    <!-- Right-hand sidebar (participants/chat) background. Used: ConferenceSidebar. -->
+    <SolidColorBrush x:Key="ConfSidebarBgBrush"       Color="#1A1A1E"/>
+    <!-- Chat bubble background for the local user's own messages. Used: ConferenceSidebar chat tab. -->
+    <SolidColorBrush x:Key="ConfChatOwnBubbleBrush"   Color="#2D2D33"/>
+    <!-- Chat bubble background for messages from others. Used: ConferenceSidebar chat tab. -->
+    <SolidColorBrush x:Key="ConfChatOtherBubbleBrush" Color="#1F1F23"/>
+    <!-- Chat text-input box background. Used: ConferenceSidebar chat composer. -->
+    <SolidColorBrush x:Key="ConfChatInputBgBrush"     Color="#2D2D33"/>
+
+    <!-- ============ OVERLAYS (2) ============ -->
+    <!-- Translucent black plate behind tile status pills (floats over video or placeholder). Used: ConferenceTile status pill. -->
+    <SolidColorBrush x:Key="ConfStatusBarBgBrush"  Color="#000000" Opacity="0.6"/>
+    <!-- Translucent white hover overlay for toolbar buttons. Used by: ConfToolbarButtonStyle :pointerover. -->
+    <SolidColorBrush x:Key="ConfHoverOverlayBrush" Color="#FFFFFF" Opacity="0.08"/>
+
+    <!-- ============ TEXT (3) ============ -->
+    <!-- Primary text/icons (names, live mic/cam icons). Used: everywhere. -->
+    <SolidColorBrush x:Key="ConfTextPrimaryBrush"   Color="#E8EAED"/>
+    <!-- Secondary/muted text ("(You)" suffix, timestamps, captions). -->
+    <SolidColorBrush x:Key="ConfTextSecondaryBrush" Color="#9AA0A6"/>
+    <!-- Disabled/greyed text. -->
+    <SolidColorBrush x:Key="ConfTextDisabledBrush"  Color="#5F6368"/>
+
+    <!-- ============ ACCENTS (6) ============ -->
+    <!-- Speaking ring + hand-raise badge fill. Used: ConferenceTile hand badge. -->
+    <SolidColorBrush x:Key="ConfAccentYellowBrush" Color="#FBBC04"/>
+    <!-- Active-mic dot + share-on toolbar state. Used: ConferenceTile mic dot. -->
+    <SolidColorBrush x:Key="ConfAccentGreenBrush"  Color="#34A853"/>
+    <!-- Host badge stroke + sidebar active tab. Used: ConferenceTile HOST badge border. -->
+    <SolidColorBrush x:Key="ConfAccentBlueBrush"   Color="#4285F4"/>
+    <!-- Host badge TEXT (paler blue for contrast on the translucent badge). Used: ConferenceTile HOST label. -->
+    <SolidColorBrush x:Key="ConfAccentBluePale"    Color="#8AB4F8"/>
+    <!-- Cam-off icon + End/Leave button + sharing pulse. Used: ConferenceTile cam icon (muted). -->
+    <SolidColorBrush x:Key="ConfAccentRedBrush"    Color="#EA4335"/>
+    <!-- Semi-transparent blue fill behind the HOST badge. Used: ConferenceTile HOST badge bg. -->
+    <SolidColorBrush x:Key="ConfHostBadgeBgBrush"  Color="#4285F4" Opacity="0.2"/>
+
+    <!-- ============ BORDERS (3) ============ -->
+    <!-- Subtle divider/border (sidebar separators, inactive tiles). -->
+    <SolidColorBrush x:Key="ConfBorderSubtleBrush" Color="#3C3C44"/>
+    <!-- Hover border for toolbar buttons (default border of ConfToolbarButtonStyle). -->
+    <SolidColorBrush x:Key="ConfBorderHoverBrush"  Color="#5F6368"/>
+    <!-- Active-speaker ring color on a tile. Used: ConferenceTile .speaking class. -->
+    <SolidColorBrush x:Key="ConfBorderActiveBrush" Color="#FBBC04"/>
+
+    <!-- ============ TYPOGRAPHY (4) ============ -->
+    <!-- Conference font stack. NOTE: "Segoe UI" is absent on macOS → falls back to
+         the Avalonia default UI font; emoji resolve via Apple Color Emoji. -->
+    <FontFamily x:Key="ConfFontFamily">Segoe UI, Segoe UI Emoji</FontFamily>
+    <!-- Large centered name on an idle tile. Used: ConferenceTile placeholder. -->
+    <x:Double x:Key="ConfFontSizeTileName">36</x:Double>
+    <!-- Status-pill / body text size. -->
+    <x:Double x:Key="ConfFontSizeStatus">12</x:Double>
+    <!-- Badge label size (HOST etc.). -->
+    <x:Double x:Key="ConfFontSizeBadge">11</x:Double>
+
+    <!-- ============ LAYOUT — CORNER RADII (5) ============ -->
+    <!-- Tile outer corner radius. Used: ConferenceTile OuterBorder. -->
+    <CornerRadius x:Key="ConfTileCornerRadius">10</CornerRadius>
+    <!-- Status-pill corner radius. Used: ConferenceTile status pill. -->
+    <CornerRadius x:Key="ConfStatusBarRadius">13</CornerRadius>
+    <!-- Floating toolbar pill radius. Used: ConferenceToolbar container. -->
+    <CornerRadius x:Key="ConfToolbarCornerRadius">24</CornerRadius>
+    <!-- Badge corner radius (HOST etc.). Used: ConferenceTile HOST badge. -->
+    <CornerRadius x:Key="ConfBadgeCornerRadius">11</CornerRadius>
+    <!-- Toolbar button pill radius. Used by: ConfToolbarButtonStyle template. -->
+    <CornerRadius x:Key="ConfButtonCornerRadius">20</CornerRadius>
+
+    <!-- ============ LAYOUT — SPACING (2) ============ -->
+    <!-- Generic tile inner padding. -->
+    <Thickness x:Key="ConfTilePadding">16</Thickness>
+    <!-- Status-pill inner padding (h,v). Used: ConferenceTile status pill. -->
+    <Thickness x:Key="ConfStatusBarPadding">12,5</Thickness>
+
+    <!-- ============ STYLES (2) — ported to Avalonia ControlTheme ============
+         WPF keyed <Style TargetType="Button"> applied via Style="{StaticResource}"
+         has no direct Avalonia analogue; the templated-control equivalent is a
+         <ControlTheme x:Key=... TargetType=...> applied via Theme="{StaticResource}".
+         Inside a ControlTheme, '^' = the templated control; '/template/' reaches
+         into the ControlTemplate; ':pointerover' replaces the WPF IsMouseOver
+         trigger.  TemplateBinding works the same. -->
+
+    <!-- ── Toolbar ── (grep "ControlTheme x:Key" by section) -->
+
+    <!-- Compact circular pill button used by every ConferenceToolbar entry
+         (mic, cam, share, chat, hand raise, more). Hover = translucent white
+         overlay (Meet/Zoom feel). -->
+    <ControlTheme x:Key="ConfToolbarButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="60"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="Margin" Value="4,0"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{StaticResource ConfBorderHoverBrush}"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+        <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Bg"
+                        CornerRadius="{StaticResource ConfButtonCornerRadius}"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}">
+                    <ContentPresenter HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Foreground="{TemplateBinding Foreground}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <!-- WPF: <Trigger Property="IsMouseOver"> on PART_Bg -->
+        <Style Selector="^:pointerover /template/ Border#PART_Bg">
+            <Setter Property="Background" Value="{StaticResource ConfHoverOverlayBrush}"/>
+        </Style>
+    </ControlTheme>
+
+    <!-- Filled End/Leave button: red, no border, wider. BasedOn keeps width/height/
+         radius consistent with the rest of the pill row. -->
+    <ControlTheme x:Key="ConfToolbarEndButtonStyle" TargetType="Button"
+                  BasedOn="{StaticResource ConfToolbarButtonStyle}">
+        <Setter Property="Width" Value="72"/>
+        <Setter Property="Background" Value="{StaticResource ConfAccentRedBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Margin" Value="12,0,0,0"/>
+    </ControlTheme>
+
+    <!-- ── Sidebar ── -->
+
+    <!-- ConferenceSidebar tab button (Chat | Participants). Flat text button with
+         a 2px bottom-border accent; the ACTIVE state (blue border+text) is applied
+         per-instance via a ".active" class in ConferenceSidebar.axaml, not here
+         (it's data-driven per tab). Naming: ControlTheme name = purpose. -->
+    <ControlTheme x:Key="SidebarTabPill" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0,0,0,2"/>
+        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="Margin" Value="2,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{StaticResource ConfTextSecondaryBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Tab"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Foreground="{TemplateBinding Foreground}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#PART_Tab">
+            <Setter Property="Background" Value="{StaticResource ConfHoverOverlayBrush}"/>
+        </Style>
+    </ControlTheme>
+
+</ResourceDictionary>
