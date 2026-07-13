@@ -99,6 +99,43 @@ int nty_last_height(void);
 int64_t nty_frame_count(void);
 
 /* ==========================================================================
+ * H.264 DECODE — VTDecompressionSession (TT-4-B, Sources/H264Decoder.swift).
+ * The inverse of the encoder above: wire Annex-B NAL bytes (keyframe =
+ * [SPS][PPS][IDR], delta = [slice]; 3- OR 4-byte start codes) → BGRA CVPixelBuffer,
+ * delivered SYNCHRONOUSLY per feed (WaitForAsynchronousFrames) so the managed
+ * codec-dispatch seam stays synchronous. Decodes the shape BOTH the shipped Windows
+ * OpenH264 student and our Mac VideoToolbox student emit.
+ *
+ * HANDLE-BASED (multi-instance) — unlike the singleton capture/encode ABI above —
+ * because the teacher may open 1–4 screen-view windows → 1–4 concurrent decoders.
+ * Lifecycle: create → feed* → destroy (exactly once per handle). No display / no
+ * Screen Recording permission needed (VideoToolbox operates on buffers).
+ * ==========================================================================*/
+
+/*
+ * Decoded BGRA frame callback. `bgra` points to the decoded frame (valid ONLY during
+ * the call — copy before returning). `bytesPerRow` may exceed width*4 (row padding) —
+ * honor it (the M16 stride gotcha).
+ */
+typedef void (*nty_decoded_cb)(void *ctx, const uint8_t *bgra,
+                               int width, int height, int bytesPerRow);
+
+/*
+ * nty_h264_decoder_create — create a decoder instance. Returns an opaque handle, or
+ *   NULL on failure. The session itself is created lazily on the first keyframe (it
+ *   needs the in-band SPS/PPS).
+ * nty_h264_decoder_feed — feed one wire frame's Annex-B bytes. Returns 1 if a BGRA
+ *   frame was delivered via `cb` (synchronously, before returning), 0 if none yet
+ *   (delta before any keyframe / SPS-PPS only), negative on error.
+ * nty_h264_decoder_destroy — destroy the instance (call EXACTLY once per handle);
+ *   tears down the VTDecompressionSession.
+ */
+void *nty_h264_decoder_create(void);
+int   nty_h264_decoder_feed(void *handle, const uint8_t *annexb, int length,
+                            int isKeyframe, nty_decoded_cb cb, void *ctx);
+void  nty_h264_decoder_destroy(void *handle);
+
+/* ==========================================================================
  * Camera (webcam) capture — Phase 28-B (Sources/Camera.swift).
  * AVCaptureSession → BGRA CVPixelBuffer → shared ImageIO JPEG encode. Camera
  * frames are JPEG-only on the wire (ConferenceCameraFrame has no codec field),

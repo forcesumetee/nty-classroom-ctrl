@@ -42,6 +42,12 @@ public typealias NtyJpegCallback = @convention(c)
 public typealias NtyH264Callback = @convention(c)
     (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int32, Int32, Int32, Int32) -> Void
 
+/// Decoded BGRA frame callback (TT-4). bgra valid only during the call; honor bytesPerRow
+/// (stride ≥ width*4 — the M16 padding gotcha). Same shape as NtyFrameCallback.
+///   (ctx, bgra, width, height, bytesPerRow)
+public typealias NtyDecodedCallback = @convention(c)
+    (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int32, Int32, Int32) -> Void
+
 // MARK: - Capture ------------------------------------------------------------------
 
 private final class CaptureSession: NSObject, SCStreamOutput {
@@ -270,3 +276,39 @@ public func nty_capture_stop() {
 @_cdecl("nty_last_width")  public func nty_last_width()  -> Int32 { NtyState.lastWidth }
 @_cdecl("nty_last_height") public func nty_last_height() -> Int32 { NtyState.lastHeight }
 @_cdecl("nty_frame_count") public func nty_frame_count() -> Int64 { NtyState.frameCount }
+
+// MARK: - H.264 decode (TT-4) ------------------------------------------------------
+//
+// Handle-based (multi-instance), UNLIKE the singleton capture/encode ABI above: a
+// student captures ONE screen, but the teacher opens 1–4 screen-view windows → 1–4
+// concurrent decoders. Each handle owns one H264Decoder (retained across the C
+// boundary via Unmanaged). destroy() must be called exactly once per handle — the
+// managed wrapper (TT-4-C) enforces that with an idempotent Dispose; the decoder's
+// own stop()/deinit are idempotent so a dropped handle can't leak a session.
+
+/// Create a decoder instance. Returns an opaque handle, or nil on allocation failure.
+@_cdecl("nty_h264_decoder_create")
+public func nty_h264_decoder_create() -> UnsafeMutableRawPointer? {
+    return Unmanaged.passRetained(H264Decoder()).toOpaque()
+}
+
+/// Feed one wire frame's Annex-B bytes. Returns 1 if a BGRA frame was delivered via
+/// `cb` (synchronously, before returning), 0 if none yet (waiting for a keyframe),
+/// negative on error. Safe to call with a delta before any keyframe (returns 0).
+@_cdecl("nty_h264_decoder_feed")
+public func nty_h264_decoder_feed(_ handle: UnsafeMutableRawPointer?,
+                                  _ nal: UnsafePointer<UInt8>?, _ length: Int32,
+                                  _ isKeyframe: Int32,
+                                  _ cb: NtyDecodedCallback?, _ ctx: UnsafeMutableRawPointer?) -> Int32 {
+    guard let handle = handle, let nal = nal, let cb = cb, length > 0 else { return -1 }
+    let dec = Unmanaged<H264Decoder>.fromOpaque(handle).takeUnretainedValue()   // borrow
+    return dec.feed(nal: nal, length: Int(length), isKeyframe: isKeyframe != 0, cb: cb, ctx: ctx)
+}
+
+/// Destroy a decoder instance (call exactly once per handle). Releases the retain
+/// taken by create → deinit → the VTDecompressionSession is torn down.
+@_cdecl("nty_h264_decoder_destroy")
+public func nty_h264_decoder_destroy(_ handle: UnsafeMutableRawPointer?) {
+    guard let handle = handle else { return }
+    Unmanaged<H264Decoder>.fromOpaque(handle).takeRetainedValue().stop()
+}
