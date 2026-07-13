@@ -11,8 +11,9 @@ namespace ClassroomCtrl.Avalonia.Sandbox;
 public partial class App : Application
 {
     private TrayController? _tray;
-    private PermissionsWindow? _perm;   // single onboarding window instance
-    private bool _exiting;              // set only by the tray's Quit → allows the window Close to proceed
+    private PermissionsWindow? _perm;                          // single onboarding window instance
+    private readonly LaunchAgentManager _launchAgent = new();  // auto-start (LaunchAgent) toggle
+    private bool _exiting;                                     // set only by the tray's Quit → allows the window Close to proceed
 
     public override void Initialize()
     {
@@ -43,6 +44,8 @@ public partial class App : Application
                 conn,
                 showWindow: () => { window.Show(); window.WindowState = WindowState.Normal; window.Activate(); },
                 showPermissions: ShowPermissions,
+                isAutoStartEnabled: () => _launchAgent.IsEnabled,
+                toggleAutoStart: () => { if (_launchAgent.IsEnabled) _launchAgent.Disable(); else _launchAgent.Enable(); },
                 quit: () => { _exiting = true; desktop.Shutdown(); });   // clean exit = dead-man unlock
             TrayIcon.SetIcons(this, new TrayIcons { _tray.Native });
 

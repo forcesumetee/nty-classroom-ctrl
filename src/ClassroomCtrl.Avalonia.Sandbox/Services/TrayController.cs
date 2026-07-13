@@ -32,7 +32,8 @@ public sealed class TrayController
     /// <summary>The underlying TrayIcon to register via <c>TrayIcon.SetIcons</c>.</summary>
     public TrayIcon Native => _tray;
 
-    public TrayController(ConnectionViewModel conn, Action showWindow, Action showPermissions, Action quit)
+    public TrayController(ConnectionViewModel conn, Action showWindow, Action showPermissions,
+                          Func<bool> isAutoStartEnabled, Action toggleAutoStart, Action quit)
     {
         _conn = conn;
         _iconConnected    = MakeCircle(Color.FromRgb(0x2E, 0xCC, 0x71));   // 🟢 green
@@ -49,6 +50,18 @@ public sealed class TrayController
         var permItem = new NativeMenuItem { Header = "Permissions…" };
         permItem.Click += (_, _) => showPermissions();
         menu.Add(permItem);
+
+        // Start at Login (LaunchAgent). Reflects/toggles the plist; in dev (not a .app bundle) the
+        // toggle refuses (Enable is gated on IsBundled), so it simply stays unchecked.
+        var autoStart = new NativeMenuItem
+        {
+            Header = "Start at Login",
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = isAutoStartEnabled(),
+        };
+        autoStart.Click += (_, _) => { toggleAutoStart(); autoStart.IsChecked = isAutoStartEnabled(); };
+        menu.Add(autoStart);
+
         menu.Add(new NativeMenuItemSeparator());
         var quitItem = new NativeMenuItem { Header = "Quit NTY ClassroomCtrl" };
         quitItem.Click += (_, _) => quit();

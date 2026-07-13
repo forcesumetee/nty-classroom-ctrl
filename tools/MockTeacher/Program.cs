@@ -28,7 +28,7 @@ using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false, trayTest = false, permTest = false;
+bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false, trayTest = false, permTest = false, launchAgentTest = false;
 int holdSeconds = 20;
 for (int i = 0; i < args.Length; i++)
 {
@@ -49,11 +49,13 @@ for (int i = 0; i < args.Length; i++)
         case "--configtest": configTest = true; break;
         case "--traytest": trayTest = true; break;
         case "--permtest": permTest = true; break;
+        case "--launchagenttest": launchAgentTest = true; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (launchAgentTest) return LaunchAgentTest.Run();
 if (permTest) return PermTest.Run();
 if (trayTest) return TrayTest.Run();
 if (configTest) return ConfigTest.Run();
@@ -1233,6 +1235,87 @@ static class PermTest
         Console.WriteLine(failures == 0
             ? "\n=== PERMTEST PASS ✅ — pill mapping · Screen-only readiness · 4 rows (Screen primary+relaunch, rest optional) ==="
             : $"\n=== PERMTEST FAIL ❌ ({failures} check(s)) ===");
+        return failures == 0 ? 0 : 1;
+    }
+}
+
+// ── Phase 32-E — LaunchAgent plist + install/uninstall self-test (--launchagenttest) ──
+// SAFE by construction: runs against a TEMP LaunchAgents dir, a FAKE launchctl runner, and a FAKE
+// bundled program path — installs ZERO real agents, runs NO real launchctl, leaves no trace. Proves
+// the plist XML (RunAtLoad=true, KeepAlive=false, self-targeted exe), enable→present+bootstrap,
+// disable→removed+bootout (uninstall = no trace), and the IsBundled guard (dev path refused).
+static class LaunchAgentTest
+{
+    public static int Run()
+    {
+        int failures = 0;
+        void Check(string name, bool cond)
+        {
+            if (cond) Console.WriteLine($"  ✅ {name}");
+            else { Console.WriteLine($"  ❌ {name}"); failures++; }
+        }
+
+        Console.WriteLine("=== MockTeacher --launchagenttest (plist + install/uninstall — TEMP dir, FAKE launchctl, ZERO real agents) ===");
+
+        var dir = Path.Combine(Path.GetTempPath(), "nty-launchagent-" + Guid.NewGuid().ToString("N"));
+        var calls = new List<string>();
+        int FakeCtl(string sub, string[] args) { calls.Add(sub + " " + string.Join(" ", args)); return 0; }
+        const string bundled = "/Applications/NTY ClassroomCtrl.app/Contents/MacOS/ClassroomCtrl.Avalonia.Sandbox";
+
+        try
+        {
+            var mgr = new LaunchAgentManager(agentsDir: dir, programPath: bundled, runctl: FakeCtl);
+
+            // (1) plist XML: valid + correct key→value pairing (RunAtLoad=true, KeepAlive=false)
+            var xml = mgr.BuildPlistXml();
+            var doc = System.Xml.Linq.XDocument.Parse(xml);   // throws on malformed XML
+            var kids = doc.Descendants("dict").First().Elements().ToList();
+            bool Pair(string key, string tag)
+            {
+                int i = kids.FindIndex(e => e.Name.LocalName == "key" && e.Value == key);
+                return i >= 0 && i + 1 < kids.Count && kids[i + 1].Name.LocalName == tag;
+            }
+            bool PairString(string key, string val)
+            {
+                int i = kids.FindIndex(e => e.Name.LocalName == "key" && e.Value == key);
+                return i >= 0 && i + 1 < kids.Count && kids[i + 1].Name.LocalName == "string" && kids[i + 1].Value == val;
+            }
+            Check("plist is valid XML with <plist> root", doc.Root!.Name.LocalName == "plist");
+            Check("Label = com.nty.classroomctrl.student", PairString("Label", "com.nty.classroomctrl.student"));
+            Check("RunAtLoad = true", Pair("RunAtLoad", "true"));
+            Check("KeepAlive = false (locked decision)", Pair("KeepAlive", "false"));
+            Check("ProgramArguments self-targets the .app exe", xml.Contains(bundled));
+
+            // (2) bundle gate + initial state
+            Check("IsBundled true for a .app path", mgr.IsBundled);
+            Check("initially disabled (no plist yet)", !mgr.IsEnabled);
+
+            // (3) enable → plist written + launchctl bootstrap invoked
+            Check("enable() ok", mgr.Enable().ok);
+            Check("enabled → plist present", mgr.IsEnabled && File.Exists(mgr.PlistPath));
+            Check("enable ran `launchctl bootstrap gui/…`", calls.Exists(c => c.StartsWith("bootstrap gui/")));
+
+            // (4) disable → plist REMOVED (no trace) + bootout invoked  ← borrowed-Mac safety
+            calls.Clear();
+            Check("disable() ok", mgr.Disable().ok);
+            Check("disabled → plist REMOVED (leaves no trace)", !mgr.IsEnabled && !File.Exists(mgr.PlistPath));
+            Check("disable ran `launchctl bootout gui/…`", calls.Exists(c => c.StartsWith("bootout gui/")));
+
+            // (5) IsBundled guard — a dev/dotnet path must REFUSE and install nothing
+            var devDir = Path.Combine(Path.GetTempPath(), "nty-launchagent-dev-" + Guid.NewGuid().ToString("N"));
+            var dev = new LaunchAgentManager(agentsDir: devDir, programPath: "/usr/local/share/dotnet/dotnet", runctl: FakeCtl);
+            Check("IsBundled false for a dev path", !dev.IsBundled);
+            Check("dev enable() REFUSED (gated on bundle)", !dev.Enable().ok);
+            Check("dev enable wrote NO plist", !dev.IsEnabled && !File.Exists(dev.PlistPath));
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { /* best-effort */ }
+        }
+
+        Console.WriteLine(failures == 0
+            ? "\n=== LAUNCHAGENTTEST PASS ✅ — plist(RunAtLoad+KeepAlive=false, self-targeted) · enable→bootstrap · disable→bootout+REMOVED · dev-path refused ==="
+            : $"\n=== LAUNCHAGENTTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
     }
 }
