@@ -54,6 +54,10 @@ public partial class ConnectionViewModel : ObservableObject
     private readonly AudioCaptureService _audioPlayback = new();
     private int _playbackSeq;
 
+    /// <summary>Phase 30-C — enforces the teacher screen-lock (native shield) + owns the
+    /// four-layer dead-man switch (process-kill / 45 s disconnect grace / 30 min cap / wake).</summary>
+    private readonly LockService _lock = new();
+
     /// <summary>Active Conference session (from the Teacher's ConferenceStart); Empty
     /// when not in a Conference. Camera peer-cam frames are gated on this.</summary>
     private Guid _conferenceSessionId;
@@ -105,6 +109,10 @@ public partial class ConnectionViewModel : ObservableObject
             Status = s;
             SelfTile.IsOnline = s == WireStatus.Connected;
             SelfTile.DisplayName = DisplayName;
+            // Dead-man layer 2: feed EVERY transition to the lock (grace timer). Do this
+            // BEFORE the disconnect reset so the lock (and its shield) survives the grace
+            // window — SelfTile.Reset() no longer touches IsLocked (LockService owns it).
+            _lock.OnConnectionStatus(s);
             if (s == WireStatus.Disconnected)
             {
                 _ = _streamer.StopAsync();
@@ -123,6 +131,10 @@ public partial class ConnectionViewModel : ObservableObject
         _streamer.FrameSent += seq => Post(() => SelfTile.StreamedFrames = seq);
         _cameraStreamer.FrameSent += seq => Post(() => SelfTile.CameraFrames = seq);
         _audioStreamer.FrameSent += seq => Post(() => SelfTile.MicFrames = seq);
+        // LockService is the single owner of SelfTile.IsLocked — it stays true through the
+        // disconnect grace window and flips false on explicit/auto unlock.
+        _lock.LockStateChanged += up => Post(() => SelfTile.IsLocked = up);
+        _lock.Log += msg => Post(() => AddLog(WireDirection.System, $"lock: {msg}", 0));
     }
 
     /// <summary>Decode the requested codec from a StudentStreamStartRequest; default
@@ -293,12 +305,14 @@ public partial class ConnectionViewModel : ObservableObject
             case MessageType.Pong:
                 detail = "keepalive ack";
                 break;
+            // Phase 30-C — ENFORCE (not just reflect). Empty payload (matches Windows) →
+            // fixed message. The shield + four-layer dead-man live in LockService.
             case MessageType.LockScreen:
-                SelfTile.IsLocked = true;
-                detail = "🔒 lock screen";
+                _lock.Lock(null);
+                detail = "🔒 lock screen (enforced)";
                 break;
             case MessageType.UnlockScreen:
-                SelfTile.IsLocked = false;
+                _lock.Unlock();
                 detail = "🔓 unlock screen";
                 break;
             case MessageType.PolicyApply:

@@ -133,7 +133,7 @@
                         <!-- Lock banner -->
                         <Border Margin="0,12,0,0" CornerRadius="6" Padding="12,8"
                                 Background="#FEE2E2" IsVisible="{Binding SelfTile.IsLocked}">
-                            <TextBlock Text="🔒 Screen locked by teacher" FontSize="13" FontWeight="SemiBold"
+                            <TextBlock Text="🔒 Locked (enforced) by teacher" FontSize="13" FontWeight="SemiBold"
                                        Foreground="#991B1B"/>
                         </Border>
 

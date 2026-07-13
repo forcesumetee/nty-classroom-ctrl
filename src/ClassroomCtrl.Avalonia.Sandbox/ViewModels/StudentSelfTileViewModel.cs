@@ -49,7 +49,9 @@ public partial class StudentSelfTileViewModel : ObservableObject
 
     public void Reset()
     {
-        IsLocked = false;
+        // NOTE: IsLocked is intentionally NOT reset here — the LockService (30-C) is its
+        // sole owner, so the lock shield + its self-tile indicator survive the disconnect
+        // grace window and flip only on explicit/auto unlock.
         PolicyActive = false;
         PolicyChips.Clear();
         IsHandRaised = false;
