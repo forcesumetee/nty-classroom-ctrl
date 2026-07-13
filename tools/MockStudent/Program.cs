@@ -29,6 +29,7 @@ string ip = "127.0.0.1";
 int port = 7777;
 string name = $"MockStudent ({Environment.MachineName})";
 bool selfTest = false;
+int classroomN = 0, durationSec = 8;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -37,10 +38,14 @@ for (int i = 0; i < args.Length; i++)
         case "--ip": ip = args[++i]; break;
         case "--port": port = int.Parse(args[++i]); break;
         case "--name": name = args[++i]; break;
+        case "--classroom": classroomN = int.Parse(args[++i]); break;   // TT-0-D: N replay-clients
+        case "--duration": durationSec = int.Parse(args[++i]); break;
     }
 }
 
-return selfTest ? await SelfTest.RunAsync() : await Interactive.RunAsync(ip, port, name);
+if (selfTest) return await SelfTest.RunAsync();
+if (classroomN > 0) return await Classroom.RunAsync(ip, port, classroomN, durationSec);
+return await Interactive.RunAsync(ip, port, name);
 
 
 // ───────────────────────────── shared framing (stub-server side) ─────────────────────────────
@@ -185,6 +190,149 @@ sealed class StudentAgent
     static Guid DecodeSession(byte[] p)
     { try { return p.Length == 0 ? Guid.Empty : MessagePackSerializer.Deserialize<ConferenceStartMessage>(p).SessionId; } catch { return Guid.Empty; } }
     static string Short(Guid g) => g.ToString()[..8];
+}
+
+
+// ───────────────────────────── TT-0-D: golden capture (1 encode) ─────────────────────────────
+// Capture a GOLDEN H.264 sample ONCE (keyframe + a few deltas) via the real ScreenStreamer routed
+// to a loopback recorder. Those raw StudentStreamFrame payloads are then replayed VERBATIM by N
+// clients — so a classroom does 1 encode + N×(send), leaving the Teacher's decode/render as the
+// sole bottleneck. Recording starts at the FIRST keyframe so every replay begins with an IDR (each
+// per-stream VTDecompressionSession syncs immediately). Needs Screen Recording once (capture).
+static class GoldenSample
+{
+    public static async Task<(List<byte[]> payloads, int keyframes)> CaptureScreenH264Async(int wantFrames = 8)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var payloads = new List<byte[]>();
+        int keyframes = 0;
+        var teacherId = Guid.NewGuid();
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var serverTask = Task.Run(async () =>
+        {
+            using var conn = await listener.AcceptTcpClientAsync();
+            var s = conn.GetStream();
+            while (payloads.Count < wantFrames)
+            {
+                var env = await Framing.ReadAsync(s);
+                if (env is null) return;
+                if (env.Type == MessageType.Hello)
+                    await Framing.SendAsync(s, MessageType.StudentStreamStart,
+                        MessagePackSerializer.Serialize(new StudentStreamStartRequest { Codec = VideoCodec.H264 }), teacherId);
+                else if (env.Type == MessageType.Ping)
+                    await Framing.SendAsync(s, MessageType.Pong, Array.Empty<byte>(), teacherId);
+                else if (env.Type == MessageType.StudentStreamFrame)
+                {
+                    var f = MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(env.Payload);
+                    if (payloads.Count == 0 && !f.IsKeyframe) continue;   // begin the golden loop on an IDR
+                    if (f.IsKeyframe) keyframes++;
+                    payloads.Add(env.Payload);
+                }
+            }
+            done.TrySetResult();
+        });
+
+        var wire = new WireClient();
+        var streamer = new ScreenStreamer();
+        wire.EnvelopeReceived += env => { if (env.Type == MessageType.StudentStreamStart) _ = streamer.StartAsync(wire, VideoCodec.H264); };
+        using var cts = new CancellationTokenSource();
+        var run = wire.RunAsync("127.0.0.1", port, "GoldenCapture", cts.Token);
+        await Task.WhenAny(done.Task, Task.Delay(15000));
+        await streamer.StopAsync();
+        cts.Cancel(); try { await run; } catch { }
+        listener.Stop();
+        return (payloads, keyframes);
+    }
+}
+
+
+// ── one replay-client: WireClient that, on StudentStreamStart, replays the golden frames on a timer
+//    (~4 fps, matching the shipped broadcaster). NO capture, NO encode — pure send. ──
+sealed class ReplayClient
+{
+    public WireClient Wire { get; } = new();
+    readonly IReadOnlyList<byte[]> _golden;
+    CancellationTokenSource? _replayCts;
+    public long FramesSent;
+
+    public ReplayClient(IReadOnlyList<byte[]> golden)
+    {
+        _golden = golden;
+        Wire.EnvelopeReceived += env =>
+        {
+            if (env.Type == MessageType.StudentStreamStart) StartReplay();
+            else if (env.Type == MessageType.StudentStreamStop) _replayCts?.Cancel();
+        };
+        Wire.StatusChanged += s => { if (s == WireStatus.Disconnected) _replayCts?.Cancel(); };
+    }
+
+    void StartReplay()
+    {
+        _replayCts?.Cancel();
+        _replayCts = new CancellationTokenSource();
+        var ct = _replayCts.Token;
+        _ = Task.Run(async () =>
+        {
+            int idx = 0;
+            while (!ct.IsCancellationRequested)
+            {
+                try { await Wire.SendAsync(MessageType.StudentStreamFrame, _golden[idx], ct); }
+                catch { return; }
+                Interlocked.Increment(ref FramesSent);
+                idx = (idx + 1) % _golden.Count;
+                try { await Task.Delay(250, ct); } catch { return; }
+            }
+        }, ct);
+    }
+}
+
+
+// ───────────────────────────── --classroom N: N replay-clients, one process ─────────────────────────────
+static class Classroom
+{
+    public static async Task<int> RunAsync(string ip, int port, int n, int durationSec)
+    {
+        Console.WriteLine($"=== MockStudent --classroom {n} → {ip}:{port} (1 golden encode, {n} replay-clients, {durationSec}s) ===");
+
+        var (golden, keyframes) = await GoldenSample.CaptureScreenH264Async();
+        if (golden.Count == 0 || keyframes == 0)
+        {
+            Console.WriteLine($"  ❌ golden H.264 capture failed (frames={golden.Count}, keyframes={keyframes}) — is Screen Recording granted?");
+            return 1;
+        }
+        long goldenBytes = golden.Sum(p => (long)p.Length);
+        Console.WriteLine($"  golden: {golden.Count} H.264 frames · {keyframes} keyframe(s) · {goldenBytes / 1024}KB — ONE encode, replayed ×{n}");
+
+        var clients = new List<ReplayClient>();
+        for (int i = 0; i < n; i++) clients.Add(new ReplayClient(golden));
+        using var cts = new CancellationTokenSource();
+        var runs = clients.Select((c, i) => c.Wire.RunAsync(ip, port, $"Replay-{i:D2}", cts.Token)).ToList();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long lastFrames = 0;
+        while (sw.Elapsed.TotalSeconds < durationSec)
+        {
+            await Task.Delay(2000);
+            int connected = clients.Count(c => c.Wire.Status == WireStatus.Connected);
+            long total = clients.Sum(c => c.FramesSent);
+            double fps = (total - lastFrames) / 2.0; lastFrames = total;
+            Console.WriteLine($"  [{sw.Elapsed.TotalSeconds:0}s] connected={connected}/{n} · frames sent={total} · ~{fps:0} fps aggregate");
+        }
+
+        int finalConnected = clients.Count(c => c.Wire.Status == WireStatus.Connected);
+        long finalFrames = clients.Sum(c => c.FramesSent);
+        cts.Cancel();
+        try { await Task.WhenAll(runs); } catch { }
+
+        bool ok = finalConnected == n && finalFrames > 0;
+        Console.WriteLine(ok
+            ? $"\n=== CLASSROOM {n} ✅ — {finalConnected}/{n} clients connected · {finalFrames} frames delivered (1 encode → {n} streams) ==="
+            : $"\n=== CLASSROOM {n} ❌ — {finalConnected}/{n} connected · {finalFrames} frames ===");
+        return ok ? 0 : 1;
+    }
 }
 
 

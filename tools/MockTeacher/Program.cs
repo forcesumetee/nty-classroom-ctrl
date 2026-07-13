@@ -31,6 +31,7 @@ int port = 7777;
 bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false, trayTest = false, permTest = false, launchAgentTest = false;
 int holdSeconds = 20;
 string? recvMode = null;   // TT-0-C: --recv <screen|screen-h264|camera|audio> — receive + assert frames from an EXTERNAL student (MockStudent)
+bool recvMany = false; int recvDuration = 10;   // TT-0-D: --recvmany — accept N students, count frames (harness-scale proof)
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -52,12 +53,15 @@ for (int i = 0; i < args.Length; i++)
         case "--permtest": permTest = true; break;
         case "--launchagenttest": launchAgentTest = true; break;
         case "--recv": recvMode = args[++i]; break;
+        case "--recvmany": recvMany = true; break;
+        case "--duration": recvDuration = int.Parse(args[++i]); break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
 if (recvMode != null) return await RecvTest.RunAsync(recvMode, port, teacherId);
+if (recvMany) return await RecvManyTest.RunAsync(port, recvDuration, teacherId);
 if (launchAgentTest) return LaunchAgentTest.Run();
 if (permTest) return PermTest.Run();
 if (trayTest) return TrayTest.Run();
@@ -1405,5 +1409,59 @@ static class RecvTest
             ? $"\n=== RECV PASS ✅ — {valid}/{received} valid {mode} frames from the external student (MockStudent = faithful stand-in) ==="
             : $"\n=== RECV FAIL ❌ — {valid}/{received} valid {mode} frames (target {target}); did the student have the capture grant? ===");
         return pass ? 0 : 1;
+    }
+}
+
+// ── TT-0-D — accept N students + count frames (--recvmany) ─────────────────────────
+// The counterparty for MockStudent --classroom N: accept every student that connects, request an
+// H.264 stream from each, and count frames — proving the HARNESS delivers N streams. It does NOT
+// decode (that's TT-4 against the real Mac Teacher); it just validates delivery + aggregate rate.
+static class RecvManyTest
+{
+    public static async Task<int> RunAsync(int port, int durationSec, Guid teacherId)
+    {
+        var listener = new TcpListener(IPAddress.Any, port);
+        listener.Start();
+        Console.WriteLine($"=== MockTeacher --recvmany (listening :{port}, {durationSec}s — accept N students, request H.264, count frames) ===");
+        int students = 0; long frames = 0;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(durationSec));
+        var conns = new List<Task>();
+
+        try
+        {
+            while (!cts.IsCancellationRequested)
+            {
+                TcpClient conn;
+                try { conn = await listener.AcceptTcpClientAsync(cts.Token); }
+                catch (OperationCanceledException) { break; }
+                Interlocked.Increment(ref students);
+                conns.Add(Task.Run(async () =>
+                {
+                    using var c = conn;
+                    var s = c.GetStream();
+                    while (!cts.IsCancellationRequested)
+                    {
+                        Envelope? env;
+                        try { env = await Frame.ReadAsync(s, cts.Token); } catch { return; }
+                        if (env is null) return;
+                        if (env.Type == MessageType.Hello)
+                            await Frame.SendAsync(s, MessageType.StudentStreamStart, Frame.StreamStartPayload(VideoCodec.H264), teacherId, cts.Token);
+                        else if (env.Type == MessageType.Ping)
+                            await Frame.SendAsync(s, MessageType.Pong, Array.Empty<byte>(), teacherId, cts.Token);
+                        else if (env.Type == MessageType.StudentStreamFrame)
+                            Interlocked.Increment(ref frames);
+                    }
+                }, cts.Token));
+            }
+        }
+        catch (OperationCanceledException) { }
+        listener.Stop();
+        try { await Task.WhenAll(conns); } catch { }
+
+        bool ok = students > 0 && frames > 0;
+        Console.WriteLine(ok
+            ? $"\n=== RECVMANY ✅ — {students} students, {frames} H.264 frames received (~{frames / (double)durationSec:0} fps aggregate) — harness delivered {students} streams ==="
+            : $"\n=== RECVMANY ❌ — {students} students, {frames} frames ===");
+        return ok ? 0 : 1;
     }
 }
