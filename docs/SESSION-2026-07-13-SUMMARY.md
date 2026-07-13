@@ -134,7 +134,7 @@ no shipped-repo change, no wire change. **Session 7.**
 | **Audio PCM (M20)** | **~288 kbit/s wire** (~277 raw) | 16 k/mono/16-bit; ~4% MessagePack overhead |
 | **3 concurrent / student** | **≈ ~2 Mbit/s** | Mic Monitor is 1-at-a-time — record for network sizing |
 
-## Milestone 21 — Phase 30: Screen-lock enforcement (kiosk + dead-man) ⏳ Mac-side ✅ · LIVE pending
+## Milestone 21 — Phase 30: Screen-lock enforcement (kiosk + dead-man) ✅ LIVE-CONFIRMED
 Enforce the teacher lock (the envelope has arrived since M15 but was only *reflected*) — a HARD
 lock that **exceeds** the soft Windows teacher-lock, with **zero Accessibility**. **Session 8.**
 - **Investigation (30-A) reframe:** the shipped Windows teacher-lock is a **soft** topmost overlay
@@ -152,9 +152,10 @@ lock that **exceeds** the soft Windows teacher-lock, with **zero Accessibility**
 - **30-E** `MockTeacher --locktest`: **all 3 grace cases PASS** (blip HELD / teacher-death UNLOCKED /
   no-reset continuous window — the log shows exactly one `grace start`). Injectable shield backend →
   proves real dead-man logic with zero AppKit (no screen-takeover in tests).
-- **LIVE (30-F):** teacher locks → shield all displays, Cmd+Tab/Force-Quit blocked; disconnect→45 s→
-  auto-unlock; unlock→gone; kill-process→gone; sleep/wake re-assert. See `docs/PHASE-30-FINDINGS.md`.
-  Cheat sheet **§20** screen-lock addendum. *(awaiting LIVE.)*
+- **LIVE (30-F, 2026-07-13):** teacher locks → **shield appears**, **Cmd+Tab/Force-Quit blocked**,
+  explicit unlock → gone, cycle reliable, **machine recoverable (no stranding)**. Tester visual
+  verification on borrowed **single-display** Mac; **multi-display untested on hardware** (code-correct,
+  flagged). See `docs/PHASE-30-LIVE-CONFIRMATION.md`. Cheat sheet **§20** screen-lock addendum.
 - **Residuals → Phase 31:** Spotlight-launch + Mission-Control (need `CGEventTap` + Accessibility).
 
 ## Commits (Sessions 3–5) — 16
@@ -194,7 +195,7 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–20** — screen capture + **LIVE MJPEG & H.264 screen streaming (~10×)** + **LIVE camera peer-cam** + **bidirectional audio** (Mac-side; LIVE pending) to the shipped Windows Teacher |
 
 ### Combined day totals (Sessions 1–8, 2026-07-13)
-- **21 milestones** (M1–M21; M20 LIVE 3/4, M21 Mac-side ✅ LIVE-pending); today added the first
+- **21 milestones** (M1–M21; M20 LIVE 3/4, M21 LIVE-confirmed single-display); today added the first
   native-macOS-API work + camera + audio + screen-lock.
 - **Native APIs: 6 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
   **AVCaptureSession camera** · **AVAudioEngine audio** · **AppKit shield/kiosk lock** (no Accessibility).
@@ -227,7 +228,7 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | 18 | 27-B | **LIVE** H.264 streaming (~10× bandwidth), **MJPEG + H.264** |
 | 19 | 28 | **LIVE** camera peer-cam → Conference gallery (JPEG 320×180, ~16× vs preset bug) |
 | 20 | 29 | **LIVE (3/4)** bidirectional audio (raw PCM 16 k) — mic talkback + system-audio playback; teacher-mic = Windows-side issue |
-| **21** | **30** | Screen-lock enforcement — HARD kiosk (shield per-display + presentationOptions 506, no Accessibility) + four-layer dead-man — Mac-side ✅, **LIVE pending** |
+| **21** | **30** | **LIVE** screen-lock enforcement — HARD kiosk (shield + presentationOptions 506, no Accessibility) + four-layer dead-man (single-display validated; multi-display code-correct/untested) |
 
 ## Next-session priority queue
 1. **Phase 31 — Input hooks** (`CGEventTap`, needs Accessibility) — closes the two macOS lock
@@ -245,7 +246,7 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
   Windows Teacher over unchanged wire.
 - **Native-APIs progression (6/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
   ✓ 27-B H.264 · ✓ 28 AVCaptureSession camera · ✓ 29 AVAudioEngine audio (LIVE 3/4; teacher-mic =
-  Windows follow-up) · ✓ 30 AppKit shield/kiosk lock (Mac-side; LIVE pending) · ⏳ 31 input hooks
+  Windows follow-up) · ✓ 30 AppKit shield/kiosk lock (**LIVE**; single-display) · ⏳ 31 input hooks
   (CGEventTap) · ⏳ 32 system integration · ⏳ 33 UI ports.
 - **Windows-track follow-up (logged, not Mac-port work):** the shipped Teacher's own-mic broadcast
   uses a brittle fixed-format `WaveInEvent` (16 k/16/1) that emits no 0x0329 frames if the mic can't

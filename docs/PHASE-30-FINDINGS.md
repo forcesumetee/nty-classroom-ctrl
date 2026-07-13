@@ -3,9 +3,11 @@
 **Goal:** enforce the teacher screen-lock on macOS (the `LockScreen` envelope has arrived
 LIVE since M15 but was only *reflected*, not enforced), over existing envelopes — no
 shipped-repo change, no wire change.
-**Result:** ✅ Mac-side complete + verified headless — the native shield + kiosk options
-render (30-B harness, `presentationOptions` raw = 506), and `MockTeacher --locktest`
-proves all three dead-man grace cases. **LIVE Windows test = the remaining human step (30-F).**
+**Result:** ✅ **LIVE-CONFIRMED (2026-07-13)** — the shipped Windows Teacher v1.2 locks and
+unlocks a macOS student via the HARD kiosk shield; machine recoverable (no stranding). Verified
+headless too (`presentationOptions` raw = 506; `--locktest` all three dead-man grace cases) and
+LIVE by tester visual verification (single-display; multi-display remains a code-correct but
+untested-on-hardware gap). See `docs/PHASE-30-LIVE-CONFIRMATION.md`.
 
 **Sub-phases:** 30-A investigation · 30-B native shield + kiosk options · 30-C LockService
 + wire-in + four-layer dead-man · 30-D shield visual · 30-E `--locktest` · 30-G docs.
@@ -132,11 +134,14 @@ auto-hide harness + 30-F LIVE). Clean separation of "logic under test" from "OS 
 - T1–T27 PASS · `--selftest`/`--streamtest`/`--streamtest-h264`/`--cameratest`/`--audiotest`
   still PASS (native screen/camera/audio unaffected by the AppKit+Lock additions).
 
-## LIVE Windows test (30-F — user-run) — awaiting result
-Teacher locks Mac → shield on all displays; Cmd+Tab + Cmd+Opt+Esc blocked; steal-focus →
-`didResignActive` re-assert; **disconnect → 45 s → auto-unlock** (real wall-clock); explicit
-`UnlockScreen` → gone; **kill Sandbox process while locked → shield gone** (safety backstop);
-sleep/wake → re-assert; multi-display if an external monitor is attached.
+## LIVE Windows test (30-F) — ✅ CONFIRMED 2026-07-13
+Teacher v1.2 (unmodified), Mac Sandbox on **borrowed single-display** hardware, iPhone hotspot.
+Tester visual verification: Teacher locks → **shield appears**; **Cmd+Tab + Force-Quit blocked**;
+explicit **UnlockScreen → gone**; lock/unlock cycle reliable; **machine recoverable (no stranding)**.
+Screenshots not captured (borrowed Mac); structural proof = `--locktest` (3 grace cases) + the
+30-B harness (506). **Multi-display untested on hardware** (single-display only) — code-correct,
+flagged as a known gap for an owned multi-monitor run. Full writeup:
+`docs/PHASE-30-LIVE-CONFIRMATION.md`.
 
 ## Constraints honored
 Sandbox + `native/` + `tools/MockTeacher` only · `Shared.Wire` unchanged · shipped repo
