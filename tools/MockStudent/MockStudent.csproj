@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>MockStudent</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Shared.Wire for the protocol; the Sandbox for the student-side WireClient (100% reuse) and
+         — from TT-0-C — the Screen/Camera/Audio streamers. MockStudent is a THIN headless CLIENT
+         harness (the inverse of MockTeacher's server), so the Mac Teacher can be proven without a
+         Windows box or a second Mac. -->
+    <ProjectReference Include="..\..\src\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
+    <ProjectReference Include="..\..\src\ClassroomCtrl.Avalonia.Sandbox\ClassroomCtrl.Avalonia.Sandbox.csproj" />
+  </ItemGroup>
+</Project>
