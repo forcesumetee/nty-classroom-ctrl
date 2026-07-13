@@ -30,12 +30,24 @@ repeat frameCount times:
   SPS/PPS per keyframe, Baseline) decodes on the Mac Teacher — **customer B (Mac students).**
 - 6 frames (1 keyframe + 5 deltas), 1920×1080.
 
-### `h264-openh264-bell.fixture` — OpenH264→VT (the interop proof) — CAPTURE PENDING
-- **Source:** a real, shipped Windows Student ("BELL", v1.2) streaming H.264.
-- **How to (re)capture:** run the scratchpad `OpenH264Capture` tool, point BELL at the Mac's
-  LAN IP; it requests H.264 on join and dumps `[SPS][PPS][IDR]` + a few deltas in this
-  format. Paste the tool's `PROVENANCE` line here when captured.
-- **Proves:** the shipped Windows student's OpenH264 Baseline stream (which may use **3-byte
-  start codes**, unlike VideoToolbox's 4-byte) decodes on the Mac Teacher — **scenario 3
-  (cross-platform).** Until captured, `TT4CGate` SKIPs this assertion and the interop is
-  covered only by the TT-4-D LIVE run.
+### `h264-openh264-bell.fixture` — OpenH264→VT (the interop proof) ✅ CAPTURED
+- **Source / provenance:** a real, shipped Windows Student ("BELL", v1.2,
+  OpenH264/MediaFoundation), captured 2026-07-14 via the scratchpad `OpenH264Capture` tool.
+- **Contents:** 5 frames (2 keyframes + 3 deltas), 1920×1080, 192423 bytes. Frame 1 is a
+  small keyframe (6289 B — SPS [`profile_idc=0x42`=66 **Baseline**] + PPS + small IDR);
+  frame 2 is a full IDR (183 KB). The shipped student emits a keyframe on stream-start
+  (the `ForceKeyframe`-on-Start path) **plus** the ~2 s IDR cadence, so this fixture also
+  exercises **mid-stream keyframe handling**: the re-fed SPS/PPS match the first set, so the
+  decoder keeps its session rather than recreating it.
+- **Start codes (measured):** **0 × 3-byte, 9 × 4-byte** (`00 00 00 01`). This build emits
+  ONLY 4-byte start codes; TT-4-A noted OpenH264 *may* emit both, so the decoder's 3-byte
+  parse stays proven **synthetically** (the TT-4-B round-trip rewrites a keyframe to 3-byte
+  and decodes it) rather than by this real sample.
+- **Proves:** OpenH264 (Windows) Baseline → VideoToolbox (Mac) decode → exact 1920×1080 —
+  **scenario 3 interop, now HEADLESS + regression-protected** (previously provable only LIVE).
+- **⚠ Re-capturing — deltas need screen MOTION:** the source student emits deltas only while
+  its screen is CHANGING. A static screen yields keyframes only (the first attempt got 2
+  keyframes, 0 deltas). Move a window / play a video on the source while capturing.
+- **How to re-capture:** run the scratchpad `OpenH264Capture` tool (it requests H.264, guards
+  against an MJPEG fallback, and prints a `PROVENANCE:` line), then point the student at the
+  Mac's LAN IP.
