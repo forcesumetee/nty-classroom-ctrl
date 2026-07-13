@@ -1,16 +1,48 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ClassroomCtrl.Avalonia.Teacher.ViewModels"
+        xmlns:views="using:ClassroomCtrl.Avalonia.Teacher.Views"
         x:Class="ClassroomCtrl.Avalonia.Teacher.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
         Width="960" Height="720"
-        Background="#1F1F23"
+        Background="{StaticResource ConfWindowBgBrush}"
         Title="NTY ClassroomCtrl — Teacher (macOS)">
-    <Panel>
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-            <TextBlock Text="NTY ClassroomCtrl — Teacher"
-                       FontSize="26" FontWeight="SemiBold" Foreground="#E5E7EB"
-                       HorizontalAlignment="Center"/>
-            <TextBlock Text="TT-2-B skeleton — the live student grid arrives in TT-2-C/D."
-                       FontSize="14" Foreground="#9CA3AF" HorizontalAlignment="Center"/>
-        </StackPanel>
-    </Panel>
+    <Grid RowDefinitions="Auto,*">
+        <!-- Header / status bar: title + listen address (what IP to point a student at) + count. -->
+        <Border Grid.Row="0" Background="{StaticResource ConfTitleBarBgBrush}" Padding="16,10">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="NTY ClassroomCtrl — Teacher" FontSize="16" FontWeight="SemiBold"
+                               Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+                    <TextBlock Text="{Binding ListenAddress}" FontSize="11"
+                               Foreground="{StaticResource ConfTextSecondaryBrush}" Margin="0,2,0,0"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center"
+                           FontSize="13" FontWeight="SemiBold"
+                           Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+            </Grid>
+        </Border>
+
+        <!-- Student grid (WrapPanel 234×220 = the shipped Windows layout) + empty state. -->
+        <Panel Grid.Row="1">
+            <ScrollViewer>
+                <ItemsControl ItemsSource="{Binding Grid.Students}" Margin="14">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel ItemWidth="234" ItemHeight="220"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:StudentTileViewModel">
+                            <views:StudentCard Margin="0,0,14,14"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <TextBlock x:Name="EmptyState" Text="Waiting for students…"
+                       IsVisible="{Binding IsEmpty}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       FontSize="16" Foreground="{StaticResource ConfTextSecondaryBrush}"/>
+        </Panel>
+    </Grid>
 </Window>
