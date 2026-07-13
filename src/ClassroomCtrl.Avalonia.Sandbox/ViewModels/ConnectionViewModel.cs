@@ -46,6 +46,9 @@ public partial class ConnectionViewModel : ObservableObject
     /// <summary>Phase 28-E — camera → JPEG → ConferenceCameraFrame streamer (peer cam).</summary>
     private readonly CameraStreamer _cameraStreamer = new();
 
+    /// <summary>Phase 29-E — mic → PCM → StudentAudioStreamFrame streamer (talkback).</summary>
+    private readonly AudioStreamer _audioStreamer = new();
+
     /// <summary>Active Conference session (from the Teacher's ConferenceStart); Empty
     /// when not in a Conference. Camera peer-cam frames are gated on this.</summary>
     private Guid _conferenceSessionId;
@@ -101,6 +104,7 @@ public partial class ConnectionViewModel : ObservableObject
             {
                 _ = _streamer.StopAsync();
                 _ = _cameraStreamer.StopAsync();
+                _ = _audioStreamer.StopAsync();
                 _conferenceSessionId = Guid.Empty;
                 SelfTile.Reset();
             }
@@ -112,6 +116,7 @@ public partial class ConnectionViewModel : ObservableObject
         Client.EnvelopeReceived += env => Post(() => Dispatch(env));
         _streamer.FrameSent += seq => Post(() => SelfTile.StreamedFrames = seq);
         _cameraStreamer.FrameSent += seq => Post(() => SelfTile.CameraFrames = seq);
+        _audioStreamer.FrameSent += seq => Post(() => SelfTile.MicFrames = seq);
     }
 
     /// <summary>Decode the requested codec from a StudentStreamStartRequest; default
@@ -192,6 +197,35 @@ public partial class ConnectionViewModel : ObservableObject
         });
     }
 
+    /// <summary>29-E — start mic talkback for the Teacher's Mic Monitor. Same
+    /// "respect the manual Audio-tab preview" default as camera: the native mic is a
+    /// single session, so if the Audio Capture tab is already capturing,
+    /// <see cref="AudioStreamer.StartAsync"/> returns -3 — we log and emit no Start.</summary>
+    private async Task StartMicAsync()
+    {
+        int rc = await _audioStreamer.StartAsync(Client, Client.EndpointId);
+        Post(() =>
+        {
+            SelfTile.IsMicLive = rc == 0;
+            if (rc == 0)
+                AddLog(WireDirection.System, "mic talkback started", 0);
+            else if (rc == -3)
+                AddLog(WireDirection.System, "mic busy (Audio Capture tab active?) — talkback not started", 0);
+            else
+                AddLog(WireDirection.System, $"mic talkback start failed ({rc})", 0);
+        });
+    }
+
+    private async Task StopMicAsync()
+    {
+        await _audioStreamer.StopAsync();
+        Post(() =>
+        {
+            SelfTile.IsMicLive = false;
+            AddLog(WireDirection.System, "mic talkback stopped", 0);
+        });
+    }
+
     private static string Short(Guid id) => id == Guid.Empty ? "—" : id.ToString("N")[..8];
 
     /// <summary>Decode an inbound envelope: enrich the traffic log with a summary
@@ -256,12 +290,21 @@ public partial class ConnectionViewModel : ObservableObject
                 _conferenceSessionId = Guid.Empty;
                 detail = "■ conference ended — camera stopped";
                 break;
+            // Phase 29-E — the Teacher's Mic Monitor "Listen". Start real AVAudioEngine
+            // → PCM → StudentAudioStreamFrame talkback (the teacher hears this Mac's mic).
+            case MessageType.MicMonitorStart:
+                _ = StartMicAsync();
+                detail = "▶ mic talkback to teacher (Mic Monitor)";
+                break;
+            case MessageType.MicMonitorStop:
+                _ = StopMicAsync();
+                detail = "■ mic talkback stopped";
+                break;
             // Remaining capture-class commands: logged + noted, deferred until their
             // native macOS APIs land. No frames produced.
             case MessageType.RequestScreenshot:
             case MessageType.ScreenStreamStart:
             case MessageType.CameraStart:
-            case MessageType.MicMonitorStart:
                 detail = "deferred — needs native capture (Phase 27+)";
                 SelfTile.LastDeferred = $"{env.Type} · deferred (needs native APIs)";
                 break;

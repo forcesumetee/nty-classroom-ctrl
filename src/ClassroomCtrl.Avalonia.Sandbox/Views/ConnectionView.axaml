@@ -185,6 +185,16 @@
                             </TextBlock>
                         </Border>
 
+                        <!-- Mic talkback indicator (29-E) -->
+                        <Border Margin="0,10,0,0" CornerRadius="6" Padding="10,6"
+                                Background="#FEF3C7" IsVisible="{Binding SelfTile.IsMicLive}">
+                            <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="#92400E">
+                                <Run Text="🎙 Mic live to teacher ·"/>
+                                <Run Text="{Binding SelfTile.MicFrames}"/>
+                                <Run Text="frames sent"/>
+                            </TextBlock>
+                        </Border>
+
                         <!-- Deferred capture note -->
                         <TextBlock Margin="0,8,0,0" FontSize="11"
                                    Foreground="{StaticResource Text.Muted}" TextWrapping="Wrap"

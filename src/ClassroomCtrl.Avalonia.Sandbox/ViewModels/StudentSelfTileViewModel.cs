@@ -38,6 +38,11 @@ public partial class StudentSelfTileViewModel : ObservableObject
     [ObservableProperty] private bool isCameraLive;
     [ObservableProperty] private int cameraFrames;
 
+    /// <summary>Phase 29-E — true while streaming the mic to the teacher (Mic Monitor
+    /// talkback, raw PCM). Independent of screen + camera.</summary>
+    [ObservableProperty] private bool isMicLive;
+    [ObservableProperty] private int micFrames;
+
     public void Reset()
     {
         IsLocked = false;
@@ -50,6 +55,8 @@ public partial class StudentSelfTileViewModel : ObservableObject
         StreamedFrames = 0;
         IsCameraLive = false;
         CameraFrames = 0;
+        IsMicLive = false;
+        MicFrames = 0;
     }
 
     public void SetPolicy(System.Collections.Generic.IEnumerable<string> chips)
