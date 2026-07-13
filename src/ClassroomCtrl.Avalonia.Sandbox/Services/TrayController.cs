@@ -32,7 +32,7 @@ public sealed class TrayController
     /// <summary>The underlying TrayIcon to register via <c>TrayIcon.SetIcons</c>.</summary>
     public TrayIcon Native => _tray;
 
-    public TrayController(ConnectionViewModel conn, Action showWindow, Action quit)
+    public TrayController(ConnectionViewModel conn, Action showWindow, Action showPermissions, Action quit)
     {
         _conn = conn;
         _iconConnected    = MakeCircle(Color.FromRgb(0x2E, 0xCC, 0x71));   // 🟢 green
@@ -46,6 +46,9 @@ public sealed class TrayController
         var showItem = new NativeMenuItem { Header = "Show Debug Window" };
         showItem.Click += (_, _) => showWindow();
         menu.Add(showItem);
+        var permItem = new NativeMenuItem { Header = "Permissions…" };
+        permItem.Click += (_, _) => showPermissions();
+        menu.Add(permItem);
         menu.Add(new NativeMenuItemSeparator());
         var quitItem = new NativeMenuItem { Header = "Quit NTY ClassroomCtrl" };
         quitItem.Click += (_, _) => quit();

@@ -28,7 +28,7 @@ using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false, trayTest = false;
+bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false, trayTest = false, permTest = false;
 int holdSeconds = 20;
 for (int i = 0; i < args.Length; i++)
 {
@@ -48,11 +48,13 @@ for (int i = 0; i < args.Length; i++)
             break;
         case "--configtest": configTest = true; break;
         case "--traytest": trayTest = true; break;
+        case "--permtest": permTest = true; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (permTest) return PermTest.Run();
 if (trayTest) return TrayTest.Run();
 if (configTest) return ConfigTest.Run();
 if (inputHold) return await InputTest.RunHoldAsync(holdSeconds);
@@ -1187,6 +1189,50 @@ static class TrayTest
         Console.WriteLine(failures == 0
             ? "\n=== TRAYTEST PASS ✅ — connect/connecting/disconnect mapping + lock-precedence + IP in status ==="
             : $"\n=== TRAYTEST FAIL ❌ ({failures} check(s)) ===");
+        return failures == 0 ? 0 : 1;
+    }
+}
+
+// ── Phase 32-D — permissions onboarding logic self-test (--permtest) ──────────────
+// Proves the pure PermissionPresenter mapping (state→pill), the run-readiness rule (only Screen
+// Recording gates it), and the 4-row descriptors (tiers + the Screen relaunch flag + primary-first
+// order). The live TCC grant/deny flow and the window rendering are visual → verified LIVE.
+static class PermTest
+{
+    public static int Run()
+    {
+        int failures = 0;
+        void Check(string name, bool cond)
+        {
+            if (cond) Console.WriteLine($"  ✅ {name}");
+            else { Console.WriteLine($"  ❌ {name}"); failures++; }
+        }
+
+        Console.WriteLine("=== MockTeacher --permtest (PermissionPresenter mapping + tiers + ready logic) ===");
+
+        // status pill mapping (glyph, text, style-class)
+        Check("Granted → 🟢 granted",       PermissionPresenter.Pill(PermState.Granted)      == ("🟢", "Granted", "granted"));
+        Check("Denied → 🔴 denied",         PermissionPresenter.Pill(PermState.Denied)       == ("🔴", "Denied", "denied"));
+        Check("NotDetermined → ⚪ not req.", PermissionPresenter.Pill(PermState.NotDetermined) == ("⚪", "Not requested", "unknown"));
+        Check("Unsupported → ⚪ unsupported",PermissionPresenter.Pill(PermState.Unsupported)  == ("⚪", "Unsupported", "unknown"));
+
+        // run-readiness gates ONLY on Screen Recording (optional perms never block)
+        Check("ready when Screen granted",           PermissionPresenter.IsReadyToRun(PermState.Granted));
+        Check("NOT ready when Screen not-determined", !PermissionPresenter.IsReadyToRun(PermState.NotDetermined));
+        Check("NOT ready when Screen denied",         !PermissionPresenter.IsReadyToRun(PermState.Denied));
+
+        // descriptors: 4 rows, correct tiers, Screen primary + needs relaunch
+        Check("4 permission rows", Permissions.All.Count == 4);
+        Check("Screen is FIRST (primary)", Permissions.All[0].Id == PermId.Screen);
+        var byId = Permissions.All.ToDictionary(p => p.Id);
+        Check("Screen = Required + needs relaunch", byId[PermId.Screen].Tier == PermTier.Required && byId[PermId.Screen].NeedsRelaunch);
+        Check("Camera = Optional, no relaunch",     byId[PermId.Camera].Tier == PermTier.Optional && !byId[PermId.Camera].NeedsRelaunch);
+        Check("Microphone = Optional, no relaunch",  byId[PermId.Microphone].Tier == PermTier.Optional && !byId[PermId.Microphone].NeedsRelaunch);
+        Check("Accessibility = Optional (graceful degrade), no relaunch", byId[PermId.Accessibility].Tier == PermTier.Optional && !byId[PermId.Accessibility].NeedsRelaunch);
+
+        Console.WriteLine(failures == 0
+            ? "\n=== PERMTEST PASS ✅ — pill mapping · Screen-only readiness · 4 rows (Screen primary+relaunch, rest optional) ==="
+            : $"\n=== PERMTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
     }
 }

@@ -4,13 +4,15 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using ClassroomCtrl.Avalonia.Sandbox.Services;
 using ClassroomCtrl.Avalonia.Sandbox.ViewModels;
+using ClassroomCtrl.Avalonia.Sandbox.Views;
 
 namespace ClassroomCtrl.Avalonia.Sandbox;
 
 public partial class App : Application
 {
     private TrayController? _tray;
-    private bool _exiting;   // set only by the tray's Quit → allows the window Close to proceed
+    private PermissionsWindow? _perm;   // single onboarding window instance
+    private bool _exiting;              // set only by the tray's Quit → allows the window Close to proceed
 
     public override void Initialize()
     {
@@ -40,10 +42,26 @@ public partial class App : Application
             _tray = new TrayController(
                 conn,
                 showWindow: () => { window.Show(); window.WindowState = WindowState.Normal; window.Activate(); },
+                showPermissions: ShowPermissions,
                 quit: () => { _exiting = true; desktop.Shutdown(); });   // clean exit = dead-man unlock
             TrayIcon.SetIcons(this, new TrayIcons { _tray.Native });
+
+            // Phase 32-D — first-run onboarding: if the primary permission (Screen Recording) isn't
+            // granted, surface the permissions window. Subsequent runs skip it (no nagging); the tray
+            // "Permissions…" item reopens it on demand.
+            if (Permissions.Check(PermId.Screen) != PermState.Granted)
+                ShowPermissions();
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>Show (or focus) the single permissions onboarding window.</summary>
+    private void ShowPermissions()
+    {
+        if (_perm is not null) { _perm.Activate(); return; }
+        _perm = new PermissionsWindow { DataContext = new PermissionsViewModel() };
+        _perm.Closed += (_, _) => _perm = null;
+        _perm.Show();
     }
 }
