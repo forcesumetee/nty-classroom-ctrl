@@ -195,6 +195,16 @@
                             </TextBlock>
                         </Border>
 
+                        <!-- Teacher-audio playback indicator (29-F) -->
+                        <Border Margin="0,10,0,0" CornerRadius="6" Padding="10,6"
+                                Background="#DBEAFE" IsVisible="{Binding SelfTile.IsPlayingAudio}">
+                            <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="#1E40AF">
+                                <Run Text="🔊 Playing teacher audio ·"/>
+                                <Run Text="{Binding SelfTile.PlayedAudioFrames}"/>
+                                <Run Text="frames"/>
+                            </TextBlock>
+                        </Border>
+
                         <!-- Deferred capture note -->
                         <TextBlock Margin="0,8,0,0" FontSize="11"
                                    Foreground="{StaticResource Text.Muted}" TextWrapping="Wrap"

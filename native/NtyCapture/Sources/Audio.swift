@@ -177,3 +177,110 @@ public func nty_audio_stop() {
 
 @_cdecl("nty_audio_frame_count") public func nty_audio_frame_count() -> Int64 { AudState.frameCount }
 @_cdecl("nty_audio_last_rms")    public func nty_audio_last_rms()    -> Int32 { AudState.lastRms }
+
+// MARK: - Playback (Phase 29-F) -----------------------------------------------------
+// Path A: play the Teacher's broadcast/system audio (AudioStreamFrame 0x0329) through
+// the Mac speakers. SEPARATE AVAudioEngine + state from capture, so playback and mic
+// capture can run concurrently and independently.
+//
+// Jitter buffer: the wire delivers 100 ms PCM frames but network jitter means they do
+// NOT arrive on a clean cadence. Strategy:
+//   * PREBUFFER 3 frames (~300 ms) before starting the player — absorbs early jitter so
+//     the first frames don't underrun. Cost: ~300 ms added playback latency (fine for
+//     a one-way listen; not a conversation).
+//   * STEADY STATE: schedule each frame on the player node as it arrives; a completion
+//     handler tracks the pending (scheduled-but-unplayed) depth.
+//   * OVERRUN guard: if pending ≥ 10 frames (~1 s), DROP the incoming frame — bounds
+//     latency creep after a burst/catch-up instead of letting it grow unbounded.
+//   * UNDERRUN: AVAudioPlayerNode simply goes silent when it runs dry and resumes when
+//     the next buffer is scheduled — a brief glitch, no restart needed.
+//
+// ⚠ ACOUSTIC FEEDBACK: playing teacher audio (path A) while the mic streams (path B) in
+// the same room loops sound. No AEC in M20 — test A and B separately, or with headphones.
+
+private final class PlaybackSession {
+    let engine = AVAudioEngine()
+    let player = AVAudioPlayerNode()
+    let format: AVAudioFormat            // float32 @ srcRate — engine resamples to device rate
+    let lock = NSLock()
+    var pending = 0
+    var started = false
+    let prebuffer = 3                    // frames (~300 ms) before play()
+    let maxPending = 10                  // cap (~1 s) — drop beyond this to bound latency
+
+    init?(sampleRate: Double, channels: AVAudioChannelCount) {
+        guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channels)
+        else { return nil }
+        format = fmt
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: fmt)
+        engine.prepare()
+        do { try engine.start() } catch { return nil }
+    }
+
+    /// Enqueue one PCM16-LE frame (call-scoped bytes). Converts to float32 and schedules.
+    func enqueue(_ bytes: UnsafePointer<UInt8>, _ length: Int) {
+        let sampleCount = length / 2
+        guard sampleCount > 0 else { return }
+
+        lock.lock(); let p = pending; lock.unlock()
+        if p >= maxPending { return }                     // overrun guard → drop
+
+        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleCount)),
+              let ch = buf.floatChannelData else { return }
+        buf.frameLength = AVAudioFrameCount(sampleCount)
+        let dst = ch[0]
+        // int16 LE → float32, alignment-safe (read byte pairs explicitly).
+        for i in 0..<sampleCount {
+            let s = Int16(bitPattern: UInt16(bytes[i * 2]) | (UInt16(bytes[i * 2 + 1]) << 8))
+            dst[i] = Float(s) / 32768.0
+        }
+
+        lock.lock(); pending += 1; let count = pending; lock.unlock()
+        player.scheduleBuffer(buf) { [weak self] in
+            guard let self = self else { return }
+            self.lock.lock(); self.pending -= 1; self.lock.unlock()
+        }
+        if !started && count >= prebuffer {               // start after prebuffer fills
+            started = true
+            player.play()
+        }
+    }
+
+    func stop() {
+        player.stop()
+        if engine.isRunning { engine.stop() }
+    }
+}
+
+private enum PlayState {
+    static let lock = NSLock()
+    static var session: PlaybackSession?
+}
+
+/// 29-F — start the playback engine at sampleRate×channels (0 → 16000/1). Returns 0,
+/// -3 already running, -7 engine failed.
+@_cdecl("nty_audio_play_start")
+public func nty_audio_play_start(_ sampleRate: Int32, _ channels: Int32) -> Int32 {
+    PlayState.lock.lock(); defer { PlayState.lock.unlock() }
+    if PlayState.session != nil { return -3 }
+    let rate = sampleRate > 0 ? Double(sampleRate) : 16000.0
+    let chs = AVAudioChannelCount(channels > 0 ? channels : 1)
+    guard let s = PlaybackSession(sampleRate: rate, channels: chs) else { return -7 }
+    PlayState.session = s
+    return 0
+}
+
+/// 29-F — enqueue one PCM16-LE frame for playback (call-scoped bytes).
+@_cdecl("nty_audio_play_pcm")
+public func nty_audio_play_pcm(_ data: UnsafePointer<UInt8>?, _ length: Int32) {
+    guard let data = data, length > 0 else { return }
+    PlayState.lock.lock(); let s = PlayState.session; PlayState.lock.unlock()
+    s?.enqueue(data, Int(length))
+}
+
+@_cdecl("nty_audio_play_stop")
+public func nty_audio_play_stop() {
+    PlayState.lock.lock(); let s = PlayState.session; PlayState.session = nil; PlayState.lock.unlock()
+    s?.stop()
+}

@@ -43,6 +43,10 @@ public partial class StudentSelfTileViewModel : ObservableObject
     [ObservableProperty] private bool isMicLive;
     [ObservableProperty] private int micFrames;
 
+    /// <summary>Phase 29-F — true while playing the teacher's broadcast audio (path A).</summary>
+    [ObservableProperty] private bool isPlayingAudio;
+    [ObservableProperty] private int playedAudioFrames;
+
     public void Reset()
     {
         IsLocked = false;
@@ -57,6 +61,8 @@ public partial class StudentSelfTileViewModel : ObservableObject
         CameraFrames = 0;
         IsMicLive = false;
         MicFrames = 0;
+        IsPlayingAudio = false;
+        PlayedAudioFrames = 0;
     }
 
     public void SetPolicy(System.Collections.Generic.IEnumerable<string> chips)

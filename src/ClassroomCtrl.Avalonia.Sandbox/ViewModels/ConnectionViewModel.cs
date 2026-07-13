@@ -49,6 +49,11 @@ public partial class ConnectionViewModel : ObservableObject
     /// <summary>Phase 29-E — mic → PCM → StudentAudioStreamFrame streamer (talkback).</summary>
     private readonly AudioStreamer _audioStreamer = new();
 
+    /// <summary>Phase 29-F — playback of the Teacher's AudioStreamFrame broadcast (path A).
+    /// Receive-side; independent native engine, coexists with the send-side streamers.</summary>
+    private readonly AudioCaptureService _audioPlayback = new();
+    private int _playbackSeq;
+
     /// <summary>Active Conference session (from the Teacher's ConferenceStart); Empty
     /// when not in a Conference. Camera peer-cam frames are gated on this.</summary>
     private Guid _conferenceSessionId;
@@ -105,6 +110,7 @@ public partial class ConnectionViewModel : ObservableObject
                 _ = _streamer.StopAsync();
                 _ = _cameraStreamer.StopAsync();
                 _ = _audioStreamer.StopAsync();
+                _ = _audioPlayback.StopPlaybackAsync();
                 _conferenceSessionId = Guid.Empty;
                 SelfTile.Reset();
             }
@@ -226,6 +232,46 @@ public partial class ConnectionViewModel : ObservableObject
         });
     }
 
+    // ── teacher-audio playback (path A, 29-F) ────────────────────────────────────
+    private async Task StartAudioPlaybackAsync()
+    {
+        _playbackSeq = 0;
+        int rc = await _audioPlayback.StartPlaybackAsync(16000, 1);
+        Post(() =>
+        {
+            SelfTile.IsPlayingAudio = rc == 0;
+            AddLog(WireDirection.System, rc == 0 ? "teacher audio playback started" : $"playback start failed ({rc})", 0);
+        });
+    }
+
+    /// <summary>Enqueue an inbound teacher-audio frame for playback (called ~10/s, no
+    /// per-frame logging). Lazily starts the engine if AudioStreamStart was dropped
+    /// (the broadcast start rides the lossy channel).</summary>
+    private void PlayTeacherAudio(byte[] payload)
+    {
+        try
+        {
+            var msg = MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(payload);
+            if (!_audioPlayback.IsPlaying)
+                _ = _audioPlayback.StartPlaybackAsync(msg.SampleRate > 0 ? msg.SampleRate : 16000,
+                                                      msg.Channels > 0 ? msg.Channels : 1);
+            _audioPlayback.EnqueuePcm(msg.PcmData);
+            int n = Interlocked.Increment(ref _playbackSeq);
+            Post(() => { SelfTile.IsPlayingAudio = true; SelfTile.PlayedAudioFrames = n; });
+        }
+        catch { /* transient decode; next frame lands ~100 ms later */ }
+    }
+
+    private async Task StopAudioPlaybackAsync()
+    {
+        await _audioPlayback.StopPlaybackAsync();
+        Post(() =>
+        {
+            SelfTile.IsPlayingAudio = false;
+            AddLog(WireDirection.System, "teacher audio playback stopped", 0);
+        });
+    }
+
     private static string Short(Guid id) => id == Guid.Empty ? "—" : id.ToString("N")[..8];
 
     /// <summary>Decode an inbound envelope: enrich the traffic log with a summary
@@ -233,6 +279,14 @@ public partial class ConnectionViewModel : ObservableObject
     /// Public so HeadlessCapture can seed a representative state deterministically.</summary>
     public void Dispatch(Envelope env)
     {
+        // High-frequency inbound audio frames (path A, ~10/s): enqueue for playback and
+        // return BEFORE the per-envelope AddLog — logging each would flood the wire log.
+        if (env.Type == MessageType.AudioStreamFrame)
+        {
+            PlayTeacherAudio(env.Payload);
+            return;
+        }
+
         string detail;
         switch (env.Type)
         {
@@ -299,6 +353,16 @@ public partial class ConnectionViewModel : ObservableObject
             case MessageType.MicMonitorStop:
                 _ = StopMicAsync();
                 detail = "■ mic talkback stopped";
+                break;
+            // Phase 29-F — the Teacher broadcasts audio (own mic / system audio, path A).
+            // Play it through the Mac speakers (AVAudioEngine player + jitter buffer).
+            case MessageType.AudioStreamStart:
+                _ = StartAudioPlaybackAsync();
+                detail = "▶ playing teacher audio";
+                break;
+            case MessageType.AudioStreamStop:
+                _ = StopAudioPlaybackAsync();
+                detail = "■ teacher audio stopped";
                 break;
             // Remaining capture-class commands: logged + noted, deferred until their
             // native macOS APIs land. No frames produced.

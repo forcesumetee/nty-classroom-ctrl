@@ -28,6 +28,10 @@ public sealed partial class AudioCaptureService
     [LibraryImport(Lib)] private static partial void nty_audio_stop();
     [LibraryImport(Lib)] private static partial long nty_audio_frame_count();
     [LibraryImport(Lib)] private static partial int nty_audio_last_rms();
+    // Playback (29-F, path A) — separate native engine + state from capture.
+    [LibraryImport(Lib)] private static partial int nty_audio_play_start(int sampleRate, int channels);
+    [LibraryImport(Lib)] private static partial void nty_audio_play_pcm(byte[] data, int length);
+    [LibraryImport(Lib)] private static partial void nty_audio_play_stop();
 
     /// <summary>Raised per 100 ms frame with a freshly-copied PCM16 buffer + its format.
     /// Fires on the native (AVAudioEngine) real-time thread — marshal to the UI thread.</summary>
@@ -93,6 +97,40 @@ public sealed partial class AudioCaptureService
     /// <summary>Last-frame RMS level (0..100) for a live meter.</summary>
     public int LastRms() => IsSupported ? nty_audio_last_rms() : 0;
     public long FrameCount() => IsSupported ? nty_audio_frame_count() : 0;
+
+    // ── playback (29-F, path A) ─────────────────────────────────────────────────
+    public bool IsPlaying { get; private set; }
+
+    /// <summary>Start the playback engine (own native state — coexists with capture).
+    /// A jitter buffer prebuffers ~300 ms before audio starts. Returns 0 or a native error.</summary>
+    public Task<int> StartPlaybackAsync(int sampleRate = 16000, int channels = 1)
+    {
+        if (!IsSupported) return Task.FromResult(-1000);
+        if (IsPlaying) return Task.FromResult(0);
+        return Task.Run(() =>
+        {
+            int rc = nty_audio_play_start(sampleRate, channels);
+            if (rc == 0) IsPlaying = true;
+            return rc;
+        });
+    }
+
+    /// <summary>Enqueue one PCM16-LE frame for playback (fast, non-blocking — the native
+    /// side schedules on the audio thread). Safe to call from the network dispatch thread.</summary>
+    public void EnqueuePcm(byte[] data)
+    {
+        if (IsSupported && IsPlaying && data.Length > 0) nty_audio_play_pcm(data, data.Length);
+    }
+
+    public Task StopPlaybackAsync()
+    {
+        if (!IsSupported || !IsPlaying) return Task.CompletedTask;
+        return Task.Run(() =>
+        {
+            nty_audio_play_stop();
+            IsPlaying = false;
+        });
+    }
 
     // ── native callback (real-time audio thread) ────────────────────────────────
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]

@@ -180,6 +180,22 @@ void nty_audio_stop(void);
 int64_t nty_audio_frame_count(void);
 int nty_audio_last_rms(void);
 
+/*
+ * Audio playback — Phase 29-F (path A: play the Teacher's broadcast audio).
+ * SEPARATE AVAudioEngine + state from capture (can play while capturing). A jitter
+ * buffer prebuffers ~3 frames (~300 ms) before starting, then schedules per frame,
+ * dropping beyond ~10 pending frames to bound latency.
+ * ⚠ Feedback: playing (A) while the mic streams (B) in the same room loops sound —
+ * no AEC in M20; use headphones or test A/B separately.
+ *   nty_audio_play_start — start playback engine at sampleRate×channels (0 → 16000/1).
+ *     Returns 0, -3 already running, -7 engine failed.
+ *   nty_audio_play_pcm   — enqueue one PCM16-LE frame (call-scoped bytes).
+ *   nty_audio_play_stop  — stop playback + release. Safe when idle.
+ */
+int nty_audio_play_start(int sampleRate, int channels);
+void nty_audio_play_pcm(const uint8_t *data, int length);
+void nty_audio_play_stop(void);
+
 #ifdef __cplusplus
 }
 #endif
