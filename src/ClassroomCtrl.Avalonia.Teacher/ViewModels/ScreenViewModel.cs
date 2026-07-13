@@ -34,7 +34,9 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
     private Bitmap? _pendingDispose;   // the frame CurrentFrame just replaced; freed one cycle later, past the compositor
     private bool _started;
     private bool _disposed;
-    private bool _warnedUnsupportedCodec;   // surface a non-MJPEG stream once, not per frame
+    private bool _warnedUnsupportedCodec;   // surface a genuinely-unknown codec once, not per frame
+    private H264DecoderWrapper? _h264;      // TT-4-C: lazy per-view VTDecompressionSession decoder
+    private bool _fellBackToMjpeg;          // set once if H.264 can't decode → switched the stream to MJPEG
 
     /// <summary>The student whose frames this view renders — the filter key.</summary>
     public Guid StudentId { get; }
@@ -54,21 +56,22 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
         title = string.IsNullOrWhiteSpace(machineName) ? displayName : $"{displayName} — {machineName}";
     }
 
-    /// <summary>Window opened: subscribe to frames and ask the student to start streaming
-    /// (MJPEG for TT-3 — the codec we can already decode; H.264 arrives in TT-4). Idempotent.</summary>
+    /// <summary>Window opened: subscribe to frames and ask the student to start streaming.
+    /// TT-4-C requests H.264 (efficient — ~10× the bandwidth of MJPEG); if the decoder
+    /// can't handle the stream, <see cref="DecodeH264"/> auto-falls-back to MJPEG. Idempotent.</summary>
     public void Start()
     {
         if (_started || _disposed) return;
         _started = true;
         _source.StudentStreamFrameReceived += OnFrame;
-        _ = RequestStreamAsync();
+        _ = RequestStreamAsync(VideoCodec.H264);
     }
 
-    private async Task RequestStreamAsync()
+    private async Task RequestStreamAsync(VideoCodec codec)
     {
         try
         {
-            await _source.RequestStudentStreamAsync(StudentId, VideoCodec.Mjpeg, CancellationToken.None)
+            await _source.RequestStudentStreamAsync(StudentId, codec, CancellationToken.None)
                          .ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -85,6 +88,8 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
         if (!_started) return;
         _started = false;
         _source.StudentStreamFrameReceived -= OnFrame;
+        var dec = _h264; _h264 = null;          // TT-4-C: tear down the decoder (frees the VTDecompressionSession)
+        try { dec?.Dispose(); } catch { }
         // Fire-and-forget the stop; if the student already left, this targets a gone
         // peer and is a harmless no-op.
         try { _ = _source.StopStudentStreamAsync(StudentId, CancellationToken.None); }
@@ -95,11 +100,7 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
     {
         if (e.StudentId != StudentId) return;    // FILTER — one window renders one student
         var bmp = RenderFrame(e.Frame);          // codec dispatch + decode, OFF the UI thread
-        if (bmp is null)
-        {
-            NoteIfUnsupportedCodec(e.Frame.Codec);   // H.264 today = clean no-op; surface why, once
-            return;
-        }
+        if (bmp is null) return;                 // dropped / waiting for keyframe / fell back — RenderFrame owns the "why"
         int w = e.Frame.Width, h = e.Frame.Height;
         Dispatcher.UIThread.Post(() =>           // marshal the Image.Source swap onto the UI thread
         {
@@ -113,21 +114,17 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
     }
 
     // ─────── The codec fork — mirrors the shipped Windows OnStudentFrame →
-    // RenderMjpeg / RenderH264. TT-3 decodes MJPEG; TT-4 fills the H.264 branch. ───────
-    //
-    // THE SEAM (why TT-4 is additive): TT-4 fills ONLY the VideoCodec.H264 case —
-    // VTDecompressionSession → CVPixelBuffer (BGRA) → WriteableBitmap.Lock() +
-    // Marshal.Copy → return a FRESH WriteableBitmap per frame (the proven
-    // ScreenCaptureViewModel seam). WriteableBitmap derives from Bitmap (verified),
-    // so this return type and CurrentFrame / Image.Source already accommodate it. The
-    // subscription, studentId filter, request/stop lifecycle, UI-thread marshal, and
-    // the dispose-previous-frame logic above are ALL untouched by TT-4.
-    private static Bitmap? RenderFrame(ScreenStreamFrameMessage frame) => frame.Codec switch
+    // RenderMjpeg / RenderH264. MJPEG = new Bitmap; H.264 = VTDecompressionSession. ───────
+    // Instance (not static) as of TT-4-C: the H.264 branch owns a per-view decoder.
+    private Bitmap? RenderFrame(ScreenStreamFrameMessage frame)
     {
-        VideoCodec.Mjpeg => DecodeMjpeg(frame.FrameData),
-        VideoCodec.H264  => null,   // TT-4: VTDecompressionSession → BGRA → WriteableBitmap → fresh WB
-        _ => null,
-    };
+        switch (frame.Codec)
+        {
+            case VideoCodec.Mjpeg: return DecodeMjpeg(frame.FrameData);
+            case VideoCodec.H264:  return DecodeH264(frame);
+            default:               NoteUnsupportedCodec(frame.Codec); return null;
+        }
+    }
 
     // MJPEG: the shipped RenderMjpeg equivalent (new Bitmap over the JPEG payload).
     // Returns null on a bad/empty payload so one corrupt frame never tears down the view.
@@ -138,15 +135,63 @@ public sealed partial class ScreenViewModel : ObservableObject, IDisposable
         catch { return null; }
     }
 
-    // H.264 (and any not-yet-supported codec) renders nothing today — no crash, no
-    // garbage. Surface WHY once (not per frame) on the status strip so a blank view
-    // reads as "decoder coming" rather than "broken". A null from a MALFORMED MJPEG
-    // frame is a dropped frame, not an unsupported codec — don't warn for that.
-    private void NoteIfUnsupportedCodec(VideoCodec codec)
+    // H.264 (TT-4-C): a per-view VTDecompressionSession decoder (H264DecoderWrapper),
+    // created lazily on the first frame and torn down in Stop(). Returns a FRESH BGRA
+    // WriteableBitmap (WriteableBitmap : Bitmap — verified; the dispose-previous logic
+    // treats it exactly like MJPEG's Bitmap). A DELTA before the first keyframe returns
+    // null (waiting — normal). A KEYFRAME that won't decode means this decoder can't
+    // handle the stream → fall back to MJPEG (LIVE-proven) rather than a dead window.
+    private Bitmap? DecodeH264(ScreenStreamFrameMessage frame)
     {
-        if (codec == VideoCodec.Mjpeg || _warnedUnsupportedCodec) return;
+        if (_fellBackToMjpeg) return null;   // already switched — ignore any late H.264 frames
+        var data = frame.FrameData;
+        if (data is null || data.Length == 0) return null;
+        try
+        {
+            _h264 ??= new H264DecoderWrapper();
+            var wb = _h264.TryDecode(data, frame.IsKeyframe);
+            if (wb is null && frame.IsKeyframe)
+                FallBackToMjpeg("H.264 keyframe did not decode");
+            return wb;
+        }
+        catch (Exception ex)   // decoder unavailable / native failure
+        {
+            FallBackToMjpeg(ex.Message);
+            return null;
+        }
+    }
+
+    // Session-create/decode failure → stop H.264 and re-request MJPEG. The student
+    // honors the requested codec (traced TT-3-A), and StudentStreamStop nulls its
+    // broadcaster (verified) so the new MJPEG StudentStreamStart takes effect. Surfaced
+    // on the status strip — visible, not a silent blank. Fires once.
+    private void FallBackToMjpeg(string reason)
+    {
+        if (_fellBackToMjpeg) return;
+        _fellBackToMjpeg = true;
+        var dec = _h264; _h264 = null;
+        try { dec?.Dispose(); } catch { }
+        Dispatcher.UIThread.Post(() => StatusText = "H.264 unavailable — using MJPEG");
+        _ = SwitchToMjpegAsync();
+    }
+
+    private async Task SwitchToMjpegAsync()
+    {
+        try
+        {
+            await _source.StopStudentStreamAsync(StudentId, CancellationToken.None).ConfigureAwait(false);
+            await _source.RequestStudentStreamAsync(StudentId, VideoCodec.Mjpeg, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch { /* best-effort; a dropped student just yields no frames */ }
+    }
+
+    // A codec we don't handle at all (neither MJPEG nor H.264 — a future addition).
+    // Surface once, not per frame.
+    private void NoteUnsupportedCodec(VideoCodec codec)
+    {
+        if (_warnedUnsupportedCodec) return;
         _warnedUnsupportedCodec = true;
-        Dispatcher.UIThread.Post(() => StatusText = $"{codec} stream — decoder arrives in TT-4");
+        Dispatcher.UIThread.Post(() => StatusText = $"{codec} stream — unsupported codec");
     }
 
     public void Dispose()

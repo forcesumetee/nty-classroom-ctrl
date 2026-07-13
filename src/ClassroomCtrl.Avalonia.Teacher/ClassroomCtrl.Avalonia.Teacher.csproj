@@ -7,6 +7,9 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <RootNamespace>ClassroomCtrl.Avalonia.Teacher</RootNamespace>
+    <!-- TT-4-C: the H.264 decoder wrapper P/Invokes libNtyCapture with a function
+         pointer + UnmanagedCallersOnly callback (the §20 pattern). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,5 +26,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClassroomCtrl.Teacher.Core\ClassroomCtrl.Teacher.Core.csproj" />
+  </ItemGroup>
+
+  <!-- TT-4-C: copy the native dylib next to the managed output so
+       LibraryImport("NtyCapture") resolves it at runtime (the H.264 decoder). Built
+       by native/NtyCapture/build.sh; guarded by Exists so a non-macOS/CI build (where
+       the dylib is absent) doesn't fail. Same mechanism as the Student Sandbox. -->
+  <ItemGroup Condition="Exists('..\..\native\NtyCapture\libNtyCapture.dylib')">
+    <None Include="..\..\native\NtyCapture\libNtyCapture.dylib">
+      <Link>libNtyCapture.dylib</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
