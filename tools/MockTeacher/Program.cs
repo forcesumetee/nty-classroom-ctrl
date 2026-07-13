@@ -28,7 +28,7 @@ using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false;
+bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false, configTest = false;
 int holdSeconds = 20;
 for (int i = 0; i < args.Length; i++)
 {
@@ -46,11 +46,13 @@ for (int i = 0; i < args.Length; i++)
             inputHold = true;
             if (i + 1 < args.Length && int.TryParse(args[i + 1], out var hs)) { holdSeconds = hs; i++; }
             break;
+        case "--configtest": configTest = true; break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (configTest) return ConfigTest.Run();
 if (inputHold) return await InputTest.RunHoldAsync(holdSeconds);
 if (inputTest) return await InputTest.RunAsync();
 if (lockTest) return await LockTest.RunAsync();
@@ -1070,5 +1072,74 @@ static partial class InputTest
             Console.WriteLine($"  tap released; is_active={nty_input_guard_is_active()}");
         }
         return 0;
+    }
+}
+
+// ── Phase 32-B — StudentConfig persistence self-test (--configtest) ────────────────
+// Exercises the real StudentConfig (Sandbox assembly) against a TEMP directory so it never
+// touches the user's ~/Library/Application Support config. Proves: round-trip, missing→defaults
+// (host-name display name), corrupt→defaults+logged (no throw), and the documented admin
+// pre-seed (hand-authored camelCase JSON) parses.
+static class ConfigTest
+{
+    public static int Run()
+    {
+        int failures = 0;
+        void Check(string name, bool cond)
+        {
+            if (cond) Console.WriteLine($"  ✅ {name}");
+            else { Console.WriteLine($"  ❌ {name}"); failures++; }
+        }
+
+        var dir = Path.Combine(Path.GetTempPath(), "nty-configtest-" + Guid.NewGuid().ToString("N"));
+        var host = Environment.MachineName;
+        Console.WriteLine($"=== MockTeacher --configtest (temp dir; host name = {host}) ===");
+        try
+        {
+            // (1) round-trip: write → read → matches
+            new StudentConfig { TeacherIp = "10.0.0.5", Port = 9999, DisplayName = "LAB-42", ChannelId = "777" }.Save(dir);
+            var r = StudentConfig.Load(dir);
+            Check("round-trip: teacherIp", r.TeacherIp == "10.0.0.5");
+            Check("round-trip: port", r.Port == 9999);
+            Check("round-trip: displayName", r.DisplayName == "LAB-42");
+            Check("round-trip: channelId", r.ChannelId == "777");
+
+            // (2) missing file → defaults (display name = host name)
+            var missingDir = Path.Combine(Path.GetTempPath(), "nty-configtest-missing-" + Guid.NewGuid().ToString("N"));
+            var d = StudentConfig.Load(missingDir);
+            Check("missing: teacherIp empty (not yet configured)", d.TeacherIp == "");
+            Check("missing: port default 7777", d.Port == 7777);
+            Check($"missing: displayName = host name", d.DisplayName == host);
+            Check("missing: channelId default 1234", d.ChannelId == "1234");
+
+            // (3) corrupt file → defaults, NO throw, logged
+            File.WriteAllText(Path.Combine(dir, "config.json"), "{ not valid json ]]");
+            string? corruptLog = null;
+            var c = StudentConfig.Load(dir, m => corruptLog = m);
+            Check("corrupt: returned defaults, did NOT throw", c.DisplayName == host && c.Port == 7777);
+            Check("corrupt: logged 'unreadable'", corruptLog is not null && corruptLog.Contains("unreadable"));
+
+            // (4) admin pre-seed: hand-authored camelCase JSON parses
+            File.WriteAllText(Path.Combine(dir, "config.json"),
+                "{ \"teacherIp\": \"172.20.10.7\", \"port\": 7777, \"displayName\": \"SEEDED-01\", \"channelId\": \"1234\" }");
+            var seed = StudentConfig.Load(dir);
+            Check("admin pre-seed: teacherIp parsed", seed.TeacherIp == "172.20.10.7");
+            Check("admin pre-seed: displayName parsed", seed.DisplayName == "SEEDED-01");
+
+            // (5) normalize: blank displayName + missing port in file → host name + 7777
+            File.WriteAllText(Path.Combine(dir, "config.json"), "{ \"teacherIp\": \"1.2.3.4\", \"displayName\": \"  \" }");
+            var norm = StudentConfig.Load(dir);
+            Check("normalize: blank displayName → host name", norm.DisplayName == host);
+            Check("normalize: missing port → 7777", norm.Port == 7777);
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { /* best-effort cleanup */ }
+        }
+
+        Console.WriteLine(failures == 0
+            ? "\n=== CONFIGTEST PASS ✅ — round-trip · missing→defaults(host name) · corrupt→defaults+logged · admin pre-seed camelCase ==="
+            : $"\n=== CONFIGTEST FAIL ❌ ({failures} check(s)) ===");
+        return failures == 0 ? 0 : 1;
     }
 }

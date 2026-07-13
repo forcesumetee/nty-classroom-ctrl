@@ -64,6 +64,10 @@ public partial class ConnectionViewModel : ObservableObject
 
     private CancellationTokenSource? _cts;
 
+    /// <summary>Phase 32-B — persisted student config (Teacher IP / port / display name / channel),
+    /// loaded at startup and saved on connect. See <see cref="StudentConfig"/>.</summary>
+    private readonly StudentConfig _config;
+
     [ObservableProperty] private string teacherIp = "172.20.10.7";  // Phase 24.2 hotspot subnet
     [ObservableProperty] private string portText = "7777";
     [ObservableProperty] private string displayName = $"Mac Sandbox ({Environment.MachineName})";
@@ -103,6 +107,14 @@ public partial class ConnectionViewModel : ObservableObject
 
     public ConnectionViewModel()
     {
+        // Phase 32-B: load persisted config, then apply Teacher IP / port / display name. A missing
+        // or corrupt file yields defaults (display name = host name) — never throws. An admin can
+        // pre-seed the file; a student's Connect (below) writes it back.
+        _config = StudentConfig.Load(log: m => AddLog(WireDirection.System, m, 0));
+        if (_config.TeacherIp.Length > 0) TeacherIp = _config.TeacherIp;
+        PortText = _config.Port.ToString();
+        DisplayName = _config.DisplayName;
+
         // WireClient raises on background threads → marshal to the UI thread.
         Client.StatusChanged += s => Post(() =>
         {
@@ -437,6 +449,13 @@ public partial class ConnectionViewModel : ObservableObject
             ErrorMessage = "Port must be 1–65535";
             return;
         }
+
+        // Phase 32-B: persist the committed connection settings so the next launch reconnects
+        // without re-entry (ChannelId + any admin-seeded fields are preserved).
+        _config.TeacherIp = TeacherIp.Trim();
+        _config.Port = port;
+        _config.DisplayName = DisplayName.Trim();
+        _config.Save(log: m => AddLog(WireDirection.System, m, 0));
 
         _cts = new CancellationTokenSource();
         // Fire-and-forget: RunAsync only returns when Disconnect cancels it.
