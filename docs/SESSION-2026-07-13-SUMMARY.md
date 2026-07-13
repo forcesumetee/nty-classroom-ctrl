@@ -134,6 +134,29 @@ no shipped-repo change, no wire change. **Session 7.**
 | **Audio PCM (M20)** | **~288 kbit/s wire** (~277 raw) | 16 k/mono/16-bit; ~4% MessagePack overhead |
 | **3 concurrent / student** | **≈ ~2 Mbit/s** | Mic Monitor is 1-at-a-time — record for network sizing |
 
+## Milestone 21 — Phase 30: Screen-lock enforcement (kiosk + dead-man) ⏳ Mac-side ✅ · LIVE pending
+Enforce the teacher lock (the envelope has arrived since M15 but was only *reflected*) — a HARD
+lock that **exceeds** the soft Windows teacher-lock, with **zero Accessibility**. **Session 8.**
+- **Investigation (30-A) reframe:** the shipped Windows teacher-lock is a **soft** topmost overlay
+  (no hook, no `BlockInput`, primary-monitor-only, **printed** escape hotkey, **NO auto-unlock** —
+  the dangerous gap). The hardened keyboard-hook kiosk is the *exam* feature only. → We build
+  stronger AND safer. Product decisions: **HARD** lock · **no** student escape hatch · **45 s** silent
+  disconnect-grace.
+- **30-B** native shield — borderless `NSWindow` at `CGShieldingWindowLevel()` **per `NSScreen`** +
+  hotplug + 7 kiosk `NSApplicationPresentationOptions` (raw **506** = Cmd+Tab/Force-Quit/logout/Dock/
+  menu/Apple-menu/Cmd+H) + `didResignActive`/`didWake` re-assert. **No Accessibility.** **30-D** visual
+  (glyph + live clock/date + brand; no printed hotkey).
+- **30-C** `LockService` + wire-in + **four-layer dead-man:** ①process-kill (in-process → OS releases
+  options = auto-unlock) ②45 s disconnect grace (continuous window; blip holds, teacher-death unlocks)
+  ③30 min cap ④wake re-assert. Sole owner of `SelfTile.IsLocked`.
+- **30-E** `MockTeacher --locktest`: **all 3 grace cases PASS** (blip HELD / teacher-death UNLOCKED /
+  no-reset continuous window — the log shows exactly one `grace start`). Injectable shield backend →
+  proves real dead-man logic with zero AppKit (no screen-takeover in tests).
+- **LIVE (30-F):** teacher locks → shield all displays, Cmd+Tab/Force-Quit blocked; disconnect→45 s→
+  auto-unlock; unlock→gone; kill-process→gone; sleep/wake re-assert. See `docs/PHASE-30-FINDINGS.md`.
+  Cheat sheet **§20** screen-lock addendum. *(awaiting LIVE.)*
+- **Residuals → Phase 31:** Spotlight-launch + Mission-Control (need `CGEventTap` + Accessibility).
+
 ## Commits (Sessions 3–5) — 16
 ```
 3a350c7  27-B-7: findings + cheat sheet §20 addendum (VideoToolbox) + screenshot
@@ -170,18 +193,18 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | **Windows patch** | `nty-classroom-macos` / `v1.2-multiselect` | **v1.2.1** bulk-lock fix SHIP-READY (tag `v1.2.1`) |
 | **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–20** — screen capture + **LIVE MJPEG & H.264 screen streaming (~10×)** + **LIVE camera peer-cam** + **bidirectional audio** (Mac-side; LIVE pending) to the shipped Windows Teacher |
 
-### Combined day totals (Sessions 1–7, 2026-07-13)
-- **20 milestones** (M1–M20; M20 LIVE-confirmed 3/4 as scoped); today added the first
-  native-macOS-API work + camera + audio.
-- **Native APIs: 5 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
-  **AVCaptureSession camera** · **AVAudioEngine audio** (capture + playback).
-- **Cheat sheet: 21 sections**, §20 with **three addenda** (VideoToolbox + AVCaptureSession +
-  AVAudioEngine).
-- **MockTeacher: 5 automated modes** — `--selftest` / `--streamtest` / `--streamtest-h264` /
-  `--cameratest` / **`--audiotest`** (+ interactive `viewscreen`/`viewscreen-h264`).
-  **Wire compat: T1–T27** (T27 = `AudioStreamFrameMessage`).
-- **Cross-platform demo: complete + optimized + expanded** — screen (MJPEG/H.264), camera, **and
-  bidirectional audio**, a macOS student into the shipped, unmodified Windows Teacher over unchanged wire.
+### Combined day totals (Sessions 1–8, 2026-07-13)
+- **21 milestones** (M1–M21; M20 LIVE 3/4, M21 Mac-side ✅ LIVE-pending); today added the first
+  native-macOS-API work + camera + audio + screen-lock.
+- **Native APIs: 6 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
+  **AVCaptureSession camera** · **AVAudioEngine audio** · **AppKit shield/kiosk lock** (no Accessibility).
+- **Cheat sheet: 21 sections**, §20 with **four addenda** (VideoToolbox + AVCaptureSession +
+  AVAudioEngine + screen-lock/kiosk).
+- **MockTeacher: 6 automated modes** — `--selftest` / `--streamtest` / `--streamtest-h264` /
+  `--cameratest` / `--audiotest` / **`--locktest`** (+ interactive `viewscreen`/`viewscreen-h264`).
+  **Wire compat: T1–T27.**
+- **Cross-platform demo: complete + expanded** — screen (MJPEG/H.264), camera, bidirectional audio,
+  **and enforced screen-lock**, a macOS student into the shipped, unmodified Windows Teacher over unchanged wire.
 
 ## Tooling / docs state (macOS track)
 - Cheat sheet: **21 sections** (§20 native interop + **VideoToolbox + AVCaptureSession +
@@ -203,15 +226,16 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | 17 | 27-C | **LIVE** MJPEG screen streaming → Windows Teacher |
 | 18 | 27-B | **LIVE** H.264 streaming (~10× bandwidth), **MJPEG + H.264** |
 | 19 | 28 | **LIVE** camera peer-cam → Conference gallery (JPEG 320×180, ~16× vs preset bug) |
-| **20** | **29** | **LIVE (3/4)** bidirectional audio (raw PCM 16 k) — mic talkback + system-audio playback confirmed; teacher-mic blocked by a Windows-side capture issue (not a Mac defect) |
+| 20 | 29 | **LIVE (3/4)** bidirectional audio (raw PCM 16 k) — mic talkback + system-audio playback; teacher-mic = Windows-side issue |
+| **21** | **30** | Screen-lock enforcement — HARD kiosk (shield per-display + presentationOptions 506, no Accessibility) + four-layer dead-man — Mac-side ✅, **LIVE pending** |
 
 ## Next-session priority queue
-1. **Phase 30 — Screen-lock enforcement** (overlay + Accessibility) — next native subsystem.
-   **Recommended next.**
-2. **Phase 31 — Input hooks** (CGEventTap).
-3. **Phase 32 — System integration** — permissions bundle, auto-start, packaging/signing.
-4. **Phase 33 — Progressive UI ports** + runtime light/dark theme swap.
-5. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
+1. **Phase 31 — Input hooks** (`CGEventTap`, needs Accessibility) — closes the two macOS lock
+   residuals (Spotlight-launch, Mission Control). **Recommended next.**
+2. **Phase 32 — System integration** — permissions bundle, auto-start, packaging/signing.
+3. **Phase 33 — Progressive UI ports** + runtime light/dark theme swap.
+4. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
+5. Windows-track follow-up: Teacher mic `WaveInEvent` robustness (M20 gap).
 6. Path C breakout peer voice (TargetGroupId + PTT + AEC) — deferred audio scope.
 
 ## Team handoff
@@ -219,14 +243,16 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
   LIVE · **M18 H.264 LIVE (~10×)** · **M19 camera LIVE**. A macOS student streams its **screen
   (production-grade H.264) AND its camera (Conference peer-cam)** into the shipped, unmodified
   Windows Teacher over unchanged wire.
-- **Native-APIs progression (5/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
+- **Native-APIs progression (6/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
   ✓ 27-B H.264 · ✓ 28 AVCaptureSession camera · ✓ 29 AVAudioEngine audio (LIVE 3/4; teacher-mic =
-  Windows follow-up) · ⏳ 30 lock · ⏳ 31 input · ⏳ 32 system integration · ⏳ 33 UI ports.
+  Windows follow-up) · ✓ 30 AppKit shield/kiosk lock (Mac-side; LIVE pending) · ⏳ 31 input hooks
+  (CGEventTap) · ⏳ 32 system integration · ⏳ 33 UI ports.
 - **Windows-track follow-up (logged, not Mac-port work):** the shipped Teacher's own-mic broadcast
   uses a brittle fixed-format `WaveInEvent` (16 k/16/1) that emits no 0x0329 frames if the mic can't
   open at that exact format — verify the test-box mic; a v1.2.x patch could make it format-robust
   like the loopback path. The Mac plays any 0x0329 that arrives (proven via system audio).
-- Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession + AVAudioEngine) proven
-  **five times**; `MockTeacher --*test` is the reuse + de-risk pattern for every remaining subsystem
-  — it caught the camera preset-ignore bug (M19) and two audio-harness bugs (M20) headless before LIVE.
+- Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession + AVAudioEngine +
+  shield/kiosk) proven **six times**; `MockTeacher --*test` is the reuse + de-risk pattern for every
+  remaining subsystem — it caught the camera preset bug (M19), two audio-harness bugs (M20), and the
+  console-main-thread shield hang (M21) headless before LIVE.
 - Both tracks green, synced with origin, independently documented.

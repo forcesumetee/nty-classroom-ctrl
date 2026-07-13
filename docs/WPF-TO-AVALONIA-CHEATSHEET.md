@@ -940,6 +940,33 @@ Audio is a different engine and threading model, and needs a capture↔playback 
   early-return BEFORE the per-envelope log so they don't flood it; **lazy-start playback on the first
   frame** in case the lossy Start signal was dropped.
 
+**Native screen-lock / kiosk (30-B/C) — no Accessibility, and a dead-man switch is mandatory.**
+A strong screen lock on macOS needs neither `CGDisplayCapture` (legacy) nor Accessibility:
+- **Shield window:** a borderless `NSWindow` at `CGShieldingWindowLevel()` (above Dock/menu-bar/
+  screensaver), **one per `NSScreen`**, `collectionBehavior = [.canJoinAllSpaces, .stationary,
+  .fullScreenAuxiliary]`, and an `NSWindow` subclass with `canBecomeKey = true` so keystrokes land
+  on it. Rebuild the set on `NSApplication.didChangeScreenParametersNotification` (display hotplug).
+- **Kiosk levers = `NSApplicationPresentationOptions`** (NO Accessibility): `.disableProcessSwitching`
+  (Cmd+Tab), `.disableForceQuit` (Cmd+Opt+Esc), `.disableSessionTermination` (logout), `.hideDock`,
+  `.hideMenuBar`, `.disableAppleMenu`, `.disableHideApplication`. **Decode the raw bitmask when
+  verifying** — e.g. `506` = exactly those seven (2+8+16+32+64+128+256). They hold ONLY while the
+  app is **frontmost**, so `NSApp.activate(ignoringOtherApps:true)` on show and **re-assert on
+  `didResignActive`** + `NSWorkspace.didWakeNotification`.
+- **Dead-man switch is non-negotiable** — a stuck lock strands a classroom. Four layers:
+  (1) keep the shield + options **in-process** so a process-kill releases the options (OS-enforced) +
+  drops the windows = auto-unlock **by construction** — never a persistent daemon;
+  (2) a **disconnect grace** timer (the connection is the teacher's authority) — ONE continuous
+  window from first leaving Connected, cancelled only on return to Connected (so a Wi-Fi blip holds
+  the lock, sustained loss unlocks); make it **longer than the reconnect window** (~45 s) and
+  **silent** (a visible countdown teaches the exploit);
+  (3) a **max-duration cap**; (4) **wake re-assert**. Let .NET own "locked/unlocked" (single source
+  of truth); native just executes show/hide + re-asserts.
+- **Injectable native backend for headless tests:** the full-screen shield hangs a console main
+  thread (no AppKit run loop) and is a screen-takeover risk — give the service a **shield-backend
+  seam** (production = the native `nty_lock_*` P/Invokes; test = a flag-tracking stub). The
+  timer/state LOGIC is then unit-testable with zero AppKit; prove the actual rendering separately
+  with a **guaranteed-auto-hide** harness (show → timed sleep → unconditional hide + process-exit).
+
 ## 21. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
@@ -954,6 +981,8 @@ Audio is a different engine and threading model, and needs a capture↔playback 
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 - AVFoundation capture (AVCaptureSession): https://developer.apple.com/documentation/avfoundation/avcapturesession
 - AVAudioEngine (mic capture + playback): https://developer.apple.com/documentation/avfaudio/avaudioengine
+- CGShieldingWindowLevel: https://developer.apple.com/documentation/coregraphics/1454406-cgshieldingwindowlevel
+- NSApplicationPresentationOptions: https://developer.apple.com/documentation/appkit/nsapplication/presentationoptions
 
 ---
 _Living document (21 sections) — extend as later ports surface new patterns. Covered:
@@ -967,7 +996,8 @@ ListView/GridView → templated ListBox + when-to-DataGrid (§17), background se
 Dispatcher marshalling / CancellationTokenSource lifetime (§18), native macOS interop —
 Swift dylib + P/Invoke + streamed callback + TCC/bundle + VideoToolbox H.264 +
 AVCaptureSession camera (independent session, shared encoder, encode-time downscale) +
-AVAudioEngine audio (capture tap + converter, separate playback engine, jitter buffer) (§20).
-Still uncovered: complex
+AVAudioEngine audio (capture tap + converter, separate playback engine, jitter buffer) +
+screen-lock/kiosk (CGShieldingWindowLevel shield + presentationOptions, four-layer dead-man,
+injectable backend for headless tests) (§20). Still uncovered: complex
 ControlTemplates re-authoring (MaterialDesign control styles → Avalonia ControlThemes),
 DynamicResource theme-swap._
