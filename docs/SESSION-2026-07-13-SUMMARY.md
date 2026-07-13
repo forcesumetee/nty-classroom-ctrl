@@ -184,6 +184,33 @@ Close the two M21 residuals (Spotlight-launch, Mission Control) with a `CGEventT
   **kill-release** · **grace-release**. See `docs/PHASE-31-LIVE-CONFIRMATION.md`. Cheat sheet **§20**
   CGEventTap addendum. **The two M21 residuals are now CLOSED.**
 
+## Milestone 23 — Phase 32: System integration (shippable Student) ✅ LIVE-CONFIRMED · STUDENT TRACK COMPLETE
+Turn the M15–M22 subsystems into a **shippable background app**. **Session 10.** LIVE-confirmed in
+**bundle form** on macOS 26.5.2.
+- **Investigation (32-A) reframe:** the Windows Service/Agent/Watchdog split is a Session-0 artifact
+  (LocalSystem crash-looped WPF; the Watchdog respawns the Service only). Product calls: **single
+  user-session LaunchAgent** (macOS forces it — the window server is needed for every job; no
+  privileged ops yet); **`KeepAlive=false` + `RunAtLoad=true`** (matches the Windows Agent + preserves
+  the M22 Cmd+Q escape); **config = a JSON file** under `~/Library/Application Support`
+  (admin-pre-seedable, mirrors the Windows file model).
+- **32-B** `StudentConfig` (config.json; default display name = host name) · **32-C** menubar
+  `TrayIcon`→`NSStatusItem` (drawn icons; Show Debug Window + Start at Login + Quit; menubar-app
+  lifecycle, Quit = dead-man unlock) · **32-D** 4-permission onboarding (Screen = Required+relaunch;
+  Camera/Mic/Accessibility = Optional; reuses M16/M19/M20/M22 native checks) · **32-E** LaunchAgent
+  (self-targets `ProcessPath`, gated on `IsBundled`; `bootstrap`/`bootout`; disable = no-trace) ·
+  **32-F** `.app` bundle (stable id `com.nty.classroomctrl.student`, `LSUIElement`; dylib in
+  `Contents/MacOS/` resolves with no rpath surgery — runtime-verified).
+- **Structural:** `--configtest` 14/14 · `--traytest` 10/10 · `--permtest` 13/13 ·
+  `--launchagenttest` 16/16 (installs ZERO real agents; disable→no-trace; dev-path refused).
+- **LIVE (32-G):** bundle form — no Dock icon; connects; locks (dylib resolves in-bundle);
+  LaunchAgent enable (586 B plist) + disable (**no trace**); clean Quit (no relaunch loop). **Bug
+  fixed: macOS Local Network Privacy** blocked the bundle's local-subnet connect — root cause was the
+  missing **`NSLocalNetworkUsageDescription`** (NOT entitlements; the bundle isn't sandboxed), fixed
+  with the Info.plist key + a package-app.sh guard. Saved as a memory (recurs in the Teacher track).
+  See `docs/PHASE-32-LIVE-CONFIRMATION.md`.
+- **STUDENT TRACK COMPLETE:** scenario 2 (shipped Windows Teacher + Mac Student) is shippable,
+  pending only **P35** Developer ID signing for wide deployment.
+
 ## Commits (Sessions 3–5) — 16
 ```
 3a350c7  27-B-7: findings + cheat sheet §20 addendum (VideoToolbox) + screenshot
@@ -220,20 +247,22 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | **Windows patch** | `nty-classroom-macos` / `v1.2-multiselect` | **v1.2.1** bulk-lock fix SHIP-READY (tag `v1.2.1`) |
 | **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–20** — screen capture + **LIVE MJPEG & H.264 screen streaming (~10×)** + **LIVE camera peer-cam** + **bidirectional audio** (Mac-side; LIVE pending) to the shipped Windows Teacher |
 
-### Combined day totals (Sessions 1–9, 2026-07-13)
-- **22 milestones** (M1–M22; M20 LIVE 3/4, M21 LIVE-confirmed single-display, **M22 LIVE-confirmed**);
-  today added the first native-macOS-API work + camera + audio + screen-lock + input-hook guard.
-- **Native APIs: 7 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
+### Combined day totals (Sessions 1–10, 2026-07-13)
+- **23 milestones** (M1–M23; M20 LIVE 3/4, M21 LIVE single-display, M22 LIVE, **M23 LIVE — bundle
+  form**). **STUDENT TRACK COMPLETE.**
+- **Native APIs: 8 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
   **AVCaptureSession camera** · **AVAudioEngine audio** · **AppKit shield/kiosk lock** (no Accessibility) ·
-  **CGEventTap input guard** (fails open; Accessibility graceful-degrade).
+  **CGEventTap input guard** (fails open) · **system integration** (LaunchAgent / TCC onboarding /
+  config.json / `.app` bundle).
 - **Cheat sheet: 21 sections**, §20 with **five addenda** (VideoToolbox + AVCaptureSession +
   AVAudioEngine + screen-lock/kiosk + CGEventTap).
-- **MockTeacher: 7 automated modes** — `--selftest` / `--streamtest` / `--streamtest-h264` /
-  `--cameratest` / `--audiotest` / `--locktest` / **`--inputtest`** (+ `--inputhold` real-tap kill
-  target; interactive `viewscreen`/`viewscreen-h264`). **Wire compat: T1–T27.**
-- **Cross-platform demo: complete + expanded** — screen (MJPEG/H.264), camera, bidirectional audio,
-  enforced screen-lock, **and input-hook keystroke suppression**, a macOS student into the shipped,
-  unmodified Windows Teacher over unchanged wire.
+- **MockTeacher: 11 automated modes** — `--selftest` / `--streamtest` / `--streamtest-h264` /
+  `--cameratest` / `--audiotest` / `--locktest` / `--inputtest` (+ `--inputhold`) / **`--configtest`**
+  / **`--traytest`** / **`--permtest`** / **`--launchagenttest`**. **Wire compat: T1–T27.**
+- **Cross-platform demo: COMPLETE** — a macOS student, **as a shippable menubar background app in
+  bundle form** (auto-start, config, onboarding), streams screen (MJPEG/H.264) + camera + bidirectional
+  audio, plays teacher audio, and obeys an enforced kiosk lock with keystroke suppression — into the
+  shipped, unmodified Windows Teacher over unchanged wire.
 
 ## Tooling / docs state (macOS track)
 - Cheat sheet: **21 sections** (§20 native interop + **VideoToolbox + AVCaptureSession +
@@ -259,39 +288,45 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | 20 | 29 | **LIVE (3/4)** bidirectional audio (raw PCM 16 k) — mic talkback + system-audio playback; teacher-mic = Windows-side issue |
 | **21** | **30** | **LIVE** screen-lock enforcement — HARD kiosk (shield + presentationOptions 506, no Accessibility) + four-layer dead-man (single-display validated; multi-display code-correct/untested) |
 | **22** | **31** | **LIVE** input-hook keystroke guard — `CGEventTap` closes the two M21 residuals (Spotlight, Mission Control); fails open (OS watchdog), Accessibility graceful-degrade, guard released on all dead-man paths |
+| **23** | **32** | **LIVE (bundle form)** system integration — shippable menubar Student: config.json · TrayIcon/NSStatusItem · 4-perm onboarding · LaunchAgent (KeepAlive=false, no-trace uninstall) · `.app` bundle (stable id, LSUIElement, in-bundle dylib). Fixed macOS Local Network Privacy. **STUDENT TRACK COMPLETE** |
 
 ## Next-session priority queue
-1. **Phase 32 — System integration** — permissions bundle (Screen Recording + Camera + Mic +
-   Accessibility), auto-start (LaunchAgent), packaging/signing. **Completes a shippable Mac Student
-   (scenario 2: shipped Windows Teacher + Mac Student).** **Recommended next.**
-2. **Teacher track (macOS Teacher, Avalonia)** — roadmap **TT-0…TT-13** in
+1. **Teacher track (macOS Teacher, Avalonia)** — roadmap **TT-0…TT-13** in
    `docs/TEACHER-TRACK-ROADMAP.md` (MockStudent-first; the one big new native piece is H.264
-   **decode**). Its own multi-phase track — can run in parallel on another shift.
+   **decode**). **The critical path for customer B (Mac teacher + Mac students, 50 seats).**
+   **Recommended next.**
+2. **Phase 35 — Distribution** — Developer ID codesign + notarization (stops the ad-hoc-rebuild TCC
+   re-prompt; a *relaunch* of the same built bundle already keeps grants) + `.pkg`/`.dmg` installer +
+   self-contained runtime bundling (for .NET-less lab Macs). Makes the Student track deployable at scale.
 3. **Phase 33 — Progressive UI ports** + runtime light/dark theme swap.
 4. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
 5. Windows-track follow-up: Teacher mic `WaveInEvent` robustness (M20 gap).
 6. Path C breakout peer voice (TargetGroupId + PTT + AEC) — deferred audio scope.
 
 ## Team handoff
-- **Cross-platform demo circle COMPLETE + optimized + EXPANDED:** M15 wire compat · M17 MJPEG
-  LIVE · **M18 H.264 LIVE (~10×)** · **M19 camera LIVE** · **M20 audio LIVE (3/4)** · **M21 lock
-  LIVE** · **M22 input-guard LIVE**. A macOS student streams screen (H.264) + camera + bidirectional
-  audio into the shipped, unmodified Windows Teacher, and is **enforced-locked with keystroke
-  suppression** — all over unchanged wire.
-- **Native-APIs progression (7/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
+- **Cross-platform demo circle COMPLETE:** M15 wire · M17 MJPEG · **M18 H.264 (~10×)** · M19 camera ·
+  M20 audio (3/4) · M21 lock · M22 input-guard · **M23 system integration** — all LIVE. A macOS
+  student, **as a shippable menubar background app in bundle form** (auto-start, config, onboarding),
+  streams screen (H.264) + camera + bidirectional audio into the shipped, unmodified Windows Teacher
+  and is enforced-locked with keystroke suppression — all over unchanged wire.
+- **Native-APIs progression (8/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
   ✓ 27-B H.264 · ✓ 28 AVCaptureSession camera · ✓ 29 AVAudioEngine audio (LIVE 3/4; teacher-mic =
   Windows follow-up) · ✓ 30 AppKit shield/kiosk lock (**LIVE**; single-display) · ✓ 31 CGEventTap
-  input guard (**LIVE**; fails open) · ⏳ 32 system integration · ⏳ 33 UI ports.
-- **Student track near-complete:** only **Phase 32 (system integration)** remains for a shippable
-  macOS Student (scenario 2). The **Teacher track** is scoped as its own multi-phase effort —
-  roadmap `docs/TEACHER-TRACK-ROADMAP.md` (TT-0…TT-13, MockStudent-first).
+  input guard (**LIVE**; fails open) · ✓ **32 system integration** (**LIVE**; bundle form) · ⏳ 33 UI ports.
+- **Student track COMPLETE:** scenario 2 (shipped Windows Teacher + macOS Student) is shippable — a
+  real menubar background app (auto-start, config, onboarding) in bundle form, pending only **P35**
+  Developer ID signing for wide deployment. The **Teacher track** is next — roadmap
+  `docs/TEACHER-TRACK-ROADMAP.md` (TT-0…TT-13, MockStudent-first); it's the critical path for a
+  Mac-teacher + Mac-students deployment (customer B).
 - **Windows-track follow-up (logged, not Mac-port work):** the shipped Teacher's own-mic broadcast
   uses a brittle fixed-format `WaveInEvent` (16 k/16/1) that emits no 0x0329 frames if the mic can't
   open at that exact format — verify the test-box mic; a v1.2.x patch could make it format-robust
   like the loopback path. The Mac plays any 0x0329 that arrives (proven via system audio).
 - Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession + AVAudioEngine +
-  shield/kiosk + **CGEventTap**) proven **seven times**; `MockTeacher --*test` is the reuse + de-risk
-  pattern for every subsystem — it caught the camera preset bug (M19), two audio-harness bugs (M20),
-  the console-main-thread shield hang (M21), and the **cross-thread tap-enable / fail-open
-  instrumentation bug (M22)** headless before LIVE.
+  shield/kiosk + **CGEventTap**) proven **seven times** (M23 added no native dylib — it's byte-unchanged);
+  `MockTeacher --*test` is the reuse + de-risk pattern — it caught the camera preset bug (M19), two
+  audio-harness bugs (M20), the console-main-thread shield hang (M21), and the cross-thread tap-enable /
+  fail-open bug (M22) headless before LIVE. M23 added `--configtest`/`--traytest`/`--permtest`/
+  `--launchagenttest` (the last proving ZERO-real-agent LaunchAgent safety); the macOS **Local Network
+  Privacy** bug (M23) was found LIVE via A/B and saved as a memory (recurs in the Teacher track).
 - Both tracks green, synced with origin, independently documented.
