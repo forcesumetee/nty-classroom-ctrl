@@ -31,5 +31,8 @@
          immediately (no relaunch). -->
     <key>NSCameraUsageDescription</key>
     <string>NTY ClassroomCtrl uses your camera for classroom video conferencing sessions with the teacher and other students.</string>
+    <!-- Microphone (Phase 29-B): shown to the user; grant effective immediately. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>NTY ClassroomCtrl uses your microphone so the teacher can listen to you and for classroom voice.</string>
 </dict>
 </plist>

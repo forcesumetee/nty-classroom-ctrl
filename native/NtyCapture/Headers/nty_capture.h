@@ -142,6 +142,44 @@ int nty_camera_last_width(void);
 int nty_camera_last_height(void);
 int64_t nty_camera_frame_count(void);
 
+/* ==========================================================================
+ * Microphone capture — Phase 29-B (Sources/Audio.swift).
+ * AVAudioEngine mic tap → AVAudioConverter → raw PCM (16 kHz mono 16-bit LE,
+ * 100 ms / 3200-byte frames), matching the shipped NAudio wire format. No codec.
+ * Independent session state (coexists with screen + camera).
+ * ==========================================================================*/
+
+/*
+ * Microphone permission (distinct TCC bucket; grant effective immediately, no
+ * relaunch; the Info.plist NSMicrophoneUsageDescription text IS shown).
+ *   nty_audio_check_permission   — 1 authorized, 0 not-determined, -1 denied/restricted. Never prompts.
+ *   nty_audio_request_permission — prompts if undetermined, BLOCKS until the user decides, returns 1/0/-1.
+ */
+int nty_audio_check_permission(void);
+int nty_audio_request_permission(void);
+
+/*
+ * PCM frame callback. `pcm` = `length` bytes of signed 16-bit LE samples for one
+ * 100 ms frame (call-scoped — copy before returning). sampleRate/channels describe
+ * the frame (16000/1 today).
+ */
+typedef void (*nty_pcm_cb)(void *ctx, const uint8_t *pcm,
+                           int length, int sampleRate, int channels);
+
+/*
+ * nty_audio_start_pcm — start mic capture, delivering 100 ms PCM16 frames at
+ *   sampleRate×channels (0 → default 16000/1) via `cb`. Returns 0 on success,
+ *   negative on error (-2 no input/permission, -3 already running, -4 null cb,
+ *   -6 converter, -7 engine).
+ * nty_audio_stop — stop capture. Safe to call when idle.
+ */
+int nty_audio_start_pcm(int sampleRate, int channels, nty_pcm_cb cb, void *ctx);
+void nty_audio_stop(void);
+
+/* Audio stats: cumulative frame count + last-frame RMS level (0..100 for a meter). */
+int64_t nty_audio_frame_count(void);
+int nty_audio_last_rms(void);
+
 #ifdef __cplusplus
 }
 #endif
