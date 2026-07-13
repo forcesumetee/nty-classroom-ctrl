@@ -294,14 +294,16 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 1. **Teacher track (macOS Teacher, Avalonia)** — roadmap **TT-0…TT-13** in
    `docs/TEACHER-TRACK-ROADMAP.md`. **TT-0 (MockStudent) + TT-1 (Teacher.Core: transport + router +
    roster) + TT-2 (windowed Teacher — live student grid) + TT-3 (per-student live screen view, MJPEG)
-   COMPLETE + LIVE-confirmed 2026-07-14.** Scenario 3 (Mac T + Win S) now spans the whole chain: a
-   shipped, **unmodified Windows Student joins the Mac Teacher's roster (TT-1), appears as a live TILE
-   (TT-2), and its SCREEN renders live in the Mac Teacher (TT-3, MJPEG)** — plus the **network-cut →
-   15 s stale-sweep → tile-gone** path, zero changes to the shipped product. See `docs/TT-1-*` …
-   `docs/TT-3-*`. Headless gates: `MockStudent --teacherselftest` **20/20** + the Avalonia **Skia**-headless
-   UI suites (TT-3-B/C **36/36**, incl. the background→UI `Dispatcher.UIThread.Post` marshal proof, the
-   studentId filter, and real exact-dimension decode). The roster namespace-gap bug (both customers
-   exposed) is fixed in the port + logged for the Windows team.
+   + TT-4 (H.264 screen DECODE, VTDecompressionSession) COMPLETE + LIVE-confirmed 2026-07-14.**
+   Scenario 3 (Mac T + Win S) spans the whole chain: a shipped, **unmodified Windows Student joins the
+   roster (TT-1), appears as a live TILE (TT-2), and its screen renders live — MJPEG (TT-3) AND H.264
+   (TT-4, OpenH264→VideoToolbox interop)** — plus the **network-cut → 15 s stale-sweep → tile-gone**
+   path, zero changes to the shipped product. Scenario 4 (Mac T + **Mac** S) also proven: a Mac Student
+   streams **our M18 VideoToolbox H.264** → decoded on the Mac Teacher (customer B's path). See
+   `docs/TT-1-*` … `docs/TT-4-*`. Headless gates: `MockStudent --teacherselftest` **20/20** + the
+   Avalonia **Skia**-headless UI suites (TT-3-B/C 36/36; **TT4CGate 18/18** — VT + a committed real
+   OpenH264 (BELL) fixture both decode to exact dims; C-ABI ×20 no leak). The roster namespace-gap bug
+   (both customers exposed) is fixed in the port + logged for the Windows team.
 
    **🔴 THE SCALE GATE IS CLOSED (not deferred).** Traced from shipped code + confirmed with sales:
    student screen streams are **ON-DEMAND** (targeted `StudentStreamStart`, one per open screen-view
@@ -313,10 +315,20 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
    clean stub; type verified — `WriteableBitmap : Bitmap`). A live thumbnail wall, if ever wanted, is a
    NEW feature that reintroduces scale — a scoped request, not a bug. See `docs/TT-3-FINDINGS.md`.
 
-   **The Mac Teacher now:** server + roster + live grid + **live screen view (MJPEG)**. **Next: TT-4**
-   (H.264 **decode** — now a small additive phase into a proven pipeline, not the risk it was thought
-   to be; `--classroom 40` stays a stress test, not a gate). **The critical path for customer B (Mac
-   teacher + Mac students, 50 seats).**
+   **🟢 THE BITSTREAM RISK IS RETIRED (TT-4).** Every student — Windows (OpenH264/MediaFoundation) and
+   Mac (our M18 VideoToolbox) — puts the SAME shape on the wire: Annex-B, Baseline (profile_idc=66,
+   confirmed in BELL's SPS), in-band SPS/PPS per IDR, fixed 1920×1080. One decode path handles all
+   sources — proven headless (the BELL fixture) AND LIVE (both encoders). Our M18 encoder was built to
+   byte-match shipped OpenH264, so its AVCC→Annex-B is the exact inverse reference for the decoder.
+   H.264 decode is the **first multi-instance (handle-based) native subsystem** (1–4 concurrent views);
+   the §20 background→UI marshal is now proven **9×**. An undecodable H.264 keyframe → a visible MJPEG
+   fallback (Stop + Request(Mjpeg) + status), not a dead window.
+
+   **The Mac Teacher now:** server + roster + live grid + **live screen view (MJPEG + H.264, from
+   Windows & Mac students)**. Both biggest Teacher-track risks — scale (TT-3) and the bitstream
+   (TT-4) — are retired. **Next: TT-5** (core commands — lock/unlock, policy, power: the full-circle
+   interop where a macOS Teacher sends the exact messages the macOS Student already receives). **The
+   critical path for customer B (Mac teacher + Mac students, 50 seats).**
 2. **Phase 35 — Distribution** — Developer ID codesign + notarization (stops the ad-hoc-rebuild TCC
    re-prompt; a *relaunch* of the same built bundle already keeps grants) + `.pkg`/`.dmg` installer +
    self-contained runtime bundling (for .NET-less lab Macs). Makes the Student track deployable at scale.

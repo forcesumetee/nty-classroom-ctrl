@@ -1,10 +1,13 @@
 # Teacher Track Roadmap — macOS ClassroomCtrl Teacher (Avalonia)
 
-**Status:** TT-0…TT-3 COMPLETE + LIVE-confirmed (2026-07-14) — MockStudent harness · Teacher.Core
+**Status:** TT-0…TT-4 COMPLETE + LIVE-confirmed (2026-07-14) — MockStudent harness · Teacher.Core
 (transport + router + roster) · windowed Teacher (live student grid) · per-student **live screen view
-(MJPEG)**, all proven against a shipped, unmodified Windows Student. **The SCALE GATE is CLOSED** —
-student screens are on-demand (1–4 concurrent), not a 40-tile wall (see §7). **TT-4 next** (H.264
-decode — now additive). TT-5…TT-13 remain PLAN. Hand-off doc for a parallel shift.
+(MJPEG + H.264 decode)**, proven against BOTH a shipped, unmodified Windows Student (OpenH264→VT
+interop) and a Mac Student (our M18 VideoToolbox H.264 — customer B's path). **Both biggest risks are
+now retired:** the SCALE gate (TT-3 — screens are on-demand, 1–4 concurrent, not a 40-tile wall, §7)
+and the BITSTREAM (TT-4 — one uniform Annex-B Baseline shape from every student, §5/§6). What remains
+(TT-5…TT-13) is **known work with no research risk**, except the TT-10 system-audio-loopback
+investigation (§6/§7). **TT-5 next** (core commands). Hand-off doc for a parallel shift.
 **Author context:** drafted 2026-07-13 after Phase 31-B (Student track), grounded in a
 structural map of the shipped Windows Teacher (`/Users/fewfee/Dev/nty-classroom-macos`,
 v1.2.1, .NET 10 / WPF). **That shipped repo is READ-ONLY — copy from it, never modify it.**
@@ -110,7 +113,7 @@ lock/policy + bulk).
 | **TT-1** | **Server + roster + Hello/Ping/Pong** | no | **M** | Windows Student connects → appears in roster; liveness + stale-sweep |
 | **TT-2** | **Student grid UI (tiles)** | no | **M** | Windows Students show as live tiles; join/leave updates |
 | **TT-3** | **Receive + display student screens — MJPEG** | no | **M** | Request a Windows Student's screen → see it live (MJPEG) |
-| **TT-4** | **H.264 student-screen DECODE (VTDecompressionSession)** | **YES** | **M** (was L) | Windows Student streaming H.264 → decoded + displayed |
+| **TT-4 ✅** | **H.264 student-screen DECODE (VTDecompressionSession)** | **YES** | **M** (done) | ✅ LIVE — Windows (OpenH264) AND Mac (VideoToolbox) students → decoded + displayed |
 | **TT-5** | **Core commands: lock/unlock, policy, power** | no | **M** | Mac Teacher locks/policies/logs-off a Windows Student |
 | **TT-6** | **Multi-select + bulk actions (v1.2)** | no | **M** | Select N Windows Students → bulk lock/policy/mute/file/power |
 | TT-7 | Chat + notifications + hand-raise + reactions | no | M | Two-way chat; hand-raise/reaction surfaces on the Mac Teacher |
@@ -145,7 +148,16 @@ live join/leave.
 `BitmapImage`); render in tile thumbnails + a full-screen `StudentScreenWindow`. *LIVE:* request a
 Windows Student's screen (set the student to MJPEG) → live thumbnail + full-screen.
 
-**TT-4 — H.264 student-screen DECODE (the one big new native piece — now ADDITIVE).** As of TT-3 the
+**TT-4 — H.264 student-screen DECODE ✅ COMPLETE + LIVE (2026-07-14).** Landed exactly as scoped:
+`native/NtyCapture/Sources/H264Decoder.swift` (VTDecompressionSession, handle-based ABI — the first
+multi-instance native subsystem) + the managed `H264DecoderWrapper` (§20) wired into the `RenderFrame`
+H264 branch. The bitstream risk was retired (one uniform Annex-B Baseline shape from every student;
+`profile_idc=66` confirmed in BELL's SPS). Proven headless (native round-trip 13/13; `TT4CGate` 18/18
+incl. a committed real-OpenH264 BELL fixture) AND LIVE (Windows OpenH264 + Mac VideoToolbox students).
+Measured detail: BELL emits 4-byte start codes only (the 3-byte parse stays proven synthetically).
+Undecodable H.264 → visible MJPEG fallback. See `docs/TT-4-FINDINGS.md`. *(Original plan below.)*
+
+**TT-4 (original plan) — the one big new native piece — now ADDITIVE.** As of TT-3 the
 whole pipeline is proven and LIVE (request → receive → decode → Image → stop, MJPEG), and the render is
 a **codec-dispatch `RenderFrame` with an H.264 stub already in place** (TT-3-C). So TT-4 fills **only**
 the `VideoCodec.H264` branch + the native decoder: add to the dylib `nty_h264_decode_start/feed/stop` —
