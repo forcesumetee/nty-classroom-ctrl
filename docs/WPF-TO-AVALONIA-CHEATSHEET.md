@@ -915,6 +915,31 @@ but the camera subsystem is a **separate, independent path**:
   == `Envelope.SenderId`). Emit Start only AFTER a successful native start (no dangling signal on
   failure); Stop is best-effort (disconnect → the Teacher's implicit PeerDisconnected stop covers it).
 
+**Native audio with AVAudioEngine (29-B/F) — deltas from the AVCaptureSession video path.**
+Audio is a different engine and threading model, and needs a capture↔playback split:
+- **Capture = an input tap + `AVAudioConverter`.** Tap `engine.inputNode`; convert each tap buffer
+  to the wire format with `AVAudioConverter` — **resample is mandatory** (device mic is 48 kHz, the
+  wire is fixed 16 kHz mono int16). The tap closure runs on a **real-time audio thread** → keep it
+  allocation-light (frame accumulation + RMS only, no logging/allocation storms).
+- **Playback = a SEPARATE `AVAudioEngine` + `AVAudioPlayerNode`,** with its own state, so capture and
+  playback run concurrently (and independently start/stop). Connect the player to `mainMixerNode`
+  with the source format; the engine resamples to the device rate for you.
+- **Jitter buffer for playback:** prebuffer ~3 frames (~300 ms) before `player.play()`; then schedule
+  per frame and track pending via the `scheduleBuffer` completion handler. **You cannot un-schedule
+  from an `AVAudioPlayerNode`,** so bound latency by **dropping on INGRESS** when pending exceeds a
+  cap (~1 s), not by trying to flush. Underrun = a silent gap that auto-resumes on the next buffer —
+  don't stop/restart (restarts sound worse). ~300 ms latency is fine for a one-way listen.
+- **Mic is a distinct TCC bucket** from camera and screen (`NSMicrophoneUsageDescription`, shown to
+  the user, immediate grant — no relaunch). Enumeration/preflight via `AVCaptureDevice…(for: .audio)`.
+- **Raw PCM = no codec.** When the wire frame is raw PCM (rate/channels/depth as fields), there's no
+  encoder to write — the "codec" sub-phase collapses. int16↔float32 conversions should be
+  alignment-safe (read byte pairs explicitly rather than `withMemoryRebound`).
+- **Wire path = existing talkback/broadcast envelopes** (`StudentAudioStreamStart/Frame/Stop` 0x032B–D
+  for mic→Teacher, `AudioStreamStart/Frame/Stop` 0x0328–A for Teacher→Mac); trigger = **Mic Monitor**
+  (0x0490), the audio analogue of "View Screen". Inbound high-frequency frames (~10/s): enqueue and
+  early-return BEFORE the per-envelope log so they don't flood it; **lazy-start playback on the first
+  frame** in case the lossy Start signal was dropped.
+
 ## 21. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
@@ -928,6 +953,7 @@ but the camera subsystem is a **separate, independent path**:
   https://docs.avaloniaui.net/docs/guides/data-binding/how-to-use-value-converters
 - Headless testing/rendering: https://docs.avaloniaui.net/docs/concepts/headless/
 - AVFoundation capture (AVCaptureSession): https://developer.apple.com/documentation/avfoundation/avcapturesession
+- AVAudioEngine (mic capture + playback): https://developer.apple.com/documentation/avfaudio/avaudioengine
 
 ---
 _Living document (21 sections) — extend as later ports surface new patterns. Covered:
@@ -940,7 +966,8 @@ dictionaries coexisting (§15), ThemeVariantScope for light views in a dark app 
 ListView/GridView → templated ListBox + when-to-DataGrid (§17), background services +
 Dispatcher marshalling / CancellationTokenSource lifetime (§18), native macOS interop —
 Swift dylib + P/Invoke + streamed callback + TCC/bundle + VideoToolbox H.264 +
-AVCaptureSession camera (independent session, shared encoder, encode-time downscale) (§20).
+AVCaptureSession camera (independent session, shared encoder, encode-time downscale) +
+AVAudioEngine audio (capture tap + converter, separate playback engine, jitter buffer) (§20).
 Still uncovered: complex
 ControlTemplates re-authoring (MaterialDesign control styles → Avalonia ControlThemes),
 DynamicResource theme-swap._

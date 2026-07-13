@@ -100,6 +100,36 @@ envelopes — no shipped-repo change, no wire change. **Session 6.**
 | Per-frame | ~122 KB | **~7.4 KB** |
 | Sustained @ 10 fps | ~9.6 Mbit/s | **~0.6 Mbit/s** (~16× reduction) |
 
+## Milestone 20 — Phase 29: Bidirectional audio (AVAudioEngine) ⏳ Mac-side ✅ · LIVE pending
+Raw-PCM audio both ways between the Mac and the shipped Teacher, over existing envelopes —
+no shipped-repo change, no wire change. **Session 7.**
+- **Investigation (29-A) pivot** (4th wrong-direction catch): audio is **raw PCM** (16 k/mono/
+  16-bit, 100 ms/3200 B) — no codec (29-C dropped); the clean trigger is **Mic Monitor
+  (0x0490), not Conference** (audio's "listen to one student" is first-class, so it's *easier*
+  to LIVE-test than camera); "bidirectional" = two independent paths.
+- **Path B (mic → Teacher):** `MicMonitorStart` → `AudioStreamer` → `StudentAudioStreamStart/
+  Frame/Stop` (0x032B–D) + `MicStateUpdate`. **Path A (Teacher audio → Mac):** `AudioStreamStart/
+  Frame/Stop` (0x0328–A) → native playback.
+- **29-B** native AVAudioEngine mic tap + `AVAudioConverter` (48 k→16 k), own state, mic TCC
+  bucket. **29-D** `AudioCaptureService` + Audio tab (RMS meter, no loopback) — **interactively
+  confirmed** (mic dialog + meter moves on speech). **29-E** mic wire-in (Mic Monitor). **29-F**
+  playback on a **separate** AVAudioEngine + `AVAudioPlayerNode` with a jitter buffer (3-frame
+  ~300 ms prebuffer, overrun-drop-on-ingress at ~1 s, underrun = silent gap).
+- **29-G** `MockTeacher --audiotest`: **both directions PASS** (B: 15/15 valid PCM, seq/endpoint/
+  non-silent/lifecycle; A: consumed 12/12) + **T27** locks `AudioStreamFrameMessage` byte-compat
+  (T1–T27). Bandwidth **measured** ~288 kbit/s wire.
+- **LIVE (29-H):** (B) Teacher Mic Monitor "Listen" → hears Mac mic; (A) Teacher "Mic"/"Share
+  Computer Audio" → Mac plays it. Test A/B separately — **no AEC** (same-room feedback). See
+  `docs/PHASE-29-FINDINGS.md`. Cheat sheet **§20** AVAudioEngine addendum. *(awaiting LIVE.)*
+
+### Bandwidth: all four media streams
+| Stream | Sustained | |
+|---|---|---|
+| Screen H.264 (M18) | ~1.16 Mbit/s | 1080p |
+| Camera JPEG (M19) | ~0.6 Mbit/s | 320×180 |
+| **Audio PCM (M20)** | **~288 kbit/s wire** (~277 raw) | 16 k/mono/16-bit; ~4% MessagePack overhead |
+| **3 concurrent / student** | **≈ ~2 Mbit/s** | Mic Monitor is 1-at-a-time — record for network sizing |
+
 ## Commits (Sessions 3–5) — 16
 ```
 3a350c7  27-B-7: findings + cheat sheet §20 addendum (VideoToolbox) + screenshot
@@ -134,28 +164,32 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | Track | Repo / branch | Outcome |
 |---|---|---|
 | **Windows patch** | `nty-classroom-macos` / `v1.2-multiselect` | **v1.2.1** bulk-lock fix SHIP-READY (tag `v1.2.1`) |
-| **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–19** — screen capture + **LIVE MJPEG & H.264 screen streaming (~10×)** + **LIVE camera peer-cam** to the shipped Windows Teacher |
+| **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–20** — screen capture + **LIVE MJPEG & H.264 screen streaming (~10×)** + **LIVE camera peer-cam** + **bidirectional audio** (Mac-side; LIVE pending) to the shipped Windows Teacher |
 
-### Combined day totals (Sessions 1–6, 2026-07-13)
-- **19 milestones** (M1–M19); today added the first native-macOS-API work + camera.
-- **Native APIs: 4 subsystems** LIVE — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox
-  H.264 · **AVCaptureSession camera**.
-- **Cheat sheet: 21 sections**, §20 with **two addenda** (VideoToolbox + AVCaptureSession).
-- **MockTeacher: 4 automated modes** — `--selftest` / `--streamtest` / `--streamtest-h264` /
-  **`--cameratest`** (+ interactive `viewscreen`/`viewscreen-h264`).
-- **Cross-platform demo: complete + optimized + expanded** — screen (MJPEG/H.264) *and* camera,
-  a macOS student into the shipped, unmodified Windows Teacher over unchanged wire.
+### Combined day totals (Sessions 1–7, 2026-07-13)
+- **20 milestones** (M1–M20; M20 Mac-side ✅, LIVE pending); today added the first native-macOS-API
+  work + camera + audio.
+- **Native APIs: 5 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
+  **AVCaptureSession camera** · **AVAudioEngine audio** (capture + playback).
+- **Cheat sheet: 21 sections**, §20 with **three addenda** (VideoToolbox + AVCaptureSession +
+  AVAudioEngine).
+- **MockTeacher: 5 automated modes** — `--selftest` / `--streamtest` / `--streamtest-h264` /
+  `--cameratest` / **`--audiotest`** (+ interactive `viewscreen`/`viewscreen-h264`).
+  **Wire compat: T1–T27** (T27 = `AudioStreamFrameMessage`).
+- **Cross-platform demo: complete + optimized + expanded** — screen (MJPEG/H.264), camera, **and
+  bidirectional audio**, a macOS student into the shipped, unmodified Windows Teacher over unchanged wire.
 
 ## Tooling / docs state (macOS track)
-- Cheat sheet: **21 sections** (§20 native interop + **VideoToolbox + AVCaptureSession** addenda).
+- Cheat sheet: **21 sections** (§20 native interop + **VideoToolbox + AVCaptureSession +
+  AVAudioEngine** addenda).
 - HeadlessCapture: scenarios incl. `screencapture`, `streaming`.
-- MockTeacher: `--selftest` + `--streamtest` + `--streamtest-h264` + **`--cameratest`** +
-  interactive `viewscreen` / `viewscreen-h264`.
+- MockTeacher: `--selftest` + `--streamtest` + `--streamtest-h264` + `--cameratest` +
+  **`--audiotest`** + interactive `viewscreen` / `viewscreen-h264`. **Wire compat: T1–T27.**
 - Native: `native/NtyCapture/` (Swift dylib — ScreenCaptureKit + ImageIO + VideoToolbox +
-  **AVFoundation/AVCaptureSession**), `scripts/package-app.sh` (.app bundle,
-  +`NSCameraUsageDescription`).
-- **Codec support: MJPEG + H.264** (screen, per `StudentStreamStartRequest.Codec`) + **JPEG
-  camera** (Conference peer-cam).
+  **AVFoundation/AVCaptureSession + AVAudioEngine**), `scripts/package-app.sh` (.app bundle,
+  +`NSCameraUsageDescription` +`NSMicrophoneUsageDescription`).
+- **Media: MJPEG + H.264** screen · **JPEG** camera (Conference peer-cam) · **raw PCM** audio
+  (16 k/mono/16-bit, bidirectional).
 
 ## Milestones (macOS track)
 | # | Phase | Outcome |
@@ -164,27 +198,27 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | 16 | 27-A | ScreenCaptureKit capture (native foundation) |
 | 17 | 27-C | **LIVE** MJPEG screen streaming → Windows Teacher |
 | 18 | 27-B | **LIVE** H.264 streaming (~10× bandwidth), **MJPEG + H.264** |
-| **19** | **28** | **LIVE** camera peer-cam → Conference gallery (JPEG 320×180, ~16× vs preset bug) |
+| 19 | 28 | **LIVE** camera peer-cam → Conference gallery (JPEG 320×180, ~16× vs preset bug) |
+| **20** | **29** | Bidirectional audio (raw PCM 16 k, mic talkback + broadcast playback) — Mac-side ✅, **LIVE pending** |
 
 ## Next-session priority queue
-1. **Phase 29 — Audio (AVFoundation)** — mic capture + the Conference voice-audio wire frames;
-   reuses the §20 template (independent session, own C callback). Completes the student-media
-   story (screen ✓ → camera ✓ → audio). **Recommended next.**
-2. **Phase 30 — Screen-lock enforcement** (overlay + Accessibility).
-3. **Phase 31 — Input hooks** (CGEventTap).
-4. **Phase 32 — System integration** — permissions bundle, auto-start, packaging/signing.
-5. **Phase 33 — Progressive UI ports** + runtime light/dark theme swap.
-6. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
+1. **Phase 30 — Screen-lock enforcement** (overlay + Accessibility) — next native subsystem.
+   **Recommended next.**
+2. **Phase 31 — Input hooks** (CGEventTap).
+3. **Phase 32 — System integration** — permissions bundle, auto-start, packaging/signing.
+4. **Phase 33 — Progressive UI ports** + runtime light/dark theme swap.
+5. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
+6. Path C breakout peer voice (TargetGroupId + PTT + AEC) — deferred audio scope.
 
 ## Team handoff
 - **Cross-platform demo circle COMPLETE + optimized + EXPANDED:** M15 wire compat · M17 MJPEG
   LIVE · **M18 H.264 LIVE (~10×)** · **M19 camera LIVE**. A macOS student streams its **screen
   (production-grade H.264) AND its camera (Conference peer-cam)** into the shipped, unmodified
   Windows Teacher over unchanged wire.
-- **Native-APIs progression (4/9 subsystems LIVE):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
-  ✓ 27-B H.264 · ✓ 28 AVCaptureSession camera · ⏳ 29 audio · ⏳ 30 lock · ⏳ 31 input ·
-  ⏳ 32 system integration · ⏳ 33 UI ports.
-- Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession) proven **four times**;
-  `MockTeacher --*test` is the reuse + de-risk pattern for every remaining subsystem — it caught
-  the camera preset-ignore bug headless before the LIVE run.
+- **Native-APIs progression (5/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
+  ✓ 27-B H.264 · ✓ 28 AVCaptureSession camera · ✓ 29 AVAudioEngine audio (Mac-side; LIVE pending) ·
+  ⏳ 30 lock · ⏳ 31 input · ⏳ 32 system integration · ⏳ 33 UI ports.
+- Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession + AVAudioEngine) proven
+  **five times**; `MockTeacher --*test` is the reuse + de-risk pattern for every remaining subsystem
+  — it caught the camera preset-ignore bug (M19) and two audio-harness bugs (M20) headless before LIVE.
 - Both tracks green, synced with origin, independently documented.
