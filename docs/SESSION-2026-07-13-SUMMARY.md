@@ -292,9 +292,14 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 
 ## Next-session priority queue
 1. **Teacher track (macOS Teacher, Avalonia)** — roadmap **TT-0…TT-13** in
-   `docs/TEACHER-TRACK-ROADMAP.md` (MockStudent-first; the one big new native piece is H.264
-   **decode**). **The critical path for customer B (Mac teacher + Mac students, 50 seats).**
-   **Recommended next.**
+   `docs/TEACHER-TRACK-ROADMAP.md`. **TT-0 (MockStudent harness) + TT-1 (Teacher.Core: transport +
+   router + roster) COMPLETE + LIVE-confirmed 2026-07-14** — a shipped, **unmodified Windows Student
+   joined the Mac Teacher's roster over the LAN (scenario 3, Mac T + Win S)**, zero changes to the
+   shipped product; see `docs/TT-1-FINDINGS.md` + `docs/TT-1-LIVE-CONFIRMATION.md`. Headless gate
+   `MockStudent --teacherselftest` **20/20**; the roster namespace-gap bug (both customers exposed) is
+   fixed in the port + logged for the Windows team. **Next: TT-2** (student-grid UI binding to
+   `StudentRoster`); the one big new native piece remains H.264 **decode** (TT-4). **The critical path
+   for customer B (Mac teacher + Mac students, 50 seats).**
 2. **Phase 35 — Distribution** — Developer ID codesign + notarization (stops the ad-hoc-rebuild TCC
    re-prompt; a *relaunch* of the same built bundle already keeps grants) + `.pkg`/`.dmg` installer +
    self-contained runtime bundling (for .NET-less lab Macs). Makes the Student track deployable at scale.
