@@ -803,6 +803,28 @@ static class AudioTest
 // risk; nty_lock_is_shown() tracks LockService's show/hide decisions (the dead-man logic).
 static class LockTest
 {
+    // Build a LockService driven ENTIRELY by flag backends — zero AppKit, ZERO real tap. Proves the
+    // shield dead-man logic (30-E) AND the input-guard lifecycle (31-D) with no OS side effects. The
+    // native shield RENDERING (30-B/30-F) and the native tap (31-B --inputtest) are proven separately.
+    static (LockService svc, Func<bool> shield, Func<bool> guard, Func<int> prompts) MakeSvc(
+        int graceMs, int capMs, bool trusted)
+    {
+        int shieldFlag = 0, guardFlag = 0, trustedFlag = trusted ? 1 : 0, prompts = 0;
+        var svc = new LockService(graceMs, capMs,
+            shieldShow:   _  => Interlocked.Exchange(ref shieldFlag, 1),
+            shieldHide:   () => Interlocked.Exchange(ref shieldFlag, 0),
+            shieldIsShown: () => Volatile.Read(ref shieldFlag) == 1,
+            guardTrusted: () => Volatile.Read(ref trustedFlag) == 1,
+            guardPrompt:  () => Interlocked.Increment(ref prompts),
+            guardInstall: () => { if (Volatile.Read(ref trustedFlag) == 1) { Interlocked.Exchange(ref guardFlag, 1); return true; } return false; },
+            guardRemove:  () => Interlocked.Exchange(ref guardFlag, 0),
+            guardIsActive: () => Volatile.Read(ref guardFlag) == 1);
+        return (svc,
+                () => Volatile.Read(ref shieldFlag) == 1,
+                () => Volatile.Read(ref guardFlag) == 1,
+                () => Volatile.Read(ref prompts));
+    }
+
     public static async Task<int> RunAsync()
     {
         int failures = 0;
@@ -812,62 +834,79 @@ static class LockTest
             else { Console.WriteLine($"  ❌ {name}"); failures++; }
         }
 
-        // Inject a flag-tracking shield backend (NO AppKit) — proves the dead-man LOGIC
-        // with zero windowing/main-loop dependency + zero screen-takeover risk. The native
-        // shield rendering is proven separately (30-B auto-hide harness + 30-F LIVE).
-        int shieldFlag = 0;
-        var svc = new LockService(graceMs: 3000, maxDurationMs: 600_000,
-            shieldShow: _ => System.Threading.Interlocked.Exchange(ref shieldFlag, 1),
-            shieldHide: () => System.Threading.Interlocked.Exchange(ref shieldFlag, 0),
-            shieldIsShown: () => System.Threading.Volatile.Read(ref shieldFlag) == 1);
+        Console.WriteLine("=== MockTeacher --locktest (flag backends — shield dead-man + input-guard lifecycle; NO AppKit, ZERO real tap) ===");
+
+        // Main service: trusted classroom Mac (Accessibility granted), grace 3s, cap 10min.
+        var (svc, Shield, Guard, _) = MakeSvc(graceMs: 3000, capMs: 600_000, trusted: true);
         int shownFlag = 0;
-        svc.LockStateChanged += up => System.Threading.Volatile.Write(ref shownFlag, up ? 1 : 0);
+        svc.LockStateChanged += up => Volatile.Write(ref shownFlag, up ? 1 : 0);
         svc.Log += m => Console.WriteLine($"        [lock] {m}");
-        bool Shown() => svc.ShieldShown();           // injected backend flag
-        bool Evt() => System.Threading.Volatile.Read(ref shownFlag) == 1; // event-tracked
+        bool Evt() => Volatile.Read(ref shownFlag) == 1;   // LockStateChanged-tracked
 
-        Console.WriteLine("=== MockTeacher --locktest (grace=3000ms; injected shield backend — dead-man LOGIC proof, no AppKit) ===");
-
-        // ── CASE A: Wi-Fi blip → lock HOLDS (exploit-prevention proof) ──
-        Console.WriteLine("\n-- CASE A: Wi-Fi blip (reconnect within grace) --");
+        // ── CASE A: Wi-Fi blip → lock + guard HOLD; explicit unlock releases BOTH ──
+        Console.WriteLine("\n-- CASE A: Wi-Fi blip (reconnect within grace) — shield + guard HELD, explicit unlock releases both --");
         svc.Lock(null);
-        Check("A: shield shown after LockScreen", Shown() && Evt());
+        Check("A: shield shown after LockScreen", Shield() && Evt());
+        Check("A: guard INSTALLED with lock (trusted)", Guard());
         svc.OnConnectionStatus(WireStatus.Reconnecting);        // t0: grace starts
         await Task.Delay(1000);
         svc.OnConnectionStatus(WireStatus.Connected);           // t1.0: reconnect within grace → cancel
         await Task.Delay(300);
-        Check("A: HELD immediately after reconnect", Shown() && Evt());
+        Check("A: shield HELD immediately after reconnect", Shield() && Evt());
+        Check("A: guard HELD after reconnect", Guard());
         await Task.Delay(2500);                                 // t3.8: past the original 3s window
-        Check("A: STILL HELD past original grace (blip did NOT unlock)", Shown() && Evt());
+        Check("A: STILL HELD past original grace (blip did NOT unlock)", Shield() && Evt() && Guard());
         svc.Unlock();
-        Check("A: explicit Unlock hides", !Shown() && !Evt());
+        Check("A: explicit Unlock hides shield", !Shield() && !Evt());
+        Check("A: explicit Unlock RELEASES guard", !Guard());
 
-        // ── CASE B: teacher-death → auto-unlock ──
-        Console.WriteLine("\n-- CASE B: teacher-death (sustained disconnect > grace) --");
+        // ── CASE B: teacher-death → grace fire releases shield + guard ──
+        Console.WriteLine("\n-- CASE B: teacher-death (sustained disconnect > grace) — grace fire releases shield + guard --");
         svc.Lock(null);
-        Check("B: shield shown", Shown());
+        Check("B: shield + guard up on lock", Shield() && Guard());
         svc.OnConnectionStatus(WireStatus.Reconnecting);        // t0
         await Task.Delay(500);
         svc.OnConnectionStatus(WireStatus.Disconnected);        // t0.5: continuous
-        Check("B: still shown mid-grace", Shown());
+        Check("B: still shown mid-grace", Shield() && Guard());
         await Task.Delay(3200);                                 // t3.7 from t0
-        Check("B: AUTO-UNLOCKED (grace fired at ~3s)", !Shown() && !Evt());
+        Check("B: shield AUTO-UNLOCKED (grace fired at ~3s)", !Shield() && !Evt());
+        Check("B: guard RELEASED on grace fire", !Guard());
 
-        // ── CASE C: no-reset (continuous window) ──
+        // ── CASE C: no-reset (continuous window) → grace fire still releases guard ──
         Console.WriteLine("\n-- CASE C: no-reset (timer NOT restarted on Reconnecting→Disconnected) --");
         svc.Lock(null);
         svc.OnConnectionStatus(WireStatus.Reconnecting);        // t0: grace starts
         await Task.Delay(1000);
         svc.OnConnectionStatus(WireStatus.Disconnected);        // t1.0: must NOT restart
         await Task.Delay(1600);                                 // t2.6: before 3s-from-t0
-        Check("C: still shown at t=2.6s (has NOT fired early)", Shown());
+        Check("C: still shown at t=2.6s (has NOT fired early)", Shield() && Guard());
         await Task.Delay(900);                                  // t3.5: past 3s-from-t0, before 4s (reset-bug would fire at t4.0)
-        Check("C: AUTO-UNLOCKED by t=3.5s → window ran from FIRST departure, not from Disconnected", !Shown() && !Evt());
+        Check("C: shield AUTO-UNLOCKED by t=3.5s → window ran from FIRST departure, not from Disconnected", !Shield() && !Evt());
+        Check("C: guard RELEASED with it", !Guard());
 
-        svc.Unlock();   // belt-and-suspenders: ensure hidden at end
+        // ── CASE D: max-duration cap fire → releases shield + guard (independent of connection) ──
+        Console.WriteLine("\n-- CASE D: max-duration cap fire (cap=1500ms) — releases shield + guard, no disconnect needed --");
+        var (svcD, ShieldD, GuardD, _) = MakeSvc(graceMs: 600_000, capMs: 1500, trusted: true);
+        svcD.Log += m => Console.WriteLine($"        [lockD] {m}");
+        svcD.Lock(null);
+        Check("D: shield + guard up on lock", ShieldD() && GuardD());
+        await Task.Delay(2100);                                 // > 1500ms cap, never touched the connection
+        Check("D: shield released on cap fire", !ShieldD());
+        Check("D: guard RELEASED on cap fire", !GuardD());
+
+        // ── CASE E: Accessibility DENIED → lock still works, guard NOT installed (graceful degrade) ──
+        Console.WriteLine("\n-- CASE E: Accessibility DENIED — lock enforced, guard NOT installed (graceful degrade) --");
+        var (svcE, ShieldE, GuardE, PromptsE) = MakeSvc(graceMs: 3000, capMs: 600_000, trusted: false);
+        svcE.Log += m => Console.WriteLine($"        [lockE] {m}");
+        svcE.Lock(null);
+        Check("E: shield UP (lock enforced WITHOUT Accessibility)", ShieldE());
+        Check("E: guard NOT installed (graceful degrade)", !GuardE());
+        Check("E: prompted for Accessibility exactly once", PromptsE() == 1);
+        svcE.Unlock();
+        Check("E: unlock clean (shield down, guard absent)", !ShieldE() && !GuardE());
 
         Console.WriteLine(failures == 0
-            ? "\n=== LOCKTEST PASS ✅ — dead-man grace: blip HOLDS, teacher-death UNLOCKS, window is CONTINUOUS ==="
+            ? "\n=== LOCKTEST PASS ✅ — dead-man grace (blip HOLDS / death+cap UNLOCK, continuous) · guard installed-on-lock & RELEASED on all 3 dead-man paths (explicit/grace/cap) · degrades gracefully ==="
             : $"\n=== LOCKTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
     }
