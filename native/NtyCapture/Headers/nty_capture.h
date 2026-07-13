@@ -217,6 +217,65 @@ void nty_lock_show(const char *message);
 void nty_lock_hide(void);
 int nty_lock_is_shown(void);
 
+/* ==========================================================================
+ * Keystroke guard (CGEventTap) — Phase 31-B (Sources/Input.swift).
+ * ADDITIVE hardening on top of the lock: suppresses a SMALL, explicit set of
+ * system shortcuts (Spotlight, Mission Control / Exposé / Spaces, Cmd+Tab,
+ * Cmd+`) to close the two residuals the Phase 30 shield can't reach. It is NOT
+ * the lock — the shield + presentation options enforce the lock with zero
+ * Accessibility; this tap needs Accessibility and is best-effort. Cmd+Q,
+ * volume/brightness/media, and screenshots pass through untouched.
+ *
+ * SAFETY: the tap runs on its OWN CFRunLoop thread (a busy main thread can't
+ * stall it) and FAILS OPEN — if the callback is slow the OS auto-disables the
+ * tap (.tapDisabledByTimeout) with keys already flowing, and we re-enable to
+ * resume; a wedged keyboard is not a reachable state. Killing the process tears
+ * the tap down (OS-enforced). LockService (31-C) installs it only while locked
+ * and removes it on every unlock path; nty_input_guard_stop is unconditional +
+ * bounded (joins the tap thread with a 2 s ceiling — never hangs).
+ * ==========================================================================*/
+
+/*
+ * Accessibility permission (required to install a SUPPRESSING tap; a different TCC
+ * bucket than Screen Recording / Camera / Mic). If denied, the caller keeps the lock
+ * and skips the tap (graceful degrade).
+ *   nty_accessibility_check   — 1 if THIS process is trusted, else 0. Never prompts.
+ *   nty_accessibility_request — prompt if undetermined; returns trust at call time (1/0).
+ *     Grant is async (System Settings ▸ Privacy ▸ Accessibility) — then poll _check.
+ *     Ad-hoc-signed builds may need re-granting after a rebuild.
+ */
+int nty_accessibility_check(void);
+int nty_accessibility_request(void);
+
+/*
+ * nty_input_guard_start — install the keystroke guard. Returns 0 on success, or a
+ *   negative code for the caller to DEGRADE GRACEFULLY: -1 not Accessibility-trusted
+ *   (keep the lock, skip the tap), -2 tap creation failed, -3 already running.
+ * nty_input_guard_stop  — UNCONDITIONAL + BOUNDED uninstall. Safe when idle; never
+ *   hangs (joins the tap thread with a 2 s ceiling).
+ * nty_input_guard_is_active — 1 if a tap is currently installed, else 0.
+ */
+int nty_input_guard_start(void);
+void nty_input_guard_stop(void);
+int nty_input_guard_is_active(void);
+
+/*
+ * Diagnostics / test hooks — used by MockTeacher --inputtest to prove guaranteed
+ * uninstall and DEMONSTRATE fail-open. Harmless in production (the stall/synthesize
+ * levers are never invoked outside the harness).
+ *   nty_input_guard_suppress_count — # shortcuts swallowed since start.
+ *   nty_input_guard_disabled_count — # OS auto-disable events caught + re-enabled (fail-open proof).
+ *   nty_input_guard_is_enabled     — 1 if the tap is enabled (guarding), 0 if disabled (keys flow) / absent.
+ *   nty_input_guard_set_stall_ms   — TEST-ONLY: force a slow callback (ms) to trip the OS watchdog. 0 = off.
+ *                                    Arm it BEFORE nty_input_guard_start (thread creation publishes it).
+ *   nty_input_test_synthesize      — TEST-ONLY: synthesize `count` key presses (keycode, CGEventFlags raw).
+ */
+int64_t nty_input_guard_suppress_count(void);
+int64_t nty_input_guard_disabled_count(void);
+int nty_input_guard_is_enabled(void);
+void nty_input_guard_set_stall_ms(int ms);
+void nty_input_test_synthesize(int keycode, uint64_t flags, int count);
+
 #ifdef __cplusplus
 }
 #endif

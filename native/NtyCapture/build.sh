@@ -20,6 +20,7 @@ swiftc -emit-library -o "$OUT" \
     -framework CoreVideo \
     -framework CoreImage \
     -framework CoreGraphics \
+    -framework ApplicationServices \
     -framework Foundation \
     Sources/*.swift
 

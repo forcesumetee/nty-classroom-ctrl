@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <RootNamespace>MockTeacher</RootNamespace>
+    <!-- [LibraryImport] source-gen (InputTest P/Invokes libNtyCapture) emits unsafe code. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <!-- Shared.Wire for the protocol; the Sandbox project for WireClient, so the

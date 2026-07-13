@@ -22,12 +22,14 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using ClassroomCtrl.Avalonia.Sandbox.Services;
 using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
 
 int port = 7777;
-bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false;
+bool selfTest = false, streamTest = false, streamTestH264 = false, cameraTest = false, audioTest = false, lockTest = false, inputTest = false, inputHold = false;
+int holdSeconds = 20;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -39,11 +41,18 @@ for (int i = 0; i < args.Length; i++)
         case "--cameratest": cameraTest = true; break;
         case "--audiotest": audioTest = true; break;
         case "--locktest": lockTest = true; break;
+        case "--inputtest": inputTest = true; break;
+        case "--inputhold":
+            inputHold = true;
+            if (i + 1 < args.Length && int.TryParse(args[i + 1], out var hs)) { holdSeconds = hs; i++; }
+            break;
     }
 }
 
 var teacherId = Guid.NewGuid();
 
+if (inputHold) return await InputTest.RunHoldAsync(holdSeconds);
+if (inputTest) return await InputTest.RunAsync();
 if (lockTest) return await LockTest.RunAsync();
 if (audioTest) return await AudioTest.RunAsync(teacherId);
 if (cameraTest) return await CameraTest.RunAsync(teacherId);
@@ -861,5 +870,166 @@ static class LockTest
             ? "\n=== LOCKTEST PASS ✅ — dead-man grace: blip HOLDS, teacher-death UNLOCKS, window is CONTINUOUS ==="
             : $"\n=== LOCKTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
+    }
+}
+
+// ── Phase 31-B — input-guard (CGEventTap) SAFETY GATE (--inputtest) ────────────────
+// Proves the keystroke guard is safe BEFORE it is ever tied to a lock:
+//   • guaranteed uninstall — the real-tap section is wrapped in try/finally with an
+//     unconditional, bounded nty_input_guard_stop() (native joins the tap thread ≤2s);
+//   • FAIL-OPEN demonstrated two ways — deterministically (force-disable → is_enabled 0
+//     = keys flow → re-enable) AND live (stall the callback → the OS auto-disables the
+//     slow tap → keys flow → the callback re-enables). A wedged keyboard is unreachable.
+//   • graceful degrade — with no Accessibility for THIS binary, start() returns -1 and
+//     NO real tap is installed; the harness asserts that safe path and exits PASS.
+// Installing a real tap needs Accessibility for the launching binary (here the MockTeacher
+// exe / dotnet host). Process-kill releases the tap regardless (OS-enforced).
+static partial class InputTest
+{
+    private const string Lib = "NtyCapture";
+    [LibraryImport(Lib)] private static partial int  nty_accessibility_check();
+    [LibraryImport(Lib)] private static partial int  nty_accessibility_request();
+    [LibraryImport(Lib)] private static partial int  nty_input_guard_start();
+    [LibraryImport(Lib)] private static partial void nty_input_guard_stop();
+    [LibraryImport(Lib)] private static partial int  nty_input_guard_is_active();
+    [LibraryImport(Lib)] private static partial int  nty_input_guard_is_enabled();
+    [LibraryImport(Lib)] private static partial long nty_input_guard_suppress_count();
+    [LibraryImport(Lib)] private static partial long nty_input_guard_disabled_count();
+    [LibraryImport(Lib)] private static partial void nty_input_guard_set_stall_ms(int ms);
+    [LibraryImport(Lib)] private static partial void nty_input_test_synthesize(int keycode, ulong flags, int count);
+
+    const ulong FlagControl = 0x040000;   // CGEventFlags.maskControl raw bit
+    const int   KcLeft      = 123;         // kVK_LeftArrow → Ctrl+Left = Spaces-left (in the suppress list, inert if it ever leaks on a single Space)
+
+    public static async Task<int> RunAsync()
+    {
+        int failures = 0;
+        void Check(string name, bool cond)
+        {
+            if (cond) Console.WriteLine($"  ✅ {name}");
+            else { Console.WriteLine($"  ❌ {name}"); failures++; }
+        }
+
+        Console.WriteLine("=== MockTeacher --inputtest (Phase 31-B — CGEventTap SAFETY GATE) ===");
+        if (!OperatingSystem.IsMacOS()) { Console.WriteLine("  (skipped — not macOS)"); return 0; }
+
+        int trusted = nty_accessibility_check();
+        Console.WriteLine($"  Accessibility trusted for this binary: {(trusted == 1 ? "YES" : "NO")}");
+
+        // ── graceful-degrade path (the SAFE default — no real tap is ever installed) ──
+        if (trusted != 1)
+        {
+            Console.WriteLine("\n-- Accessibility NOT granted → asserting graceful degrade (no tap installed, nothing to strand) --");
+            nty_accessibility_request();                       // surface the system prompt for a later run
+            int rc = nty_input_guard_start();
+            Check("degrade: start() returns -1 (not trusted)", rc == -1);
+            Check("degrade: is_active()==0 (no tap installed)", nty_input_guard_is_active() == 0);
+            nty_input_guard_stop();                            // unconditional — safe even when idle
+            Check("degrade: stop() safe when idle (still 0)", nty_input_guard_is_active() == 0);
+            Console.WriteLine("\n  ℹ To run the FULL fail-open demo, grant Accessibility to this binary:");
+            Console.WriteLine("     System Settings ▸ Privacy & Security ▸ Accessibility → enable the prompted entry,");
+            Console.WriteLine("     then re-run:  dotnet run --project tools/MockTeacher -- --inputtest");
+            Console.WriteLine(failures == 0
+                ? "\n=== INPUTTEST PASS ✅ (graceful-degrade path proven — grant Accessibility for the live fail-open demo) ==="
+                : $"\n=== INPUTTEST FAIL ❌ ({failures} check(s)) ===");
+            return failures == 0 ? 0 : 1;
+        }
+
+        // ── trusted → full real-tap demo, GUARANTEED-UNINSTALL via try/finally ──
+        try
+        {
+            int rc = nty_input_guard_start();
+            Check("start() returns 0", rc == 0);
+            Check("is_active()==1 after start", nty_input_guard_is_active() == 1);
+            Check("is_enabled()==1 after start (guarding)", nty_input_guard_is_enabled() == 1);
+
+            // (1) suppression — synthesize Ctrl+Left ×3; the tap should swallow all three.
+            long s0 = nty_input_guard_suppress_count();
+            nty_input_test_synthesize(KcLeft, FlagControl, 3);
+            await Task.Delay(500);
+            long swallowed = nty_input_guard_suppress_count() - s0;
+            Check($"suppressed 3 synthesized Ctrl+Left ({swallowed} swallowed)", swallowed >= 3);
+            nty_input_guard_stop();
+            Check("is_active()==0 after suppression-phase stop", nty_input_guard_is_active() == 0);
+
+            // (2) FAIL-OPEN — the real thing, via the OS watchdog. Arm a 2000ms stall BEFORE start()
+            //     (thread creation publishes it to the tap thread), then drive events through the now-
+            //     slow tap. A callback that doesn't return in ~1s is AUTO-DISABLED by the OS — during
+            //     that window keystrokes flow untouched (fail-open) — and the callback re-enables on
+            //     the .tapDisabledByTimeout it receives. This is exactly the wedged-tap failure mode,
+            //     and macOS resolves it in the user's favor automatically: a frozen keyboard is NOT a
+            //     reachable state.
+            Console.WriteLine("\n-- FAIL-OPEN (live, real OS watchdog): callback stalls 2000ms → OS auto-disables the slow tap --");
+            nty_input_guard_set_stall_ms(2000);
+            int rc2 = nty_input_guard_start();
+            Check("live: start() with stall armed returns 0", rc2 == 0 && nty_input_guard_is_active() == 1);
+            long w0 = nty_input_guard_disabled_count();
+            for (int i = 0; i < 6; i++) { nty_input_test_synthesize(KcLeft, FlagControl, 1); await Task.Delay(600); }
+            await Task.Delay(2500);
+            long autoDisabled = nty_input_guard_disabled_count() - w0;
+            Console.WriteLine($"  → the OS auto-disabled our slow tap {autoDisabled}× — each is a window where keystrokes flowed untouched; the callback then re-enabled.");
+            Check("live: OS auto-disabled the slow tap ≥1× (wedged tap NOT reachable — it FAILS OPEN)", autoDisabled >= 1);
+            nty_input_guard_set_stall_ms(0);
+            nty_input_guard_stop();
+            await Task.Delay(500);   // let the stalled tap thread finish teardown before recovery
+
+            // (3) RECOVERY — after the fail-open disable/re-enable cycles, a fresh guard suppresses
+            //     normally again (end-to-end: guards → fails open under stall → guards again).
+            int rc3 = nty_input_guard_start();
+            Check("recovery: start() returns 0", rc3 == 0);
+            long r0 = nty_input_guard_suppress_count();
+            nty_input_test_synthesize(KcLeft, FlagControl, 3);
+            await Task.Delay(500);
+            long recov = nty_input_guard_suppress_count() - r0;
+            Check($"recovery: guard suppresses again after fail-open ({recov} swallowed)", recov >= 3);
+        }
+        finally
+        {
+            // GUARANTEED uninstall — unconditional + bounded (native joins the tap thread ≤2s).
+            nty_input_guard_set_stall_ms(0);
+            nty_input_guard_stop();
+        }
+        Check("is_active()==0 after stop (guaranteed uninstall)", nty_input_guard_is_active() == 0);
+        Check("is_enabled()==0 after stop (tap gone)", nty_input_guard_is_enabled() == 0);
+
+        Console.WriteLine(failures == 0
+            ? "\n=== INPUTTEST PASS ✅ — suppression works · FAILS OPEN (OS auto-disable + re-enable) · guaranteed uninstall ==="
+            : $"\n=== INPUTTEST FAIL ❌ ({failures} check(s)) ===");
+        return failures == 0 ? 0 : 1;
+    }
+
+    // Process-kill release demo (--inputhold [seconds]). Installs a REAL tap and holds it on a
+    // BOUNDED timer so you can `kill -9 <pid>` the process and confirm the tap dies with it —
+    // the OS-enforced ultimate backstop (same ownership guarantee as the Phase 30 shield). If it
+    // is never killed, the timer + finally + process-exit each release it — it can never strand.
+    public static async Task<int> RunHoldAsync(int seconds)
+    {
+        Console.WriteLine("=== MockTeacher --inputhold (Phase 31-B — process-kill release demo) ===");
+        if (!OperatingSystem.IsMacOS()) { Console.WriteLine("  (skipped — not macOS)"); return 0; }
+        if (nty_accessibility_check() != 1)
+        {
+            int rc0 = nty_input_guard_start();     // returns -1, installs nothing (graceful degrade)
+            Console.WriteLine($"  Accessibility NOT granted → start()={rc0}, no tap installed. Grant it to run this demo.");
+            return 0;
+        }
+        int pid = Environment.ProcessId;
+        try
+        {
+            int rc = nty_input_guard_start();
+            if (rc != 0) { Console.WriteLine($"  ❌ start() failed rc={rc}"); return 1; }
+            Console.WriteLine($"  ✅ TAP INSTALLED — pid={pid}, is_active={nty_input_guard_is_active()}, is_enabled={nty_input_guard_is_enabled()}");
+            Console.WriteLine( "     Spotlight (Cmd+Space) + Ctrl+Arrows are SUPPRESSED while this process lives.");
+            Console.WriteLine($"     → PROVE process-death frees the keyboard:   kill -9 {pid}");
+            Console.WriteLine( "       then press Cmd+Space — Spotlight opens again (the tap died with the process).");
+            Console.WriteLine($"     (auto-releases in {seconds}s regardless — bounded, never strands.)");
+            for (int i = seconds; i > 0; i--) await Task.Delay(1000);
+            Console.WriteLine("  timeout reached — auto-releasing.");
+        }
+        finally
+        {
+            nty_input_guard_stop();
+            Console.WriteLine($"  tap released; is_active={nty_input_guard_is_active()}");
+        }
+        return 0;
     }
 }
