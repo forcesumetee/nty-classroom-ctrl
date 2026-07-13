@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TeacherHost</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- TT-1-F LIVE harness: runs the REAL Teacher.Core server headlessly so a real
+         student (MockStudent, or a shipped unmodified Windows Student) can connect
+         over the LAN and appear in the roster. This is NOT the Teacher app — no UI,
+         no decode, no bulk ops. The windowed Avalonia.Teacher is TT-6+. It references
+         ONLY Teacher.Core (no Sandbox / native dylib) — the cleanest seam. -->
+    <ProjectReference Include="..\..\src\ClassroomCtrl.Teacher.Core\ClassroomCtrl.Teacher.Core.csproj" />
+  </ItemGroup>
+</Project>
