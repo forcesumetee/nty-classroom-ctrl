@@ -301,7 +301,8 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 3. **Phase 33 — Progressive UI ports** + runtime light/dark theme swap.
 4. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
 5. Windows-track follow-up: Teacher mic `WaveInEvent` robustness (M20 gap).
-6. Path C breakout peer voice (TargetGroupId + PTT + AEC) — deferred audio scope.
+6. **Windows-track follow-up: roster namespace-gap bug** (peerId vs EndpointId) — found TT-1-A, fixed in the macOS port (TT-1-D); candidate v1.2.x patch. Details below.
+7. Path C breakout peer voice (TargetGroupId + PTT + AEC) — deferred audio scope.
 
 ## Team handoff
 - **Cross-platform demo circle COMPLETE:** M15 wire · M17 MJPEG · **M18 H.264 (~10×)** · M19 camera ·
@@ -322,6 +323,14 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
   uses a brittle fixed-format `WaveInEvent` (16 k/16/1) that emits no 0x0329 frames if the mic can't
   open at that exact format — verify the test-box mic; a v1.2.x patch could make it format-robust
   like the loopback path. The Mac plays any 0x0329 that arrives (proven via system audio).
+- **Windows-track follow-up (logged, not Mac-port work) — ROSTER NAMESPACE-GAP** (found TT-1-A, fixed in the macOS port TT-1-D):
+  - Transport keys peers by **peerId** (fresh Guid at TCP-accept); the app keys students by **EndpointId** (= `Envelope.SenderId`). Never bridged.
+  - `MainViewModel.OnStudentLeft`: `FirstOrDefault(x => x.EndpointId == peerId)` never matches → falls back to `RemoveAt(Count-1)` → removes the **LAST** student, not the departed one.
+  - `TcpControlServer.cs:187` calls the proper map a "Tier-3 follow-up" — known, unfixed.
+  - Also silently no-ops the EndpointId-keyed cleanups (Conference cam senders, share permissions, tile selection).
+  - **Invisible at 1–2 seats. At 50 (both customers), a mid-class disconnect greys out the WRONG student.**
+  - **Fix:** bridge peerId ↔ EndpointId at the transport→app boundary (adopt the Hello's EndpointId per peer, report EndpointId on disconnect, guard so a stale socket doesn't evict a reconnected owner). Teacher-internal C#, zero wire change.
+  - Candidate for a **v1.2.x Windows patch**. We do NOT touch the shipped repo — this is a report to the team.
 - Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession + AVAudioEngine +
   shield/kiosk + **CGEventTap**) proven **seven times** (M23 added no native dylib — it's byte-unchanged);
   `MockTeacher --*test` is the reuse + de-risk pattern — it caught the camera preset bug (M19), two
