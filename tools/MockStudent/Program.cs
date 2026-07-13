@@ -12,9 +12,15 @@
 //   --selftest — spin up a MINIMAL in-process teacher-stub on loopback and drive the real
 //             WireClient through connect → Hello → command-receipt → heartbeat Ping/Pong. No
 //             Local Network Privacy (loopback), no permissions (no capture). Exits 0 (PASS) / 1.
+//   --teacherselftest — TT-1-E: the inverse — spin the REAL ClassroomCtrl.Teacher.Core
+//             (ControlServer + StudentRoster) on loopback and drive the real WireClient + raw
+//             connections through roster identity, Ping/Pong, the 3-student middle-disconnect fix,
+//             the reconnect-ownership guard, and stale-sweep — guaranteed teardown. The permanent
+//             Teacher-side gate. Loopback ⇒ no LNP; no capture ⇒ no perms. Exits 0 (PASS) / 1.
 //
 // Usage:
 //   dotnet run --project tools/MockStudent -- --selftest
+//   dotnet run --project tools/MockStudent -- --teacherselftest
 //   dotnet run --project tools/MockStudent -- --ip 172.20.10.5 --port 7777   # connect to a Teacher
 
 using System.Buffers.Binary;
@@ -23,18 +29,23 @@ using System.Net;
 using System.Net.Sockets;
 using ClassroomCtrl.Avalonia.Sandbox.Services;
 using ClassroomCtrl.Shared.Protocol;
+using ClassroomCtrl.Teacher.Services;                 // TT-1-E: real ControlServer
+using ClassroomCtrl.Teacher.Core;                     // TT-1-E: real StudentRoster
+using Microsoft.Extensions.Logging.Abstractions;      // TT-1-E: NullLogger for the headless server
 using MessagePack;
 
 string ip = "127.0.0.1";
 int port = 7777;
 string name = $"MockStudent ({Environment.MachineName})";
 bool selfTest = false;
+bool teacherSelfTest = false;
 int classroomN = 0, durationSec = 8;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
     {
         case "--selftest": selfTest = true; break;
+        case "--teacherselftest": teacherSelfTest = true; break;   // TT-1-E: real Teacher.Core gate
         case "--ip": ip = args[++i]; break;
         case "--port": port = int.Parse(args[++i]); break;
         case "--name": name = args[++i]; break;
@@ -43,6 +54,7 @@ for (int i = 0; i < args.Length; i++)
     }
 }
 
+if (teacherSelfTest) return await TeacherSelfTest.RunAsync();
 if (selfTest) return await SelfTest.RunAsync();
 if (classroomN > 0) return await Classroom.RunAsync(ip, port, classroomN, durationSec);
 return await Interactive.RunAsync(ip, port, name);
@@ -427,6 +439,163 @@ static class SelfTest
     static async Task<bool> WaitUntil(Func<bool> cond, int ms)
     {
         for (int t = 0; t < ms && !cond(); t += 50) await Task.Delay(50);
+        return cond();
+    }
+}
+
+// ───────────────────────────── TT-1-E: --teacherselftest — the REAL Teacher.Core gate ─────────────────────────────
+// The permanent Teacher-side gate (the analog of the Student track's --selftest / --locktest).
+// Spins the REAL ControlServer + StudentRoster from ClassroomCtrl.Teacher.Core on 127.0.0.1:0
+// (ephemeral → no :7777 collision, not LAN-visible, no Local Network Privacy) and proves:
+//   • the REAL student WireClient (the same client the Mac Student ships) → roster identity +
+//     Ping/Pong liveness + clean-disconnect removal, and the 3-student middle-disconnect fix;
+//   • raw framed connections (deterministic socket / EndpointId control) → the reconnect-ownership
+//     guard and stale-sweep eviction.
+// Guaranteed teardown: each server runs under try/finally + a hard 30 s timeout, and every scenario
+// asserts the ephemeral port re-binds after Dispose (zero listening sockets left behind).
+static class TeacherSelfTest
+{
+    public static async Task<int> RunAsync()
+    {
+        int failures = 0;
+        void Check(string label, bool ok)
+        {
+            if (ok) Console.WriteLine($"  ✅ {label}");
+            else { Console.WriteLine($"  ❌ {label}"); failures++; }
+        }
+
+        Console.WriteLine("=== MockStudent --teacherselftest (REAL Teacher.Core on loopback — no LNP, no perms) ===");
+
+        // ── Server 1: the REAL student WireClient against the REAL server. ──
+        // Large stale window (8 s > the client's 5 s heartbeat) so healthy clients never false-stale.
+        await WithServer(8000, Check, "server-1 (real WireClient)", async (server, roster, port) =>
+        {
+            // (1) Interop: a real WireClient appears in the roster with its identity.
+            var (r, rCts, rRun) = StartClient(port, "Live MockStudent");
+            Check("real WireClient reaches Connected", await WaitUntil(() => r.Status == WireStatus.Connected, 5000));
+            Check("real WireClient appears in the roster", await WaitUntil(() => roster.Contains(r.EndpointId), 5000));
+            roster.TryGet(r.EndpointId, out var entry);
+            Check("roster carries EndpointId + DisplayName + MachineName",
+                entry is not null && entry.DisplayName == "Live MockStudent" && entry.MachineName == Environment.MachineName);
+
+            // Ping/Pong liveness through the real client (drive one Ping immediately for speed).
+            int pongs = 0;
+            r.EnvelopeReceived += e => { if (e.Type == MessageType.Pong) Interlocked.Increment(ref pongs); };
+            await r.SendAsync(MessageType.Ping, Array.Empty<byte>(), CancellationToken.None);
+            Check("real client Ping → server Pong (liveness)", await WaitUntil(() => Volatile.Read(ref pongs) > 0, 3000));
+
+            // Clean disconnect removes it from the roster.
+            rCts.Cancel(); try { await rRun.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
+            Check("clean disconnect removes the student from the roster", await WaitUntil(() => !roster.Contains(r.EndpointId), 3000));
+
+            // (2) 3 REAL WireClients → disconnect the MIDDLE one → the RIGHT one is removed.
+            var a = StartClient(port, "Alice"); var b = StartClient(port, "Bob"); var c = StartClient(port, "Cara");
+            Check("3 real students joined", await WaitUntil(() => roster.Count == 3, 5000));
+            b.cts.Cancel(); try { await b.run.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
+            Check("disconnecting the MIDDLE student removes B", await WaitUntil(() => !roster.Contains(b.client.EndpointId), 3000));
+            Check("A and C REMAIN — buggy RemoveAt(Count-1) would have dropped C",
+                roster.Contains(a.client.EndpointId) && roster.Contains(c.client.EndpointId) && roster.Count == 2);
+            a.cts.Cancel(); c.cts.Cancel();
+            try { await Task.WhenAll(a.run, c.run).WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
+        });
+
+        // ── Server 2: raw framed clients for deterministic socket / EndpointId control. ──
+        // Short stale window (600 ms) + a 150 ms ping-keeper → the stale-sweep test runs in ~2 s.
+        await WithServer(600, Check, "server-2 (raw client)", async (server, roster, port) =>
+        {
+            var A = Guid.NewGuid(); var B = Guid.NewGuid(); var C = Guid.NewGuid();
+            var alive = new Dictionary<TcpClient, Guid>(); var gate = new object();
+            void Keep(TcpClient cl, Guid id) { lock (gate) alive[cl] = id; }
+            void Drop(TcpClient cl) { lock (gate) alive.Remove(cl); }
+            using var pingCts = new CancellationTokenSource();
+            var pinger = Task.Run(async () =>
+            {
+                while (!pingCts.IsCancellationRequested)
+                {
+                    KeyValuePair<TcpClient, Guid>[] snap; lock (gate) snap = alive.ToArray();
+                    foreach (var kv in snap) { try { await Framing.SendAsync(kv.Key.GetStream(), MessageType.Ping, Array.Empty<byte>(), kv.Value); } catch { } }
+                    try { await Task.Delay(150, pingCts.Token); } catch { }
+                }
+            });
+            async Task<TcpClient> Raw(Guid id, string name)
+            {
+                var cl = new TcpClient(); await cl.ConnectAsync(IPAddress.Loopback, port);
+                var hello = new HelloMessage { EndpointId = id, DisplayName = name, MachineName = "mac-raw" };
+                await Framing.SendAsync(cl.GetStream(), MessageType.Hello, MessagePackSerializer.Serialize(hello), id);
+                Keep(cl, id); return cl;
+            }
+
+            var ca = await Raw(A, "Alice"); var cb = await Raw(B, "Bob"); var cc = await Raw(C, "Cara");
+            Check("raw: 3 students joined", await WaitUntil(() => roster.Count == 3, 3000));
+
+            // middle disconnect + reconnect (same EndpointId) → A, C undisturbed
+            Drop(cb); cb.Close();
+            Check("raw: middle disconnect removes B; A + C remain",
+                await WaitUntil(() => !roster.Contains(B) && roster.Contains(A) && roster.Contains(C), 3000));
+            var cb2 = await Raw(B, "Bob");
+            Check("raw: B reconnects → roster A, C, B", await WaitUntil(() => roster.Count == 3 && roster.Contains(B), 3000));
+
+            // ownership guard: cb3 takes over endpoint B; dropping the OLD cb2 must not evict B
+            var cb3 = await Raw(B, "Bob");
+            await WaitUntil(() => roster.Contains(B), 2000);
+            Drop(cb2); cb2.Close(); await Task.Delay(500);
+            Check("ownership guard: stale old-socket drop does NOT evict reconnected B",
+                roster.Contains(B) && roster.Count == 3);
+
+            // stale-sweep: silence B (cb3) → evicted; A / C kept alive → survive
+            Drop(cb3);
+            Check("stale-sweep evicts the SILENT student B", await WaitUntil(() => !roster.Contains(B), 5000));
+            Check("A and C survive the sweep (kept alive)", roster.Contains(A) && roster.Contains(C));
+
+            pingCts.Cancel(); try { await pinger; } catch { }
+            ca.Close(); cc.Close(); cb3.Close();
+        });
+
+        Console.WriteLine(failures == 0
+            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — real-client interop + roster fix + ownership guard + stale-sweep + guaranteed teardown ==="
+            : $"\n=== MOCKSTUDENT TEACHERSELFTEST FAIL ❌ ({failures} check(s)) ===");
+        return failures == 0 ? 0 : 1;
+    }
+
+    // A real student transport (the same WireClient the Mac Student ships), driven headlessly.
+    static (WireClient client, CancellationTokenSource cts, Task run) StartClient(int port, string name)
+    {
+        var c = new WireClient();
+        var cts = new CancellationTokenSource();
+        var run = c.RunAsync("127.0.0.1", port, name, cts.Token);
+        return (c, cts, run);
+    }
+
+    // Runs `body` against a REAL ControlServer + StudentRoster on 127.0.0.1:0, then GUARANTEES
+    // teardown (Dispose under a hard 30 s timeout) and asserts the port re-binds (no socket leaked) —
+    // the server's analog of the Student track's "zero real taps left installed".
+    static async Task WithServer(int staleAfterMs, Action<string, bool> check, string label,
+        Func<ControlServer, StudentRoster, int, Task> body)
+    {
+        var server = new ControlServer(NullLogger<ControlServer>.Instance, NullLoggerFactory.Instance,
+            IPAddress.Loopback, 0, IPAddress.Loopback, staleAfterMs);
+        var roster = new StudentRoster(server);
+        int port = -1;
+        try
+        {
+            await server.StartAsync(CancellationToken.None);
+            port = server.BoundPort ?? -1;
+            check($"{label}: bound an ephemeral port", port > 0);
+            await body(server, roster, port).WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        catch (Exception ex) { check($"{label}: scenario threw — {ex.GetType().Name}: {ex.Message}", false); }
+        finally { server.Dispose(); }
+
+        await Task.Delay(150);
+        bool rebind = false;
+        if (port > 0) { try { var l = new TcpListener(IPAddress.Loopback, port); l.Start(); l.Stop(); rebind = true; } catch { } }
+        check($"{label}: Dispose released the listener (re-bind succeeds, zero sockets left)", rebind);
+        check($"{label}: BoundPort null after Dispose", server.BoundPort is null);
+    }
+
+    static async Task<bool> WaitUntil(Func<bool> cond, int ms)
+    {
+        for (int t = 0; t < ms && !cond(); t += 25) await Task.Delay(25);
         return cond();
     }
 }

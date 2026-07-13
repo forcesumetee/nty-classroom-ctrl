@@ -14,5 +14,8 @@
          Windows box or a second Mac. -->
     <ProjectReference Include="..\..\src\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
     <ProjectReference Include="..\..\src\ClassroomCtrl.Avalonia.Sandbox\ClassroomCtrl.Avalonia.Sandbox.csproj" />
+    <!-- TT-1-E: the REAL Teacher.Core server, so the teacherselftest mode drives the real
+         student WireClient against the real Mac Teacher server + roster in-process (loopback). -->
+    <ProjectReference Include="..\..\src\ClassroomCtrl.Teacher.Core\ClassroomCtrl.Teacher.Core.csproj" />
   </ItemGroup>
 </Project>
