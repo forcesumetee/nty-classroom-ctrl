@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/ClassroomCtrl.Avalonia.Sandbox/ClassroomCtrl.Avalonia.Sandbox.csproj" />
     <Project Path="src/ClassroomCtrl.Shared.Wire/ClassroomCtrl.Shared.Wire.csproj" />
+    <Project Path="src/ClassroomCtrl.Teacher.Core/ClassroomCtrl.Teacher.Core.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/CrossPlatformInteropTest/CrossPlatformInteropTest.csproj" />

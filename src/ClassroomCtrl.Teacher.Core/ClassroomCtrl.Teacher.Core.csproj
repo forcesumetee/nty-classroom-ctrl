@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- TT-1 (Teacher track) — UI-agnostic server core for the macOS Teacher.
+       Holds the ported wire-server (TcpControlServer, TT-1-B) and, from TT-1-C,
+       the ControlServer router + roster.  Deliberately NO Avalonia reference:
+       the server stays headless-testable so MockStudent can drive the REAL
+       server in-process (loopback), and so the Student Sandbox is never pulled
+       into the Teacher's build/test path.  Mirrors the Windows split of
+       Networking (transport) + Teacher.Services (router) into one clean lib. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>ClassroomCtrl.Teacher.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- ILogger<T> / ILoggerFactory — the ported server logs verbatim through
+         Microsoft.Extensions.Logging.  Abstractions only (no concrete provider):
+         cross-platform, no Windows dep.  10.0.7 matches the net10.0 target and
+         is already in the local NuGet cache (offline restore). -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shared.Wire: Envelope, MessageType, NetworkConstants — byte-identical to
+         the shipped Windows protocol (MessagePack pin 2.5.187 lives there). -->
+    <ProjectReference Include="..\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
+  </ItemGroup>
+</Project>
