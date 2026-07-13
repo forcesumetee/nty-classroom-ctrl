@@ -156,5 +156,12 @@
                                          HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
             </Grid>
         </TabItem>
+        <!-- Tab 14 (Phase 29-D): AVAudioEngine mic capture (permission + RMS level meter). -->
+        <TabItem Header="Audio">
+            <Grid Background="#1F1F23">
+                <views:AudioCaptureView DataContext="{Binding AudioCapture}"
+                                        HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+            </Grid>
+        </TabItem>
     </TabControl>
 </Window>
