@@ -196,6 +196,27 @@ int nty_audio_play_start(int sampleRate, int channels);
 void nty_audio_play_pcm(const uint8_t *data, int length);
 void nty_audio_play_stop(void);
 
+/* ==========================================================================
+ * Screen lock — Phase 30-B (Sources/Lock.swift).
+ * HARD kiosk-lite lock (exceeds the soft Windows teacher-lock): a borderless
+ * shield NSWindow at CGShieldingWindowLevel() on EVERY display + kiosk
+ * NSApplicationPresentationOptions (disable Cmd+Tab / Force-Quit / logout /
+ * Dock / menu bar / Apple menu / hide). NO Accessibility permission. Re-asserts
+ * on resignActive + wake; rebuilds on display hotplug. Main-thread (dispatched
+ * internally). NO in-shield escape hotkey.
+ *
+ * SAFETY: the DEAD-MAN switch (disconnect->45s-grace unlock, 30-min cap, wake
+ * re-assert) lives in the .NET LockService (30-C). Backstop by construction:
+ * the shield + options are owned by THIS process, so killing it releases the
+ * presentation options (OS-enforced) + drops the windows = auto-unlock.
+ *   nty_lock_show — show/refresh the shield with `message` (NULL/empty -> default).
+ *   nty_lock_hide — remove the shield + clear presentation options.
+ *   nty_lock_is_shown — 1 if the shield is up, else 0.
+ * ==========================================================================*/
+void nty_lock_show(const char *message);
+void nty_lock_hide(void);
+int nty_lock_is_shown(void);
+
 #ifdef __cplusplus
 }
 #endif

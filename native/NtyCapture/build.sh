@@ -14,6 +14,7 @@ swiftc -emit-library -o "$OUT" \
     -O \
     -framework ScreenCaptureKit \
     -framework AVFoundation \
+    -framework AppKit \
     -framework VideoToolbox \
     -framework CoreMedia \
     -framework CoreVideo \
