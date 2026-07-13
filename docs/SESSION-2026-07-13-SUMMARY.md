@@ -158,6 +158,32 @@ lock that **exceeds** the soft Windows teacher-lock, with **zero Accessibility**
   flagged). See `docs/PHASE-30-LIVE-CONFIRMATION.md`. Cheat sheet **§20** screen-lock addendum.
 - **Residuals → Phase 31:** Spotlight-launch + Mission-Control (need `CGEventTap` + Accessibility).
 
+## Milestone 22 — Phase 31: Input-hook keystroke guard (CGEventTap) ✅ LIVE-CONFIRMED
+Close the two M21 residuals (Spotlight-launch, Mission Control) with a `CGEventTap` keystroke guard —
+**additive to the lock, needs Accessibility, must FAIL OPEN.** **Session 9.**
+- **Investigation (31-A) safety framing:** a tap's blast radius exceeds the shield (a wedged tap
+  could freeze the keyboard machine-wide), but macOS makes that **unreachable** — a slow callback is
+  **auto-disabled by the OS** (`kCGEventTapDisabledByTimeout`) with keys already flowing; process-kill
+  releases it. Smaller blast radius than the Windows `WH_KEYBOARD_LL` exam-hook. Product decisions:
+  **thorough** suppression list · **Cmd+Q unblocked** (quit = dead-man unlock + escape hatch) ·
+  **graceful degrade** if Accessibility denied.
+- **31-B** native `Sources/Input.swift` — `CGEventTap` (`.cgSessionEventTap`/`.headInsertEventTap`/
+  `.defaultTap`, keyDown+flagsChanged) on a **dedicated `CFRunLoop` thread**; exact-modifier
+  suppression (Spotlight/Mission-Control/Spaces/Cmd+Tab/Cmd+`), passes Cmd+Q/media/screenshots;
+  **FAILS OPEN** (re-enable on OS auto-disable); `AXIsProcessTrusted` check/request; bounded
+  guaranteed-uninstall. `--inputtest` **DEMONSTRATED fail-open via the real OS watchdog, 4/4 runs**;
+  process-kill release proven (`--inputhold` + `kill -9`).
+- **31-C** `LockService` **injectable input-guard backend** (same seam as the 30-E shield backend):
+  install on shield-up **iff Accessibility-trusted** (else prompt once + degrade), remove on **every**
+  unlock path (explicit / grace / cap). Guard tied to lock state; never guard without shield.
+- **31-D** `--locktest` extension — guard lifecycle **21/21** (CASE A–E): installed-on-lock, HELD
+  through a blip, **RELEASED on all three dead-man paths** + graceful-degrade. **Flag backend → ZERO
+  real taps** in automated testing.
+- **LIVE (31-E, 2026-07-13):** borrowed Mac, all four groups PASS — **suppress** (Spotlight + Mission
+  Control blocked under lock; reopen on unlock) · **graceful degrade** (deny → lock still works) ·
+  **kill-release** · **grace-release**. See `docs/PHASE-31-LIVE-CONFIRMATION.md`. Cheat sheet **§20**
+  CGEventTap addendum. **The two M21 residuals are now CLOSED.**
+
 ## Commits (Sessions 3–5) — 16
 ```
 3a350c7  27-B-7: findings + cheat sheet §20 addendum (VideoToolbox) + screenshot
@@ -194,30 +220,33 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | **Windows patch** | `nty-classroom-macos` / `v1.2-multiselect` | **v1.2.1** bulk-lock fix SHIP-READY (tag `v1.2.1`) |
 | **macOS native APIs** | `nty-classroom-avalonia` / `avalonia-experiment` | **Milestones 16–20** — screen capture + **LIVE MJPEG & H.264 screen streaming (~10×)** + **LIVE camera peer-cam** + **bidirectional audio** (Mac-side; LIVE pending) to the shipped Windows Teacher |
 
-### Combined day totals (Sessions 1–8, 2026-07-13)
-- **21 milestones** (M1–M21; M20 LIVE 3/4, M21 LIVE-confirmed single-display); today added the first
-  native-macOS-API work + camera + audio + screen-lock.
-- **Native APIs: 6 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
-  **AVCaptureSession camera** · **AVAudioEngine audio** · **AppKit shield/kiosk lock** (no Accessibility).
-- **Cheat sheet: 21 sections**, §20 with **four addenda** (VideoToolbox + AVCaptureSession +
-  AVAudioEngine + screen-lock/kiosk).
-- **MockTeacher: 6 automated modes** — `--selftest` / `--streamtest` / `--streamtest-h264` /
-  `--cameratest` / `--audiotest` / **`--locktest`** (+ interactive `viewscreen`/`viewscreen-h264`).
-  **Wire compat: T1–T27.**
+### Combined day totals (Sessions 1–9, 2026-07-13)
+- **22 milestones** (M1–M22; M20 LIVE 3/4, M21 LIVE-confirmed single-display, **M22 LIVE-confirmed**);
+  today added the first native-macOS-API work + camera + audio + screen-lock + input-hook guard.
+- **Native APIs: 7 subsystems** — ScreenCaptureKit capture · ImageIO JPEG · VideoToolbox H.264 ·
+  **AVCaptureSession camera** · **AVAudioEngine audio** · **AppKit shield/kiosk lock** (no Accessibility) ·
+  **CGEventTap input guard** (fails open; Accessibility graceful-degrade).
+- **Cheat sheet: 21 sections**, §20 with **five addenda** (VideoToolbox + AVCaptureSession +
+  AVAudioEngine + screen-lock/kiosk + CGEventTap).
+- **MockTeacher: 7 automated modes** — `--selftest` / `--streamtest` / `--streamtest-h264` /
+  `--cameratest` / `--audiotest` / `--locktest` / **`--inputtest`** (+ `--inputhold` real-tap kill
+  target; interactive `viewscreen`/`viewscreen-h264`). **Wire compat: T1–T27.**
 - **Cross-platform demo: complete + expanded** — screen (MJPEG/H.264), camera, bidirectional audio,
-  **and enforced screen-lock**, a macOS student into the shipped, unmodified Windows Teacher over unchanged wire.
+  enforced screen-lock, **and input-hook keystroke suppression**, a macOS student into the shipped,
+  unmodified Windows Teacher over unchanged wire.
 
 ## Tooling / docs state (macOS track)
 - Cheat sheet: **21 sections** (§20 native interop + **VideoToolbox + AVCaptureSession +
-  AVAudioEngine** addenda).
+  AVAudioEngine + screen-lock/kiosk + CGEventTap** addenda).
 - HeadlessCapture: scenarios incl. `screencapture`, `streaming`.
 - MockTeacher: `--selftest` + `--streamtest` + `--streamtest-h264` + `--cameratest` +
-  **`--audiotest`** + interactive `viewscreen` / `viewscreen-h264`. **Wire compat: T1–T27.**
+  `--audiotest` + `--locktest` + **`--inputtest`** (+ `--inputhold`) + interactive `viewscreen` /
+  `viewscreen-h264`. **Wire compat: T1–T27.**
 - Native: `native/NtyCapture/` (Swift dylib — ScreenCaptureKit + ImageIO + VideoToolbox +
-  **AVFoundation/AVCaptureSession + AVAudioEngine**), `scripts/package-app.sh` (.app bundle,
-  +`NSCameraUsageDescription` +`NSMicrophoneUsageDescription`).
+  AVFoundation/AVCaptureSession + AVAudioEngine + **AppKit shield + CGEventTap/ApplicationServices**),
+  `scripts/package-app.sh` (.app bundle, +`NSCameraUsageDescription` +`NSMicrophoneUsageDescription`).
 - **Media: MJPEG + H.264** screen · **JPEG** camera (Conference peer-cam) · **raw PCM** audio
-  (16 k/mono/16-bit, bidirectional).
+  (16 k/mono/16-bit, bidirectional). **Enforcement: kiosk shield + CGEventTap keystroke guard.**
 
 ## Milestones (macOS track)
 | # | Phase | Outcome |
@@ -229,11 +258,15 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 | 19 | 28 | **LIVE** camera peer-cam → Conference gallery (JPEG 320×180, ~16× vs preset bug) |
 | 20 | 29 | **LIVE (3/4)** bidirectional audio (raw PCM 16 k) — mic talkback + system-audio playback; teacher-mic = Windows-side issue |
 | **21** | **30** | **LIVE** screen-lock enforcement — HARD kiosk (shield + presentationOptions 506, no Accessibility) + four-layer dead-man (single-display validated; multi-display code-correct/untested) |
+| **22** | **31** | **LIVE** input-hook keystroke guard — `CGEventTap` closes the two M21 residuals (Spotlight, Mission Control); fails open (OS watchdog), Accessibility graceful-degrade, guard released on all dead-man paths |
 
 ## Next-session priority queue
-1. **Phase 31 — Input hooks** (`CGEventTap`, needs Accessibility) — closes the two macOS lock
-   residuals (Spotlight-launch, Mission Control). **Recommended next.**
-2. **Phase 32 — System integration** — permissions bundle, auto-start, packaging/signing.
+1. **Phase 32 — System integration** — permissions bundle (Screen Recording + Camera + Mic +
+   Accessibility), auto-start (LaunchAgent), packaging/signing. **Completes a shippable Mac Student
+   (scenario 2: shipped Windows Teacher + Mac Student).** **Recommended next.**
+2. **Teacher track (macOS Teacher, Avalonia)** — roadmap **TT-0…TT-13** in
+   `docs/TEACHER-TRACK-ROADMAP.md` (MockStudent-first; the one big new native piece is H.264
+   **decode**). Its own multi-phase track — can run in parallel on another shift.
 3. **Phase 33 — Progressive UI ports** + runtime light/dark theme swap.
 4. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
 5. Windows-track follow-up: Teacher mic `WaveInEvent` robustness (M20 gap).
@@ -241,19 +274,24 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 
 ## Team handoff
 - **Cross-platform demo circle COMPLETE + optimized + EXPANDED:** M15 wire compat · M17 MJPEG
-  LIVE · **M18 H.264 LIVE (~10×)** · **M19 camera LIVE**. A macOS student streams its **screen
-  (production-grade H.264) AND its camera (Conference peer-cam)** into the shipped, unmodified
-  Windows Teacher over unchanged wire.
-- **Native-APIs progression (6/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
+  LIVE · **M18 H.264 LIVE (~10×)** · **M19 camera LIVE** · **M20 audio LIVE (3/4)** · **M21 lock
+  LIVE** · **M22 input-guard LIVE**. A macOS student streams screen (H.264) + camera + bidirectional
+  audio into the shipped, unmodified Windows Teacher, and is **enforced-locked with keystroke
+  suppression** — all over unchanged wire.
+- **Native-APIs progression (7/9 subsystems):** ✓ 27-A ScreenCaptureKit · ✓ 27-C JPEG ·
   ✓ 27-B H.264 · ✓ 28 AVCaptureSession camera · ✓ 29 AVAudioEngine audio (LIVE 3/4; teacher-mic =
-  Windows follow-up) · ✓ 30 AppKit shield/kiosk lock (**LIVE**; single-display) · ⏳ 31 input hooks
-  (CGEventTap) · ⏳ 32 system integration · ⏳ 33 UI ports.
+  Windows follow-up) · ✓ 30 AppKit shield/kiosk lock (**LIVE**; single-display) · ✓ 31 CGEventTap
+  input guard (**LIVE**; fails open) · ⏳ 32 system integration · ⏳ 33 UI ports.
+- **Student track near-complete:** only **Phase 32 (system integration)** remains for a shippable
+  macOS Student (scenario 2). The **Teacher track** is scoped as its own multi-phase effort —
+  roadmap `docs/TEACHER-TRACK-ROADMAP.md` (TT-0…TT-13, MockStudent-first).
 - **Windows-track follow-up (logged, not Mac-port work):** the shipped Teacher's own-mic broadcast
   uses a brittle fixed-format `WaveInEvent` (16 k/16/1) that emits no 0x0329 frames if the mic can't
   open at that exact format — verify the test-box mic; a v1.2.x patch could make it format-robust
   like the loopback path. The Mac plays any 0x0329 that arrives (proven via system audio).
 - Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession + AVAudioEngine +
-  shield/kiosk) proven **six times**; `MockTeacher --*test` is the reuse + de-risk pattern for every
-  remaining subsystem — it caught the camera preset bug (M19), two audio-harness bugs (M20), and the
-  console-main-thread shield hang (M21) headless before LIVE.
+  shield/kiosk + **CGEventTap**) proven **seven times**; `MockTeacher --*test` is the reuse + de-risk
+  pattern for every subsystem — it caught the camera preset bug (M19), two audio-harness bugs (M20),
+  the console-main-thread shield hang (M21), and the **cross-thread tap-enable / fail-open
+  instrumentation bug (M22)** headless before LIVE.
 - Both tracks green, synced with origin, independently documented.

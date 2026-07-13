@@ -967,6 +967,42 @@ A strong screen lock on macOS needs neither `CGDisplayCapture` (legacy) nor Acce
   timer/state LOGIC is then unit-testable with zero AppKit; prove the actual rendering separately
   with a **guaranteed-auto-hide** harness (show → timed sleep → unconditional hide + process-exit).
 
+**Native keystroke guard with `CGEventTap` (31-B/C) — additive to the lock, and it must FAIL OPEN.**
+Closing the launch-shortcut residuals a kiosk shield can't reach (Spotlight, Mission Control) needs a
+`CGEventTap` — which needs Accessibility. Treat it as **additive hardening, never the enforcement**:
+- **Tap:** `CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
+  options: .defaultTap, eventsOfInterest: keyDown|flagsChanged, …)`. `.defaultTap` (not
+  `.listenOnly`) is what lets the callback **suppress** by returning `nil`; everything else returns
+  `Unmanaged.passUnretained(event)`. Match `(keycode, EXACT major-modifier set)` so you don't
+  over-suppress (Cmd+Ctrl+Space = emoji picker ≠ Cmd+Space = Spotlight).
+- **Dedicated run-loop thread.** Put the tap's `CFRunLoopSource` on its **own `CFRunLoop` thread**
+  (`CFRunLoopRun()`), NOT the AppKit main loop — a busy main thread must never be able to stall
+  guarding. `stop()` = `CFRunLoopStop` + `CFRunLoopWakeUp`, then **join the thread with a timeout**
+  (bounded uninstall — never hangs, even if a callback is mid-execution).
+- **FAILS OPEN — the safety keystone.** A callback that doesn't return in ~1 s is **auto-disabled by
+  the OS**, which delivers `kCGEventTapDisabledByTimeout` — at which point keystrokes **already flow
+  untouched**. Re-enable there (`CGEvent.tapEnable(tap:enable:true)`) to resume; a wedged keyboard is
+  **not a reachable state**. Keep the callback allocation-light + lock-free so the OS never disables
+  you spuriously. (Same story for `.tapDisabledByUserInput`.)
+- **`CGEventTapEnable` only takes effect on the tap's OWN thread.** Calling it (or reading
+  `CGEvent.tapIsEnabled`) from another thread against an idle run loop is unreliable — the production
+  re-enable is fine because it runs *inside the callback* (the owning thread); a cross-thread test
+  hook is not. Prove fail-open via the **real OS watchdog** (arm a stall BEFORE `start()` so thread
+  creation publishes it), not via cross-thread enable/disable.
+- **Process-kill releases it** (the tap is a process-owned `CFMachPort`) — dead-man layer 1, same as
+  the shield's presentation options.
+- **Accessibility, graceful-degrade:** `AXIsProcessTrusted()` to check, `AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt: true])`
+  to prompt (async grant; ad-hoc-signed binaries may need re-granting after a rebuild). If denied,
+  **the lock still fully works** — install the tap only when trusted, prompt once, arm on the next lock.
+- **Injectable guard backend (same seam as the 30-E shield backend):** give `LockService` a
+  `trusted?/prompt/install/remove/isActive` backend — production = the native `nty_input_guard_*`
+  P/Invokes; test = flags. Automated tests then prove the **install-on-lock / release-on-every-dead-man-path**
+  lifecycle with **ZERO real taps**; the real tap is proven separately by a guaranteed-uninstall
+  harness that also **demonstrates** fail-open.
+- **Suppress:** Spotlight (Cmd+Space, Cmd+Opt+Space), Mission Control/Exposé (F3, Ctrl+Up/Down),
+  Spaces (Ctrl+Left/Right), Cmd+Tab, Cmd+`. **Pass through (intentional):** Cmd+Q (quit = process
+  death = dead-man unlock, and the escape hatch), volume/brightness/media keys, screenshots.
+
 ## 21. Reference links
 
 - Avalonia docs: https://docs.avaloniaui.net
@@ -983,6 +1019,8 @@ A strong screen lock on macOS needs neither `CGDisplayCapture` (legacy) nor Acce
 - AVAudioEngine (mic capture + playback): https://developer.apple.com/documentation/avfaudio/avaudioengine
 - CGShieldingWindowLevel: https://developer.apple.com/documentation/coregraphics/1454406-cgshieldingwindowlevel
 - NSApplicationPresentationOptions: https://developer.apple.com/documentation/appkit/nsapplication/presentationoptions
+- CGEventTap (Quartz Event Services): https://developer.apple.com/documentation/coregraphics/quartz_event_services
+- AXIsProcessTrusted / Accessibility permission: https://developer.apple.com/documentation/applicationservices/1459186-axisprocesstrusted
 
 ---
 _Living document (21 sections) — extend as later ports surface new patterns. Covered:
@@ -998,6 +1036,8 @@ Swift dylib + P/Invoke + streamed callback + TCC/bundle + VideoToolbox H.264 +
 AVCaptureSession camera (independent session, shared encoder, encode-time downscale) +
 AVAudioEngine audio (capture tap + converter, separate playback engine, jitter buffer) +
 screen-lock/kiosk (CGShieldingWindowLevel shield + presentationOptions, four-layer dead-man,
-injectable backend for headless tests) (§20). Still uncovered: complex
+injectable backend for headless tests) + CGEventTap keystroke guard (dedicated run-loop thread,
+FAILS OPEN on OS watchdog auto-disable, Accessibility graceful-degrade, injectable guard backend
+= zero real taps in tests) (§20). Still uncovered: complex
 ControlTemplates re-authoring (MaterialDesign control styles → Avalonia ControlThemes),
 DynamicResource theme-swap._
