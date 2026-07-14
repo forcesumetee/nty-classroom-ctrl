@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>NTY ClassroomCtrl Teacher</string>
+    <key>CFBundleDisplayName</key>
+    <string>NTY ClassroomCtrl Teacher</string>
+    <!-- STABLE bundle id, DISTINCT from the student (com.nty.classroomctrl.student). TCC binds the
+         Teacher's Screen Recording grant to this id. Ad-hoc builds re-prompt on REBUILD (P35 fixes);
+         a RELAUNCH of the same built bundle keeps the grant. -->
+    <key>CFBundleIdentifier</key>
+    <string>com.nty.classroomctrl.teacher</string>
+    <key>CFBundleVersion</key>
+    <string>1.2.32</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.2</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <!-- Must match the .NET apphost name (assembly name). -->
+    <key>CFBundleExecutable</key>
+    <string>ClassroomCtrl.Avalonia.Teacher</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.3</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- The Teacher is a WINDOWED app (no LSUIElement) — it shows in the Dock and opens its main
+         window on launch, unlike the menubar-only student. -->
+    <!-- TT-8: Screen Recording — NEW for the Teacher (until TT-8 it only DECODED, which needs no
+         permission). Capturing the teacher's own screen to broadcast ("Share My Screen") requires it.
+         The grant binds at process launch → grant it, then RELAUNCH the bundle. -->
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>NTY ClassroomCtrl Teacher captures your screen to share it with your students.</string>
+    <!-- Camera / Microphone — not used yet on the Teacher; declared ahead of TT-9/10/11 (teacher
+         audio broadcast + conference camera) so those don't need a re-package. Harmless until used. -->
+    <key>NSCameraUsageDescription</key>
+    <string>NTY ClassroomCtrl Teacher uses your camera for classroom video conferencing.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>NTY ClassroomCtrl Teacher uses your microphone to broadcast audio to your students.</string>
+    <!-- Local Network (macOS 15+/26 LNP): the Teacher hosts the classroom server on the local subnet
+         and exchanges frames/commands with students on it. Without this key the OS can deny local
+         connections for a bundled app. -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>NTY ClassroomCtrl Teacher hosts the classroom on your local network so students can connect.</string>
+</dict>
+</plist>
