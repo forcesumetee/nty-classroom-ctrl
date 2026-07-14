@@ -698,11 +698,15 @@ public class ControlServer : IDisposable
 
     /// <summary>Phase 15-E step 3 — teacher Recognize action.  Sends a
     /// targeted 0x0111 HandLower at the named student; the student-side
-    /// dispatch arm (Student.Agent.MainWindow OnIpcMessage HandLower case)
-    /// drops the local raised flag.  HandLower is normally student-initiated
-    /// (S→T) so the payload's StudentId is set on receive from
-    /// Envelope.SenderId; we mirror the same shape here for grep-friendly
-    /// auditing.  Reliable channel.</summary>
+    /// dispatch arm drops the local raised flag.  HandLower is normally
+    /// student-initiated (S→T) so the payload's StudentId is set on receive from
+    /// Envelope.SenderId; we mirror the same shape here for grep-friendly auditing.
+    /// TT-7 (SHIPPED BUG #6) fix — routes RELIABLE. Hand-lower is a targeted STATE
+    /// TOGGLE: dropping it clears the teacher's UI (teacher thinks it's handled) while
+    /// the STUDENT still shows the hand raised → a permanent desync until the student
+    /// manually lowers it. Same "dropped control message leaves a stuck state" shape as
+    /// ScreenStreamStop (#5). (The doc already SAID "Reliable channel"; the code was
+    /// lossy — shipped is lossy, Windows-track follow-up #6, shipped repo untouched.)</summary>
     public Task SendHandLowerAsync(Guid studentId, CancellationToken ct)
     {
         var msg = new HandRaiseMessage
@@ -713,7 +717,7 @@ public class ControlServer : IDisposable
         };
         var bytes = MessagePack.MessagePackSerializer.Serialize(msg);
         var env = Envelope.CreateTargeted(MessageType.HandLower, bytes, _teacherId, studentId);
-        return _tcp.BroadcastAsync(env, ct);
+        return _tcp.BroadcastReliableAsync(env, ct);   // targeted state toggle → never drop (bug #6)
     }
 
     /// <summary>Phase 15-E step 4 — teacher reaction broadcast.  Reliable; the

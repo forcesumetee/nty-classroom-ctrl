@@ -442,15 +442,26 @@ Everything else (screen capture, H.264 encode, camera, mic capture, single-strea
 Distinct from the optional *features* above: these are **known gaps/fixes** surfaced by the port, each
 recorded so it isn't re-investigated. None block the current Teacher-track phases.
 
-- **Windows-track follow-ups (5) — all found/fixed in the macOS port, all v1.2.x candidates; shipped
-  repo untouched:** ① **v1.2.1 installer** (ship — customer commitment); ② **teacher-mic `WaveInEvent`
+- **Windows-track follow-ups (6) — all found in the macOS port, all v1.2.x candidates; shipped repo
+  untouched.** ① **v1.2.1 installer** (ship — customer commitment); ② **teacher-mic `WaveInEvent`
   robustness** (M20 — brittle fixed-format capture); ③ **roster namespace-gap** (peerId vs EndpointId →
-  wrong-student-greys-out at 50; found TT-1, fixed in port); ④ **per-student lossy-channel** (per-student
-  commands defaulted `reliable:false` → DropOldest; found TT-5-A, fixed in port); ⑤ **lossy
-  `ScreenStreamStop`** (teacher-screen Stop routes DropOldest → a dropped Stop under a frame flood
-  strands a student in the takeover viewer; camera Start/Stop was already reliable, screen wasn't; found
-  TT-8-A, fixing in the port by promoting **Stop→reliable, Start stays lossy** — asymmetry deliberate).
-  *Reports to the Windows team; we do not touch the shipped repo.*
+  wrong-student-greys-out at 50; found TT-1); ④ **per-student lossy-channel commands** (per-student
+  commands defaulted `reliable:false` → DropOldest; found TT-5-A); ⑤ **lossy `ScreenStreamStop`**
+  (a dropped Stop under a frame flood strands a student in the takeover viewer; found TT-8-A →
+  Stop→reliable, Start stays lossy); ⑥ **lossy `SendHandLowerAsync`** (Recognize's hand-lower is a
+  targeted STATE TOGGLE on the lossy queue → a dropped lower clears the teacher's UI but leaves the
+  student's hand raised = permanent desync; found TT-7 → routed reliable in the port). *All fixed in
+  the port; reported to the Windows team; we do not touch the shipped repo.*
+
+  🔴 **RECOMMEND A SWEEP, NOT SIX POINT FIXES.** **THREE of the six (④⑤⑥) are the same bug class:** a
+  **control/state message riding the lossy (DropOldest) video/broadcast queue.** Dropping such a
+  message leaves a client in a state the server thinks it left — a *stuck state*. v1.2.1 fixed ONE
+  instance (bulk commands); the class was never swept. **The invariant to hand the Windows team:** for
+  every `*Async` send site, ask *"does dropping this leave a STUCK STATE?"* — if yes, `reliable:true`;
+  if it's ephemeral / self-expiring (a video frame, an expiring reaction), lossy is correct. Give them
+  the invariant + the audit, not six tickets. *(①②③ are distinct classes — installer/packaging,
+  mic-capture robustness, and a roster id-namespace bug — NOT the lossy-queue class; the "same class"
+  is ④⑤⑥ only.)*
 - **Student-track follow-ups (macOS enforcement gaps — block Mac-only feature parity for customer B):**
   **macOS power execution** (Sandbox has no logoff/restart/shutdown handler — power is a no-op on Mac;
   Teacher disables it per-platform) and **macOS policy enforcement** (Sandbox shows a policy badge but
