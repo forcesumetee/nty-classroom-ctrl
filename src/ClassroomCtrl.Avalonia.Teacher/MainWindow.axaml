@@ -48,6 +48,77 @@
                        IsVisible="{Binding IsEmpty}"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        FontSize="16" Foreground="{StaticResource ConfTextSecondaryBrush}"/>
+
+            <!-- TT-6-C — floating bulk-action toolbar. Visible only with a selection; slides in
+                 from the top (Transitions + the .shown class both bound to HasSelection). Shows
+                 the count + live "Sending i of N" / result summary, the in-scope actions
+                 (lock/unlock/power), and Clear. Power buttons are enabled only while at least one
+                 selected student can execute power (decision A); the op skips the rest. Only the
+                 actions that WORK are here — policy/mic/file arrive with their features. -->
+            <Border x:Name="BulkToolbar" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                    IsVisible="{Binding Grid.HasSelection}"
+                    Classes.shown="{Binding Grid.HasSelection}"
+                    Background="{StaticResource ConfTitleBarBgBrush}"
+                    BorderBrush="{StaticResource ConfBorderSubtleBrush}"
+                    BorderThickness="0,0,0,1" Padding="16,8">
+                <Border.Styles>
+                    <Style Selector="Border#BulkToolbar">
+                        <Setter Property="RenderTransform" Value="translateY(-48px)"/>
+                        <Setter Property="Opacity" Value="0"/>
+                        <Setter Property="Transitions">
+                            <Transitions>
+                                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18"/>
+                                <DoubleTransition Property="Opacity" Duration="0:0:0.18"/>
+                            </Transitions>
+                        </Setter>
+                    </Style>
+                    <Style Selector="Border#BulkToolbar.shown">
+                        <Setter Property="RenderTransform" Value="translateY(0)"/>
+                        <Setter Property="Opacity" Value="1"/>
+                    </Style>
+                    <Style Selector="Button.bulk">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource ConfBorderSubtleBrush}"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="Foreground" Value="{StaticResource ConfTextPrimaryBrush}"/>
+                        <Setter Property="Padding" Value="10,4"/>
+                        <Setter Property="Margin" Value="0,0,6,0"/>
+                        <Setter Property="FontSize" Value="12"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                    </Style>
+                </Border.Styles>
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14"
+                                   Foreground="{StaticResource ConfTextPrimaryBrush}">
+                            <Run Text="{Binding Grid.SelectedCount, Mode=OneWay}"/><Run Text=" selected"/>
+                        </TextBlock>
+                        <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" FontSize="13"
+                                   Foreground="{StaticResource ConfTextSecondaryBrush}"
+                                   Text="{Binding Grid.BulkStatus}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,8,0">
+                        <Button Classes="bulk" Content="Lock" Command="{Binding Grid.BulkLockCommand}"/>
+                        <Button Classes="bulk" Content="Unlock" Command="{Binding Grid.BulkUnlockCommand}"/>
+                        <Border Width="1" Background="{StaticResource ConfBorderSubtleBrush}" Margin="4,2,10,2"/>
+                        <Button Classes="bulk" Content="Log off" Command="{Binding Grid.BulkLogoffCommand}"
+                                IsEnabled="{Binding Grid.CanBulkPower}"/>
+                        <Button Classes="bulk" Content="Restart" Command="{Binding Grid.BulkRestartCommand}"
+                                IsEnabled="{Binding Grid.CanBulkPower}"/>
+                        <Button Classes="bulk" Content="Shut down" Foreground="#EA4335"
+                                Command="{Binding Grid.BulkShutdownCommand}"
+                                IsEnabled="{Binding Grid.CanBulkPower}"/>
+                    </StackPanel>
+                    <Button Grid.Column="3" Width="28" Height="28" Background="Transparent"
+                            BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"
+                            ToolTip.Tip="Clear selection (Esc)"
+                            Command="{Binding Grid.ClearSelectionCommand}">
+                        <TextBlock Text="✕" FontSize="14" FontWeight="Bold"
+                                   Foreground="{StaticResource ConfTextSecondaryBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                </Grid>
+            </Border>
         </Panel>
     </Grid>
 </Window>

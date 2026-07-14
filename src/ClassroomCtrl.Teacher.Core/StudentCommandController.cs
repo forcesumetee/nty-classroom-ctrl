@@ -1,9 +1,21 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ClassroomCtrl.Shared.Protocol;
 
 namespace ClassroomCtrl.Teacher.Core;
+
+/// <summary>TT-6-C — one student in a bulk operation. <see cref="CanReceivePower"/> is the
+/// tile's platform gate (<see cref="StudentPlatform.CanReceivePower"/>); bulk power skips the
+/// ones that can't execute it (macOS students) rather than shipping a no-op.</summary>
+public sealed record BulkTarget(Guid EndpointId, bool CanReceivePower);
+
+/// <summary>TT-6-C — the outcome of a bulk operation, for an honest, visible report:
+/// <see cref="Sent"/> reached, <see cref="Skipped"/> platform-skipped (macOS + power),
+/// <see cref="Cancelled"/> if the teacher declined the confirm.</summary>
+public sealed record BulkResult(StudentCommand Command, int Sent, int Skipped, bool Cancelled);
 
 /// <summary>
 /// TT-5 (macOS port) — the single entry point the Teacher UI calls to issue a per-student
@@ -73,6 +85,76 @@ public sealed class StudentCommandController
         {
             _log?.Invoke($"Command {command} → {endpointId} failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// TT-6-C — apply a command to a SELECTION, fanning out per-student on the reliable
+    /// channel (so the promoted guard covers bulk exactly as it covers a single command — a
+    /// bulk command cannot go lossy without bypassing this method). Mirrors the shipped bulk
+    /// loop (snapshot → sequential awaited reliable sends → "i of N" progress).
+    ///
+    ///   • Decision A — bulk POWER skips students that can't execute it (macOS): it applies to
+    ///     the Windows ones and reports the skip count. Lock/unlock apply to everyone.
+    ///   • Decision B — bulk power confirms ONCE (count-aware), even for a single student.
+    ///
+    /// Per-student failures are logged, not fatal (one unreachable student mustn't abort the
+    /// batch). Sequential-awaited on purpose (matches shipped): correctness over speed, paced
+    /// by the reliable channel; the caller shows "Sending i of N" because it isn't instant.
+    /// </summary>
+    public async Task<BulkResult> ExecuteBulkAsync(
+        IReadOnlyList<BulkTarget> targets,
+        StudentCommand command,
+        IProgress<(int Done, int Total)>? progress = null,
+        CancellationToken ct = default)
+    {
+        bool isPower = command is StudentCommand.Logoff or StudentCommand.Restart or StudentCommand.Shutdown;
+
+        // Decision A: power skips non-Windows students; lock/unlock apply to all.
+        var eligible = isPower ? targets.Where(t => t.CanReceivePower).ToList() : targets.ToList();
+        int skipped = targets.Count - eligible.Count;
+
+        if (eligible.Count == 0)
+            return new BulkResult(command, Sent: 0, Skipped: skipped, Cancelled: false);
+
+        // Decision B: one count-aware confirm for power (Cancel is the dialog's default).
+        if (isPower && !await _confirmAsync(BulkConfirmPrompt(command, eligible.Count)))
+            return new BulkResult(command, Sent: 0, Skipped: skipped, Cancelled: true);
+
+        int done = 0;
+        foreach (var t in eligible)
+        {
+            if (ct.IsCancellationRequested) break;
+            try
+            {
+                switch (command)
+                {
+                    case StudentCommand.Lock: await _sink.LockAsync(t.EndpointId, locked: true, reliable: true, ct); break;
+                    case StudentCommand.Unlock: await _sink.LockAsync(t.EndpointId, locked: false, reliable: true, ct); break;
+                    default: await _sink.PowerAsync(t.EndpointId, ToMessageType(command), reliable: true, ct); break;
+                }
+                done++;
+                progress?.Report((done, eligible.Count));
+            }
+            catch (Exception ex)
+            {
+                _log?.Invoke($"Bulk {command} → {t.EndpointId} failed: {ex.Message}");
+            }
+        }
+        return new BulkResult(command, Sent: done, Skipped: skipped, Cancelled: false);
+    }
+
+    /// <summary>The count-aware batch confirm body for a bulk power action.</summary>
+    public static string BulkConfirmPrompt(StudentCommand command, int count)
+    {
+        string verb = command switch
+        {
+            StudentCommand.Logoff => "Log off",
+            StudentCommand.Restart => "Restart",
+            StudentCommand.Shutdown => "Shut down",
+            _ => command.ToString(),
+        };
+        string who = count == 1 ? "1 student" : $"{count} students";
+        return $"{verb} {who}? Unsaved work on those computers will be lost.";
     }
 
     /// <summary>Maps a power <see cref="StudentCommand"/> to its wire <see cref="MessageType"/>.

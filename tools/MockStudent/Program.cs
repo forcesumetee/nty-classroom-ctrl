@@ -599,6 +599,41 @@ static class TeacherSelfTest
                 snap.Count == 3 && sel.Count == 1);
         }
 
+        // ── (0c) TT-6-C BULK — ExecuteBulkAsync fans out on the RELIABLE channel (so the guard
+        //    covers bulk BY CONSTRUCTION), skips non-Windows students for power (decision A), and
+        //    confirms once (decision B). Assert the CHANNEL + the skip + the confirm — a send-only
+        //    check would miss a bulk command regressing to the lossy path.
+        Console.WriteLine("-- (0c) TT-6 bulk (StudentCommandController.ExecuteBulkAsync) --");
+        {
+            var win1 = new BulkTarget(Guid.NewGuid(), CanReceivePower: true);
+            var win2 = new BulkTarget(Guid.NewGuid(), CanReceivePower: true);
+            var mac = new BulkTarget(Guid.NewGuid(), CanReceivePower: false);
+
+            var s1 = new RecordingCommandSink();
+            var r1 = await new StudentCommandController(s1).ExecuteBulkAsync(new[] { win1, win2, mac }, StudentCommand.Lock);
+            Check("bulk lock → all 3 on the RELIABLE channel", s1.Count == 3 && s1.AllReliable && r1.Sent == 3 && r1.Skipped == 0);
+
+            var s2 = new RecordingCommandSink();
+            var r2 = await new StudentCommandController(s2, confirmAsync: _ => Task.FromResult(true))
+                .ExecuteBulkAsync(new[] { win1, win2, mac }, StudentCommand.Shutdown);
+            Check("bulk power (mixed) → Windows only, Mac SKIPPED, all reliable",
+                s2.Count == 2 && s2.AllReliable && r2.Sent == 2 && r2.Skipped == 1);
+
+            var s3 = new RecordingCommandSink();
+            var r3 = await new StudentCommandController(s3, confirmAsync: _ => Task.FromResult(false))
+                .ExecuteBulkAsync(new[] { win1, win2 }, StudentCommand.Logoff);
+            Check("bulk power confirm=NO → NOTHING sent (cancelled)", s3.Count == 0 && r3.Cancelled && r3.Sent == 0);
+
+            var s4 = new RecordingCommandSink();
+            int prompts4 = 0;
+            var r4 = await new StudentCommandController(s4, confirmAsync: _ => { prompts4++; return Task.FromResult(true); })
+                .ExecuteBulkAsync(new[] { mac }, StudentCommand.Shutdown);
+            Check("bulk power all-macOS → nothing sent, all skipped, never prompted",
+                s4.Count == 0 && r4.Sent == 0 && r4.Skipped == 1 && !r4.Cancelled && prompts4 == 0);
+
+            Check("bulk confirm prompt is count-aware", StudentCommandController.BulkConfirmPrompt(StudentCommand.Shutdown, 2).Contains("2 students"));
+        }
+
         // ── Server 1: the REAL student WireClient against the REAL server. ──
         // Large stale window (8 s > the client's 5 s heartbeat) so healthy clients never false-stale.
         await WithServer(8000, Check, "server-1 (real WireClient)", async (server, roster, port) =>

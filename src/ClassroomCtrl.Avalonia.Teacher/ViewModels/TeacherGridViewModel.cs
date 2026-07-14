@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using ClassroomCtrl.Teacher.Core;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -39,6 +40,18 @@ public partial class TeacherGridViewModel : ObservableObject
     // TT-6-B — selection aggregates the toolbar binds to.
     public int SelectedCount => _selection.Count;
     public bool HasSelection => _selection.HasSelection;
+
+    // TT-6-C — bulk. CanBulkPower gates the toolbar's power buttons (decision A: enabled while
+    // AT LEAST ONE selected student can execute power; the op skips the rest). BulkStatus shows
+    // "Sending i of N…" during a run and the honest result summary after (incl. any skip count).
+    public bool CanBulkPower => Students.Any(s => _selection.IsSelected(s.EndpointId) && s.CanReceivePower);
+
+    [ObservableProperty] private string bulkStatus = "";
+
+    // Set by App after the command controller is built (it needs the window for the confirm
+    // dialog, which is created after this VM). Bulk commands are no-ops until attached.
+    private StudentCommandController? _commands;
+    public void AttachCommands(StudentCommandController commands) => _commands = commands;
 
     public TeacherGridViewModel(StudentRoster roster)
     {
@@ -85,14 +98,66 @@ public partial class TeacherGridViewModel : ObservableObject
 
     /// <summary>A left-click on a tile, with the (decoded) modifier state. macOS idiom:
     /// plain = select only; ⌘ = toggle; Shift = range from the anchor.</summary>
-    public void HandleClick(Guid id, bool cmdKey, bool shiftKey) =>
+    public void HandleClick(Guid id, bool cmdKey, bool shiftKey)
+    {
+        BulkStatus = "";   // a manual selection change clears a stale result summary
         _selection.HandleClick(id, cmdKey, shiftKey, OrderedIds());
+    }
 
     [RelayCommand]
-    private void SelectAll() => _selection.SelectAll(OrderedIds());
+    private void SelectAll()
+    {
+        BulkStatus = "";
+        _selection.SelectAll(OrderedIds());
+    }
 
     [RelayCommand]
-    private void ClearSelection() => _selection.Clear();
+    private void ClearSelection()
+    {
+        BulkStatus = "";
+        _selection.Clear();
+    }
+
+    // ─────── TT-6-C: bulk actions — fan out through StudentCommandController ───────
+    // Routing bulk through the controller means the promoted reliable-channel guard covers it
+    // by construction (a bulk command can't go lossy without bypassing the controller).
+
+    [RelayCommand] private Task BulkLock() => RunBulkAsync(StudentCommand.Lock);
+    [RelayCommand] private Task BulkUnlock() => RunBulkAsync(StudentCommand.Unlock);
+    [RelayCommand] private Task BulkLogoff() => RunBulkAsync(StudentCommand.Logoff);
+    [RelayCommand] private Task BulkRestart() => RunBulkAsync(StudentCommand.Restart);
+    [RelayCommand] private Task BulkShutdown() => RunBulkAsync(StudentCommand.Shutdown);
+
+    private async Task RunBulkAsync(StudentCommand command)
+    {
+        if (_commands is null) return;
+        var targets = GetSelectedSnapshot()
+            .Select(t => new BulkTarget(t.EndpointId, t.CanReceivePower))
+            .ToList();
+        if (targets.Count == 0) return;
+
+        var progress = new Progress<(int Done, int Total)>(p => BulkStatus = $"Sending {p.Done} of {p.Total}…");
+        var result = await _commands.ExecuteBulkAsync(targets, command, progress);
+        BulkStatus = FormatBulkResult(result);
+    }
+
+    private static string FormatBulkResult(BulkResult r)
+    {
+        if (r.Cancelled) return "";
+        string verb = r.Command switch
+        {
+            StudentCommand.Lock => "Locked",
+            StudentCommand.Unlock => "Unlocked",
+            StudentCommand.Logoff => "Logged off",
+            StudentCommand.Restart => "Restarted",
+            StudentCommand.Shutdown => "Shut down",
+            _ => r.Command.ToString(),
+        };
+        // Decision A — the skip MUST be visible, never a silent partial.
+        return r.Skipped > 0
+            ? $"{verb} {r.Sent} · {r.Skipped} macOS skipped (not supported)"
+            : $"{verb} {r.Sent}";
+    }
 
     /// <summary>Point-in-time copy of the selected tiles — the bulk target list. Stable
     /// across a mid-loop disconnect (the model's Snapshot + this ToList are both copies).</summary>
@@ -104,5 +169,6 @@ public partial class TeacherGridViewModel : ObservableObject
         foreach (var s in Students) s.IsSelected = _selection.IsSelected(s.EndpointId);
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(CanBulkPower));
     }
 }

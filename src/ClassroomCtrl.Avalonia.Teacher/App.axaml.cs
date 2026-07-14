@@ -44,6 +44,10 @@ public partial class App : Application
                 _session,
                 confirmAsync: msg => ConfirmDialog.ShowAsync(window, msg),
                 log: msg => Console.Error.WriteLine($"[cmd] {msg}"));
+            // TT-6-C: the grid's bulk commands fan out through the same controller (so the
+            // reliable-channel guard covers bulk too). Attached here — the controller needs the
+            // window (for the confirm dialog), which is created after the grid VM.
+            _session.Grid.AttachCommands(_commands);
 
             // Double-tap a tile → open (or focus) that student's live screen view.
             window.StudentActivated += tile =>
