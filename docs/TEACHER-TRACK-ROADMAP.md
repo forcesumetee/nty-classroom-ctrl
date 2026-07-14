@@ -1,5 +1,12 @@
 # Teacher Track Roadmap — macOS ClassroomCtrl Teacher (Avalonia)
 
+> 🔴 **RE-SCOPE 2026-07-14 — READ §0 (top of file) FIRST.** Customer B (Mac teacher + Mac students,
+> 50 seats) wants ALL 7 previously-"deferred" features. **NO new wire needed** (except restoring
+> `Exam.Shared`). Critical path **CORRECTED** — the conference is *silent* without audio, so TT-9 +
+> TT-10 move onto it. Honest completion: **Teacher ~37% · Student ~55% (not 95%) · System ~40%.**
+> Companion: `docs/STUDENT-TRACK-ROADMAP-V2.md`. The §5 phase list below is **superseded by §0**
+> where they conflict (§5 kept for the TT-0…TT-6 history).
+
 **Status:** TT-0…TT-6 COMPLETE + LIVE-confirmed (2026-07-14) — MockStudent harness · Teacher.Core
 (transport + router + roster) · windowed Teacher (live student grid) · per-student **live screen view
 (MJPEG + H.264 decode)**, proven against BOTH a shipped, unmodified Windows Student (OpenH264→VT
@@ -25,6 +32,92 @@ command** students (multi-select + bulk incl.). Hand-off doc for a parallel shif
 **Author context:** drafted 2026-07-13 after Phase 31-B (Student track), grounded in a
 structural map of the shipped Windows Teacher (`/Users/fewfee/Dev/nty-classroom-macos`,
 v1.2.1, .NET 10 / WPF). **That shipped repo is READ-ONLY — copy from it, never modify it.**
+
+---
+
+## 0. RE-SCOPE (2026-07-14) — customer B wants all 7 "deferred" features · AUTHORITATIVE
+
+**Trigger:** the team confirmed customer B (Mac teacher + Mac students, 50 seats) wants ALL SEVEN
+features filed as "deferred/optional" in §7: (1) remote control, (2) demonstration/annotation,
+(3) net movie, (4) recording, (5) breakout rooms, (6) exam/quiz, (7) UDP discovery. Read-only
+investigation done. This section is the authoritative revised plan; §5 is kept for TT-0…TT-6 history.
+
+### 0.1 Two headline findings
+1. **🟢 NO NEW WIRE for any of the seven.** Every feature's MessageType tags AND payload POCOs are
+   already vendored in the frozen `Shared.Wire` (Phase 24.1) — verified. Thirteen sessions of
+   byte-stability hold. **One exception: exam/quiz needs `ClassroomCtrl.Exam.Shared` restored**
+   (the `Quiz*` tags exist; the payload POCOs were `#if false`'d out in TT-1-C). UDP discovery is
+   not TCP wire at all (a separate UDP beacon on 7778, `UdpClient` — cross-platform, near-direct port).
+2. **The work MOVED to Student + native + UI.** `Teacher.Core` (`ControlServer`) is already ported
+   for most send-paths (remote-control send, movie broadcast, breakout group-state, demo state,
+   recording-notify). **The Mac Student (Sandbox) handles NONE of the seven** — see
+   `docs/STUDENT-TRACK-ROADMAP-V2.md`. Remaining weight = Student handlers + new native (CGEvent
+   inject, AVPlayer, capture-to-file, UdpClient) + UI.
+
+### 0.2 🔴 Q1 CORRECTION — the conference is SILENT without audio (critical path grew)
+Traced in the shipped product: **the conference star-relay carries VIDEO ONLY** — it fans out
+exactly screen-share (`ControlServer.cs:1579`), webcam (`:1634`), and reactions (`:1516`). There is
+**no `ConferenceAudio*` message type**; audio is a physically separate wire path on separate
+channels (`_audioOutbox`/`_voiceOutbox` vs the video `_outbox`). Consequences:
+- **TT-11 alone = a silent conference.** An audible conference REQUIRES **TT-9** (teacher hears
+  students, `StudentAudioStream` 0x032B-0x032D + `StudentAudioMixer`) **+ TT-10** (students hear
+  teacher, `AudioStream` 0x0328-0x032A). Both move ONTO the critical path.
+- **🚩 Product decision (flag before TT-11):** true **student↔student** audio (everyone hears
+  everyone) does NOT exist in the shipped product — the conference mic button only does
+  student→teacher talkback to the *teacher's local speaker*; the group-voice peer-relay (0x0640)
+  was never wired to the conference (breakout-only). If customer B expects peer-to-peer conference
+  audio, that is **net-new work** (a 0x0640-style relay bound to `ConferenceId`), not a port.
+
+### 0.3 Revised phase table (TT-7 … TT-18)
+🔴 = multi-peer topology (build + LIVE with ≥2 students); ⚠️ = milder multi-student (aggregation/broadcast).
+
+| Phase | Goal | New native? | Multi-peer | Effort·Risk | Notes |
+|---|---|---|---|---|---|
+| **TT-7** | Chat + hand-raise + reactions **(+ Mac-Student SEND)** | no | ⚠️ aggregation | **M·LOW** | hand-raise SEND already exists; chat/reaction send net-new; DMs `reliable:true` |
+| **TT-8** | Teacher "Share My Screen" | no (reuse M17/M18) | ⚠️ broadcast | **M·LOW–MED** | +Screen Recording TCC on Teacher (**new** — first capture); **Mac-Student display = Student item #10** |
+| **TT-9** | Student audio mixing | extend M20 | 🔴 yes | **M·MED** | **ON critical path** (conference audio) |
+| **TT-10** | Teacher audio broadcast + mic-monitor | reuse M20 | ⚠️ | **M–H·MED–HIGH** | **ON critical path**; system-loopback gap (§6) |
+| **TT-11** | Camera + Conference (star relay) | reuse M19 | 🔴 yes (flagship) | **L·HIGH** | video-only relay; audio via TT-9/10; peer-audio net-new (0.2) |
+| **TT-12a** | File distribution | no | ⚠️ broadcast | **S·LOW** | reliable channel |
+| **TT-12b** | **Net movie** | 🔴 AVPlayer + sync | ⚠️ broadcast | **M·MED** | rides TT-12a transport; teacher SEND ported |
+| **TT-13** | System integration + packaging **+ UDP discovery** | UdpClient + LNP entitlement | no | **M·MED** | discovery = near-direct `UdpClient` port |
+| **TT-14** | **Remote control** | 🔴 CGEvent inject + Accessibility | no | **M–L·MED–HIGH** | teacher SEND ported; student inject net-new |
+| **TT-15** | **Demonstration** (spotlight relay) | reuse capture + decode | 🔴 yes | **M·MED** | build with the TT-9/11 multi-peer cluster |
+| **TT-16** | **Recording** | 🔴 ffmpeg-bundle / AVAssetWriter | no | **M·MED** | 🚩 decision flagged (0.6); notify ported |
+| **TT-17** | **Breakout rooms** (+ room chat) | reuse relay | 🔴 yes | **L·HIGH** | activates the inert `IsForMe` `TargetGroupId` branch |
+| **TT-18** | **Exam / quiz** | no (restore `Exam.Shared`) | no | **L·HIGH** | needs `Exam.Shared` POCOs restored + large UI |
+
+→ then **UI POLISH → LICENSE/ACTIVATE KEY → P35 (sign+notarize) → SHIP** (end-game unchanged, §5).
+
+### 0.4 Revised critical path to a customer-B-deployable build (CORRECTED for audio)
+**TT-7 → TT-8 → TT-9 → TT-10 → TT-11 (now audible) → TT-12a (files) → TT-13 (discovery + packaging) → P35.**
+The remaining re-scope features — **remote control (TT-14), demonstration (TT-15), recording (TT-16),
+breakout (TT-17), exam/quiz (TT-18)** — are **parity features that fast-follow by customer priority**;
+net movie (TT-12b) and UDP discovery (TT-13) fold into those phases. The three **L·HIGH** phases
+(TT-11 conference, TT-17 breakout, TT-18 quiz) dominate the remaining effort.
+
+### 0.5 Build order (approved 2026-07-14)
+- **BATCH 1 = TT-7 + TT-8** — both LOW risk, no new native, independent; one LIVE session, per-phase
+  checkpoints. NOTE: TT-8's **teacher-capture** side is LIVE-testable against Windows students
+  immediately (they already decode); the **Mac-Student display** of a teacher screen is **net-new**
+  (Student-track item #10) and is what customer B needs — track it explicitly.
+- **TT-12 SPLIT:** **TT-12a** file distribution (LOW, no native, batchable later) / **TT-12b** net
+  movie (new native — AVPlayer + sync drift — solo).
+
+### 0.6 🚩 Decisions flagged for later (do NOT decide now)
+- **TT-16 Recording — ffmpeg-bundle vs AVAssetWriter.** ffmpeg (shipped uses NReco/ffmpeg):
+  cross-platform, but a large bundled binary + licensing to clear. AVAssetWriter: native, cleaner,
+  but new code. A real trade-off — decide **at** TT-16, not by accident.
+- **TT-11 conference audio topology.** teacher↔student (shipped parity, via TT-9/10) vs student↔student
+  peer audio (net-new, see 0.2). Confirm the expectation before building TT-11.
+
+### 0.7 Honest completion (the denominator grew)
+- **Teacher track: ~37%** — 7 of ~19 phases (was a nominal 50% over the old TT-0…TT-13).
+- **Student track: ~55%** against full customer-B scope — **NOT the 95% claimed at M23** (that was
+  the original narrow scope: a base Mac Student talking to a Windows teacher). See V2 doc.
+- **SYSTEM: ~40%.** Wire 100% done; the hardest foundational native (capture/encode/decode/lock/
+  audio/camera) done and LIVE; the broad feature tail mostly not. **Not under 37%** — but the
+  Student-track "95%" was the real illusion, not the Teacher's already-honest 37%.
 
 ---
 
@@ -333,10 +426,12 @@ Everything else (screen capture, H.264 encode, camera, mic capture, single-strea
   is **unnecessary and is dropped**. `--classroom 40` (MockStudent) stays as a **stress test, not a
   gate**. *If* a live-thumbnail-wall feature is ever requested, it is a NEW feature that would
   reintroduce this gate — a scoped request with known cost, not a bug. See `docs/TT-3-FINDINGS.md`.
-- **Deferred/optional features** (not on the shippable-Teacher path; port later if wanted): remote
-  control (`0x0480-0x0486`), demo/annotation/screen-pen (`0x0440-0x0452`), net movie
-  (`0x0470-0x0473`), recording (NReco/ffmpeg → AVAssetWriter), breakout rooms (`0x0600-0x0625`),
-  exam/quiz + charts + Excel/Word export (`0x0700-0x0703`), UDP discovery beacon (7778).
+- **~~Deferred/optional features~~ → NOW SCHEDULED (re-scope 2026-07-14, §0).** All 7 are wanted by
+  customer B and are slotted as TT-12b/TT-13/TT-14–18: remote control (`0x0480-0x0486`),
+  demo/annotation/screen-pen (`0x0440-0x0452`), net movie (`0x0470-0x0473`), recording (NReco/ffmpeg
+  → ffmpeg-bundle **or** AVAssetWriter — 🚩 §0.6), breakout rooms (`0x0600-0x0625`), exam/quiz +
+  charts + Excel/Word export (`0x0700-0x0703` — needs `Exam.Shared` restored), UDP discovery beacon
+  (7778). **No new wire needed for any of them** except the `Exam.Shared` POCO library. See §0.
 
 ### Cross-track follow-ups (deferred, tracked — current as of 2026-07-14)
 
