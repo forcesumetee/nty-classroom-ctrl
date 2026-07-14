@@ -294,7 +294,8 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 1. **Teacher track (macOS Teacher, Avalonia)** — roadmap **TT-0…TT-13** in
    `docs/TEACHER-TRACK-ROADMAP.md`. **TT-0 (MockStudent) + TT-1 (Teacher.Core: transport + router +
    roster) + TT-2 (windowed Teacher — live student grid) + TT-3 (per-student live screen view, MJPEG)
-   + TT-4 (H.264 screen DECODE, VTDecompressionSession) COMPLETE + LIVE-confirmed 2026-07-14.**
+   + TT-4 (H.264 screen DECODE, VTDecompressionSession) + TT-5 (core commands — lock/unlock + power)
+   COMPLETE + LIVE-confirmed 2026-07-14.**
    Scenario 3 (Mac T + Win S) spans the whole chain: a shipped, **unmodified Windows Student joins the
    roster (TT-1), appears as a live TILE (TT-2), and its screen renders live — MJPEG (TT-3) AND H.264
    (TT-4, OpenH264→VideoToolbox interop)** — plus the **network-cut → 15 s stale-sweep → tile-gone**
@@ -324,11 +325,23 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
    the §20 background→UI marshal is now proven **9×**. An undecodable H.264 keyframe → a visible MJPEG
    fallback (Stop + Request(Mjpeg) + status), not a dead window.
 
+   **🟢 TT-5 CORE COMMANDS DONE (2026-07-14).** The Mac Teacher now COMMANDS students: **lock/unlock**
+   enforced on both Mac (M21 hard kiosk) and Windows (soft overlay) students, and **power**
+   (logoff/restart/shutdown) on Windows students — every command on the **reliable channel** (the
+   `StudentCommandController`/`IStudentCommandSink` seam hardcodes `reliable:true`, fixing the shipped
+   v1.2.1-class per-student lossy bug — see the Windows follow-up below). Power is **platform-gated**
+   via `HelloMessage.OsVersion` (already on the wire — **zero Shared.Wire change**; the roster was just
+   discarding it): enabled for Windows, disabled-with-tooltip for Mac students (no macOS power handler
+   yet — Student-track gap). Confirm dialog for power (Cancel = default — safer than the shipped Yes
+   default). **Policy + mic monitor deferred.** Gates: TT5Gate 23/23 (asserts the CHANNEL, not just the
+   send) · `--teacherselftest` 22/22 (+2 delivery checks) · T1-T27. See `docs/TT-5-*`.
+
    **The Mac Teacher now:** server + roster + live grid + **live screen view (MJPEG + H.264, from
-   Windows & Mac students)**. Both biggest Teacher-track risks — scale (TT-3) and the bitstream
-   (TT-4) — are retired. **Next: TT-5** (core commands — lock/unlock, policy, power: the full-circle
-   interop where a macOS Teacher sends the exact messages the macOS Student already receives). **The
-   critical path for customer B (Mac teacher + Mac students, 50 seats).**
+   Windows & Mac students)** + **core commands (lock/unlock + power, platform-gated, reliable)**. Both
+   biggest Teacher-track risks — scale (TT-3) and the bitstream (TT-4) — are retired. **Next: TT-6**
+   (multi-select + bulk actions, v1.2 — reuses the TT-5 command path; bulk already routes reliable:true
+   in the shipped code). **The Mac Teacher can now SEE and COMMAND students** — the critical path for
+   customer B (Mac teacher + Mac students, 50 seats).
 2. **Phase 35 — Distribution** — Developer ID codesign + notarization (stops the ad-hoc-rebuild TCC
    re-prompt; a *relaunch* of the same built bundle already keeps grants) + `.pkg`/`.dmg` installer +
    self-contained runtime bundling (for .NET-less lab Macs). Makes the Student track deployable at scale.
@@ -336,7 +349,9 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
 4. **Ship v1.2.1 installer** (Windows track, ~1 h) — customer commitment.
 5. Windows-track follow-up: Teacher mic `WaveInEvent` robustness (M20 gap).
 6. **Windows-track follow-up: roster namespace-gap bug** (peerId vs EndpointId) — found TT-1-A, fixed in the macOS port (TT-1-D); candidate v1.2.x patch. Details below.
-7. Path C breakout peer voice (TargetGroupId + PTT + AEC) — deferred audio scope.
+7. **Windows-track follow-up: per-student commands route through the LOSSY queue** (found TT-5-A, fixed in the macOS port TT-5-B) — the v1.2.1 fix hit the BULK path only; per-student context-menu commands still default to `reliable:false`. Candidate v1.2.x patch. Details below.
+8. **Student-track follow-ups (Q5 gaps for Mac-only classrooms / customer B):** (a) **macOS power execution** — the Mac Student has NO logoff/restart/shutdown handler (power commands are silently ignored); (b) **macOS policy enforcement** — the Mac Student receives `PolicyApply` and shows a badge but enforces nothing (no USB/optical/printing/process/host blocking). Both needed before a Mac-only classroom has feature parity. Details below.
+9. Path C breakout peer voice (TargetGroupId + PTT + AEC) — deferred audio scope.
 
 ## Team handoff
 - **Cross-platform demo circle COMPLETE:** M15 wire · M17 MJPEG · **M18 H.264 (~10×)** · M19 camera ·
@@ -365,6 +380,14 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
   - **Invisible at 1–2 seats. At 50 (both customers), a mid-class disconnect greys out the WRONG student.**
   - **Fix:** bridge peerId ↔ EndpointId at the transport→app boundary (adopt the Hello's EndpointId per peer, report EndpointId on disconnect, guard so a stale socket doesn't evict a reconnected owner). Teacher-internal C#, zero wire change.
   - Candidate for a **v1.2.x Windows patch**. We do NOT touch the shipped repo — this is a report to the team.
+- **Windows-track follow-up (logged, not Mac-port work) — PER-STUDENT COMMANDS ON THE LOSSY QUEUE** (found TT-5-A, fixed in the macOS port TT-5-B):
+  - The v1.2.1 "18/50 locked" fix set `reliable:true` on the **BULK** path (`MainViewModel` 3790/3810/3887/3921/3941/4041) but **NOT** on the per-student context-menu commands (1423 lock, 1610/1631 policy, 1710 power, 809 mic-mute) — those still default to `reliable:false` → `_outbox` (DropOldest, cap 16), the **same lossy video queue**.
+  - A per-student command issued while the teacher is screen-sharing competes with outbound video frames and **can be silently evicted**. Same bug class as v1.2.1, **half-fixed**.
+  - **Fix:** pass `reliable:true` at the per-student call sites. Teacher-internal C#, zero wire change.
+  - Candidate for a **v1.2.x Windows patch**. We do NOT touch the shipped repo — this is a report to the team.
+- **Student-track follow-ups (logged) — the two Q5 gaps (honest gaps, never built; block Mac-only feature parity):**
+  - **macOS power execution** — the Mac Student (Sandbox `ConnectionViewModel`) has **no `ForceShutdown`/`ForceRestart`/`ForceLogoff` handler**; the Teacher sends correctly (TT-5) but the command is silently ignored. The Teacher **disables** power for Mac tiles so nothing dead ships, but a Mac-only classroom (customer B) can't use power until this lands.
+  - **macOS policy enforcement** — the Mac Student receives `PolicyApply` and **shows a badge but enforces nothing** (no USB/optical/printing/process/host blocking). This is why TT-5 **deferred policy**: a reflect-only badge isn't a feature. Pair the Teacher-side policy editor with this enforcement in one phase.
 - Native-interop template (**§20**, incl. VideoToolbox + AVCaptureSession + AVAudioEngine +
   shield/kiosk + **CGEventTap**) proven **seven times** (M23 added no native dylib — it's byte-unchanged);
   `MockTeacher --*test` is the reuse + de-risk pattern — it caught the camera preset bug (M19), two

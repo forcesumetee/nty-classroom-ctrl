@@ -1,13 +1,16 @@
 # Teacher Track Roadmap — macOS ClassroomCtrl Teacher (Avalonia)
 
-**Status:** TT-0…TT-4 COMPLETE + LIVE-confirmed (2026-07-14) — MockStudent harness · Teacher.Core
+**Status:** TT-0…TT-5 COMPLETE + LIVE-confirmed (2026-07-14) — MockStudent harness · Teacher.Core
 (transport + router + roster) · windowed Teacher (live student grid) · per-student **live screen view
 (MJPEG + H.264 decode)**, proven against BOTH a shipped, unmodified Windows Student (OpenH264→VT
-interop) and a Mac Student (our M18 VideoToolbox H.264 — customer B's path). **Both biggest risks are
-now retired:** the SCALE gate (TT-3 — screens are on-demand, 1–4 concurrent, not a 40-tile wall, §7)
-and the BITSTREAM (TT-4 — one uniform Annex-B Baseline shape from every student, §5/§6). What remains
-(TT-5…TT-13) is **known work with no research risk**, except the TT-10 system-audio-loopback
-investigation (§6/§7). **TT-5 next** (core commands). Hand-off doc for a parallel shift.
+interop) and a Mac Student (our M18 VideoToolbox H.264 — customer B's path) · **core commands
+(lock/unlock + power)** — a Mac Student is hard-locked (M21 kiosk), a Windows Student locks + logs off,
+power platform-gated, every command on the reliable channel. **Both biggest risks are now retired:**
+the SCALE gate (TT-3 — screens are on-demand, 1–4 concurrent, not a 40-tile wall, §7) and the BITSTREAM
+(TT-4 — one uniform Annex-B Baseline shape from every student, §5/§6). What remains (TT-6…TT-13) is
+**known work with no research risk**, except the TT-10 system-audio-loopback investigation (§6/§7).
+**TT-6 next** (multi-select + bulk actions, v1.2). The Mac Teacher can now **see AND command** students.
+Hand-off doc for a parallel shift.
 **Author context:** drafted 2026-07-13 after Phase 31-B (Student track), grounded in a
 structural map of the shipped Windows Teacher (`/Users/fewfee/Dev/nty-classroom-macos`,
 v1.2.1, .NET 10 / WPF). **That shipped repo is READ-ONLY — copy from it, never modify it.**
@@ -114,7 +117,7 @@ lock/policy + bulk).
 | **TT-2** | **Student grid UI (tiles)** | no | **M** | Windows Students show as live tiles; join/leave updates |
 | **TT-3** | **Receive + display student screens — MJPEG** | no | **M** | Request a Windows Student's screen → see it live (MJPEG) |
 | **TT-4 ✅** | **H.264 student-screen DECODE (VTDecompressionSession)** | **YES** | **M** (done) | ✅ LIVE — Windows (OpenH264) AND Mac (VideoToolbox) students → decoded + displayed |
-| **TT-5** | **Core commands: lock/unlock, policy, power** | no | **M** | Mac Teacher locks/policies/logs-off a Windows Student |
+| **TT-5 ✅** | **Core commands: lock/unlock + power** (policy deferred) | no | **M** (done) | ✅ LIVE — Mac Teacher locks a Mac Student (M21 kiosk) + locks/logs-off a Windows Student; power platform-gated |
 | **TT-6** | **Multi-select + bulk actions (v1.2)** | no | **M** | Select N Windows Students → bulk lock/policy/mute/file/power |
 | TT-7 | Chat + notifications + hand-raise + reactions | no | M | Two-way chat; hand-raise/reaction surfaces on the Mac Teacher |
 | TT-8 | Teacher screen broadcast ("Share My Screen") | no (reuse M17/M18) | M | Mac Teacher shares screen → Windows Students display it |
@@ -172,11 +175,25 @@ shape? Investigate that first (the M18 encoder findings are the template). *Stru
 streams H.264 (loopback encode→decode round-trip). *LIVE:* a Windows Student in H.264 mode → decoded on
 the Mac Teacher. `--classroom 40` stays a **stress test, not a gate**.
 
-**TT-5 — Core commands.** Port the send-sites: `BroadcastLockAsync`/`LockOneAsync` (`0x0300/0x0301`),
-`BroadcastPolicyAsync`/`ApplyPolicyToOneAsync`/revert (`0x0400/0x0401`), `BroadcastPowerAsync`
-(`ForceShutdown/Restart/Logoff 0x0302-0x0304`), with confirm dialogs. **Full-circle interop:** these
-are the exact messages the *macOS Student* already receives (M15/M21) — now a macOS Teacher sends
-them. *LIVE:* Mac Teacher ⇄ Windows Student for each.
+**TT-5 — Core commands ✅ COMPLETE + LIVE (2026-07-14).** Shipped **lock/unlock + power**
+(logoff/restart/shutdown); **policy deferred** (needs an editor dialog AND macOS enforcement, which
+doesn't exist — a reflect-only badge isn't a feature). `StudentCommandController` + `IStudentCommandSink`
+(the command-side analog of TT-3's `ScreenViewController`/`IStudentStreamSource`) forward to the
+already-ported `ControlServer.LockOneAsync`/`PowerOneAsync` — **every command `reliable:true`**, fixing
+the shipped v1.2.1-class latent bug where per-student commands defaulted to the lossy queue. Power is
+**platform-gated** (`StudentPlatform.CanReceivePower` from `HelloMessage.OsVersion` — already on the
+wire, zero Shared.Wire change): enabled for Windows students, disabled-with-tooltip for Mac students
+(no macOS power handler yet). Confirm dialog for power (Cancel = default, safer than shipped Yes).
+**Full-circle interop proven:** a macOS Teacher sends the exact messages the macOS Student already
+receives (M15/M21) — a Mac Student is hard-locked (M21 kiosk), a Windows Student locks + logs off.
+Gates: TT5Gate 23/23 (reliable channel + platform gate + confirm) · `--teacherselftest` 22/22 (+2
+delivery checks) · T1-T27. See `docs/TT-5-FINDINGS.md`. *(Original plan below.)*
+
+**TT-5 (original plan) — Core commands.** Port the send-sites: `BroadcastLockAsync`/`LockOneAsync`
+(`0x0300/0x0301`), `BroadcastPolicyAsync`/`ApplyPolicyToOneAsync`/revert (`0x0400/0x0401`),
+`BroadcastPowerAsync` (`ForceShutdown/Restart/Logoff 0x0302-0x0304`), with confirm dialogs.
+**Full-circle interop:** these are the exact messages the *macOS Student* already receives (M15/M21) —
+now a macOS Teacher sends them. *LIVE:* Mac Teacher ⇄ Windows Student for each.
 
 **TT-6 — Multi-select + bulk (v1.2).** Port `_selectedTileIds`, `HasSelection`, Shift-range anchor,
 `SelectAll`/`ClearSelection`, the `Bulk*` `[RelayCommand]`s (`MainViewModel.cs:3777-4024`), and the
