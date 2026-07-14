@@ -1,0 +1,17 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ClassroomCtrl.Avalonia.Sandbox.ViewModels"
+        x:Class="ClassroomCtrl.Avalonia.Sandbox.Views.TeacherScreenWindow"
+        x:DataType="vm:TeacherScreenViewModel"
+        Width="960" Height="620"
+        Title="Teacher's Screen"
+        Background="#0D1224">
+    <!-- TT-8-D — the teacher's shared screen (takeover viewer, the shipped ScreenViewWindow analog).
+         Opened on ScreenStreamStart, closed on ScreenStreamStop (reliable — bug #5) or disconnect. -->
+    <Grid RowDefinitions="*,Auto">
+        <Image Grid.Row="0" Source="{Binding CurrentFrame}" Stretch="Uniform" Margin="8"/>
+        <Border Grid.Row="1" Background="#161B2E" Padding="12,8">
+            <TextBlock Text="{Binding StatusText}" Foreground="#E8EAED" FontSize="12"/>
+        </Border>
+    </Grid>
+</Window>

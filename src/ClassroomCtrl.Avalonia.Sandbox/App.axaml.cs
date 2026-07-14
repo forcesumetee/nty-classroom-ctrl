@@ -48,6 +48,13 @@ public partial class App : Application
                 desktop.MainWindow = window;   // dev: the classic lifetime shows it on start
 
             var conn = ((MainWindowViewModel)window.DataContext!).Connection;
+
+            // TT-8-D — the teacher's shared screen opens/closes a takeover viewer window. The events
+            // fire on the UI thread (WireClient events are Post-marshaled), so this is UI-thread-safe.
+            var teacherScreen = new TeacherScreenController(conn.TeacherScreen);
+            conn.TeacherShareStarted += teacherScreen.Open;
+            conn.TeacherShareStopped += teacherScreen.Close;
+
             _tray = new TrayController(
                 conn,
                 showWindow: () => { window.Show(); window.WindowState = WindowState.Normal; window.Activate(); },

@@ -40,6 +40,15 @@ public partial class ConnectionViewModel : ObservableObject
     /// <summary>Reflects the state Teacher commands drive onto this student.</summary>
     public StudentSelfTileViewModel SelfTile { get; } = new();
 
+    /// <summary>TT-8-D — the teacher's shared screen (received ScreenStreamFrame broadcast), shown
+    /// in a takeover viewer window.</summary>
+    public TeacherScreenViewModel TeacherScreen { get; } = new();
+
+    /// <summary>TT-8-D — raised (UI thread) when the teacher starts/stops sharing; the App opens/
+    /// closes the takeover viewer window.</summary>
+    public event Action? TeacherShareStarted;
+    public event Action? TeacherShareStopped;
+
     /// <summary>Phase 27-C — screen → JPEG → StudentStreamFrame streamer.</summary>
     private readonly ScreenStreamer _streamer = new();
 
@@ -135,6 +144,8 @@ public partial class ConnectionViewModel : ObservableObject
                 _ = _audioStreamer.StopAsync();
                 _ = _audioPlayback.StopPlaybackAsync();
                 _conferenceSessionId = Guid.Empty;
+                TeacherScreen.Reset();
+                TeacherShareStopped?.Invoke();   // TT-8-D: close the takeover viewer if the teacher vanished
                 SelfTile.Reset();
             }
             ConnectCommand.NotifyCanExecuteChanged();
@@ -316,6 +327,15 @@ public partial class ConnectionViewModel : ObservableObject
             return;
         }
 
+        // TT-8-D — the teacher's screen-share frames (broadcast, ~2 fps). Decode + display BEFORE the
+        // filter/log (like audio frames) to keep the wire log clean. It's a broadcast (Empty target),
+        // so the IsForMe filter would pass it anyway.
+        if (env.Type == MessageType.ScreenStreamFrame)
+        {
+            TeacherScreen.OnFrame(env.Payload);
+            return;
+        }
+
         // TT-6-D fix — receive-side target filter (DEFAULT-DENY). The Teacher broadcasts targeted
         // commands to all peers and relies on client-side filtering; the shipped Windows Student
         // does this in its Service (ClassroomWorker.IsForMe), but the port dropped it when it
@@ -404,10 +424,21 @@ public partial class ConnectionViewModel : ObservableObject
                 _ = StopAudioPlaybackAsync();
                 detail = "■ teacher audio stopped";
                 break;
+            // TT-8-D — the teacher's "Share My Screen". Start opens the takeover viewer; Stop
+            // (reliable — bug #5) closes it. Frames are handled above (before the filter/log).
+            case MessageType.ScreenStreamStart:
+                TeacherScreen.Begin();
+                TeacherShareStarted?.Invoke();
+                detail = "📺 teacher started sharing their screen";
+                break;
+            case MessageType.ScreenStreamStop:
+                TeacherScreen.Reset();
+                TeacherShareStopped?.Invoke();
+                detail = "■ teacher stopped sharing";
+                break;
             // Remaining capture-class commands: logged + noted, deferred until their
             // native macOS APIs land. No frames produced.
             case MessageType.RequestScreenshot:
-            case MessageType.ScreenStreamStart:
             case MessageType.CameraStart:
                 detail = "deferred — needs native capture (Phase 27+)";
                 SelfTile.LastDeferred = $"{env.Type} · deferred (needs native APIs)";
