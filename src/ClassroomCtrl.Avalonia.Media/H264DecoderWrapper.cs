@@ -5,21 +5,21 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 
-namespace ClassroomCtrl.Avalonia.Teacher.Services;
+namespace ClassroomCtrl.Avalonia.Media;
 
 /// <summary>
-/// TT-4-C — managed wrapper over the native VTDecompressionSession decoder
+/// TT-4-C / TT-8-B — managed wrapper over the native VTDecompressionSession decoder
 /// (native/NtyCapture/H264Decoder.swift, handle-based ABI). One instance per open
-/// screen-view window (the teacher may have 1–4 concurrent). Mirrors the shipped
-/// <c>H264DecoderWrapper</c>'s shape (a TryDecode + IDisposable), and the §20 interop
-/// pattern from <c>ScreenCaptureService</c>: a static <see cref="UnmanagedCallersOnlyAttribute"/>
-/// callback whose <c>ctx</c> is a <see cref="GCHandle"/> to this instance, so no
-/// per-call delegate marshalling and the instance is rooted for the decoder's life.
+/// screen view (the teacher may have 1–4 concurrent; the student has 1 for the teacher's
+/// shared screen). Extracted to the shared Media lib in TT-8-B so Teacher AND Student use
+/// the SAME decoder (must-not-diverge native interop). The §20 interop pattern: a static
+/// <see cref="UnmanagedCallersOnlyAttribute"/> callback whose <c>ctx</c> is a
+/// <see cref="GCHandle"/> to this instance, so no per-call delegate marshalling and the
+/// instance is rooted for the decoder's life.
 ///
-/// The native feed is SYNCHRONOUS (WaitForAsynchronousFrames), so the callback has
-/// fired and populated <see cref="_pending"/> by the time <c>feed</c> returns — this
-/// wrapper stays a simple synchronous TryDecode, keeping the TT-3-C codec seam
-/// synchronous. Each decoded frame is a FRESH WriteableBitmap (the ScreenViewModel
+/// The native feed is SYNCHRONOUS (WaitForAsynchronousFrames), so the callback has fired
+/// and populated <see cref="_pending"/> by the time <c>feed</c> returns — this wrapper stays
+/// a simple synchronous TryDecode. Each decoded frame is a FRESH WriteableBitmap (the caller
 /// disposes the previous one — same contract as the MJPEG path).
 /// </summary>
 public sealed partial class H264DecoderWrapper : IDisposable

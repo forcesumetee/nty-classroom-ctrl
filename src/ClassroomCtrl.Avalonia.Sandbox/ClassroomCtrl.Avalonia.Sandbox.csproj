@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
+    <ProjectReference Include="..\ClassroomCtrl.Avalonia.Media\ClassroomCtrl.Avalonia.Media.csproj" /> <!-- TT-8-D: shared decode (teacher-screen display) -->
+
   </ItemGroup>
 
   <!-- Phase 27-A — copy the native ScreenCaptureKit helper next to the managed

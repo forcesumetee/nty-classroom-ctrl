@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TT-8-B — shared Avalonia media library. Holds the native-interop screen DECODE surface
+       (H264DecoderWrapper + ScreenFrameDecoder) that BOTH the Teacher (views student screens)
+       and the Student (views the teacher's shared screen, TT-8-D) need. Extracted rather than
+       copied because this is must-NOT-diverge native code (GCHandle rooting, stride-aware copy,
+       WriteableBitmap.Lock) — two drifting copies is the hardest bug class to catch. The pure
+       codec->Bitmap core lives here; app-specific viewing lifecycle stays in each app. -->
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>ClassroomCtrl.Avalonia.Media</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>   <!-- LibraryImport + the stride-copy unsafe block -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <ProjectReference Include="..\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
+  </ItemGroup>
+
+</Project>

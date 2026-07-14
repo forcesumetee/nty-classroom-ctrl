@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClassroomCtrl.Teacher.Core\ClassroomCtrl.Teacher.Core.csproj" />
+    <ProjectReference Include="..\ClassroomCtrl.Avalonia.Media\ClassroomCtrl.Avalonia.Media.csproj" /> <!-- TT-8-B: shared decode -->
+
   </ItemGroup>
 
   <!-- TT-4-C: copy the native dylib next to the managed output so

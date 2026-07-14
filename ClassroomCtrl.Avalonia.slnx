@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/ClassroomCtrl.Avalonia.Media/ClassroomCtrl.Avalonia.Media.csproj" />
     <Project Path="src/ClassroomCtrl.Avalonia.Sandbox/ClassroomCtrl.Avalonia.Sandbox.csproj" />
     <Project Path="src/ClassroomCtrl.Avalonia.Teacher/ClassroomCtrl.Avalonia.Teacher.csproj" />
     <Project Path="src/ClassroomCtrl.Shared.Wire/ClassroomCtrl.Shared.Wire.csproj" />
