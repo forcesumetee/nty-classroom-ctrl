@@ -1,48 +1,60 @@
 # TT-10 — System-audio ("Share Computer Audio") probe · 2026-07-14 (last Mac access)
 
-**Question:** can macOS capture SYSTEM audio first-party (for "Share Computer Audio"), or does it
-need a third-party virtual audio device (BlackHole-class) on the teacher's Mac?
+**Question:** can macOS capture SYSTEM audio first-party (for "Share Computer Audio" / recording a
+video's soundtrack), or does it need a third-party virtual audio device (BlackHole-class)?
+**Contract link:** TOR 11.2.9 requires recording the teacher's screen AND audio — if "เสียงของครู"
+means SYSTEM audio (not just the mic), this answer gates a contract item. **Ask the customer which.**
 
-## Verdict: ⚠️ FIRST-PARTY API IS REAL + INSTANTIABLE — actual buffer delivery UNCONFIRMED (headless)
+## Verdict: ⚠️ First-party API CONFIRMED real + instantiable · audio buffer delivery UNRESOLVED by automation → needs a human run
 
-Ran a standalone Swift spike (ScreenCaptureKit `capturesAudio`) on the borrowed MacBook Air (M-series,
-macOS Sequoia). Result:
+Ran the ScreenCaptureKit `capturesAudio` path **four times** on the borrowed MacBook Air (M-series):
+headless CLI, and a **foreground GUI NSApplication** (activated, real window), each at 2×2 and at
+640×480 with queueDepth. **Every run:** the stream started with no error and **screen buffers flowed**,
+but **audio buffers = 0** (`maxAbs=0`, no audio format ever seen).
 
+**What is PROVEN (high confidence):**
+- **The first-party API is real and instantiates with ZERO third-party audio device.**
+  `SCShareableContent` + `SCStreamConfiguration.capturesAudio=true` + `addStreamOutput(.audio)` +
+  `startCapture()` all succeed and the stream runs (screen frames arrive). **This RULES OUT the
+  customer's worst case: ❌ "needs BlackHole to even work."** Screen Recording TCC is the gate — the
+  SAME grant TT-8 already uses (no new permission type).
+
+**What is NOT resolved:**
+- **0 audio sample buffers in all 4 automated runs**, even foreground. The environment is NOT the
+  trivial "no device" case — `system_profiler` shows a **real default output (MacBook Air Speakers) +
+  coreaudiod running**. Two live confounds we could not eliminate by automation:
+  1. **A virtual "Microsoft Teams Audio Device"** is present in the routing — if system output is
+     routed through it, `afplay`'s sound may not reach the tap SCK reads.
+  2. **Harness-launched process context** — the probe runs under the automation harness, not a normal
+     Aqua login session; SCK audio delivery may depend on genuine session/foreground status that a
+     harness-spawned GUI app doesn't fully get.
+
+## 🔴 To resolve — a HUMAN must run it (5 min, needs a Mac; do it while you still have one)
+The binary + source are in `tools/SckAudioProbe/`. Run it **from YOUR Terminal.app** (a real login
+session, not automation), **with a known audio source playing** (a YouTube tab, Music, or `afplay`),
+and **set System Settings ▸ Sound ▸ Output to "MacBook Air Speakers"** (not the Teams device) first:
 ```
-PROBE: SCK stream started (capturesAudio=true) — sampling 4s
-PROBE RESULT: audioBuffers=0 nonSilentBuffers=0
-VERDICT: ❓ no audio buffers (TCC/session/context)
+cd tools/SckAudioProbe
+swiftc -O sck_audio_probe_gui.swift -framework Cocoa -framework ScreenCaptureKit \
+       -framework AVFoundation -framework CoreMedia -o sck_gui
+# start a video/music playing on the Mac, THEN:
+./sck_gui                       # a window titled "SCK Audio Probe" appears for ~7s
+cat probe_gui_result.txt
 ```
+Read `probe_gui_result.txt`:
+- `✅ SYSTEM AUDIO CAPTURED FIRST-PARTY (non-silent)` → **ship it first-party** (add `capturesAudio` to
+  the existing `nty_capture_*` SCK path in `native/NtyCapture` — it already runs inside the Teacher app;
+  confirm it COEXISTS with the TT-8 screen-share SCK stream — TT-8 + TT-16 recording both want SCK).
+  Note the reported `audioFormat` (SCK delivers Float32).
+- `❌ buffers arrive but SILENT` → system audio is NOT capturable this way → a **virtual audio device
+  is required** → that's a THIRD Apple-platform limitation for the customer (after power-ON + policy).
+- Still `❓ 0 buffers` in a real Terminal session too → escalate: try **Core Audio process taps**
+  (`AudioHardwareCreateProcessTap`, macOS 14.4+, first-party) before concluding a virtual device is
+  needed.
 
-**What this PROVES (high confidence):**
-- **`SCShareableContent` succeeded** → Screen Recording TCC is available in the run context (the SAME
-  grant TT-8 "Share My Screen" already requires — **no new permission type**).
-- **`SCStreamConfiguration.capturesAudio = true` + `addStreamOutput(type: .audio)` + `startCapture()`
-  all succeeded with NO error and with NO third-party audio device installed.** → The first-party
-  system-audio API (ScreenCaptureKit, macOS 13+) is **real, present, and instantiable with zero
-  third-party dependencies.** This **rules out the customer's worst case: ❌ "needs BlackHole to even
-  work."**
-
-**What this does NOT prove:**
-- **0 audio sample buffers arrived** in 4 s while `afplay` was looping a sound. Most likely cause: this
-  **headless CLI/daemon context has no active audio output session** for SCK to tap (system-audio
-  capture reflects what is actually rendering to a real output device; a non-GUI tool context usually
-  has none). It is **not a confirmed failure of the feature** — it is the ceiling of what a headless
-  probe can show.
-
-## To resolve (needs a Mac + a foreground app — ~30 min)
-Run the same spike **inside a foreground GUI app** (or the Teacher `.app` bundle) on the real machine,
-with real audio playing, and confirm non-silent buffers arrive. If they do → **✅ ship it first-party
-via SCK** (add `capturesAudio` to the existing `nty_capture_*` ScreenCaptureKit path — it already runs
-in the Teacher app). Also verify SCK **audio + screen coexist** in one stream (the spike added both
-outputs and the stream started, but buffer coexistence is unconfirmed). Fallback if it never delivers:
-**Core Audio process taps** (`AudioHardwareCreateProcessTap`, macOS 14.4+) — also first-party — then,
-last resort, a bundled virtual device.
-
-## The spike (durable — re-runnable; inline so it survives the machine)
-Compile: `swiftc -O sck_audio_probe.swift -framework ScreenCaptureKit -framework AVFoundation -framework CoreMedia -o sck_probe` — full source in git history at `scratchpad/sck_audio_probe.swift` (this session) / reproduce from the pattern: `SCShareableContent.excludingDesktopWindows` → `SCContentFilter(display:)` → `SCStreamConfiguration{capturesAudio=true; sampleRate=48000; channelCount=2}` → `addStreamOutput(_, .audio, queue)` → `startCapture()`; in `didOutputSampleBuffer` for `.audio`, read the `CMBlockBuffer` as Int16 and check max-abs > 200 for non-silent. Self-exits after 6 s so a TCC prompt can't hang it.
-
-## Bottom line for TT-10 / the customer
-"Share Computer Audio" is **very likely deliverable first-party (no third-party driver)** — the API is
-there and starts clean. The one remaining check is a foreground-app buffer-flow test, which needs a
-Mac. **The teacher-MIC broadcast half (TT-10-B) is DONE + gate-proven and does not depend on this.**
+## Bottom line
+"Share Computer Audio" is **probably deliverable first-party** — the API is real and the worst case is
+ruled out — but the last empirical step (do non-silent buffers actually arrive) **could not be settled
+by automation** and needs a 5-minute human run in a normal session. **The teacher-MIC broadcast half
+(TT-10-B) is DONE + gate-proven and does not depend on this.** Recording the teacher's MIC audio (TOR
+11.2.9, if mic-only) is therefore already unblocked; system-audio recording is the open question.

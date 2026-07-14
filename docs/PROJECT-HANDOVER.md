@@ -20,6 +20,9 @@ After today, macOS builds/LIVE tests STOP indefinitely (borrowed MacBook returne
   - **TT-9: multi-student audio mixer** — teacher hears N students mixed (native N-node AVAudioEngine,
     cap 12 + gain-norm; LIVE 2026-07-14)
   - **TT-10-B: "Talk to Class"** — teacher mic → all students (LIVE-pending user test; gate-proven)
+- 🔴 **NOT DONE — camera view:** the teacher **cannot open a student's camera**. It is NOT built and
+  is entangled with the conference relay (TT-11). Fully scoped ready-to-build in
+  `docs/TT-CAMERA-VIEW-SCOPE.md`. Don't let "audio both directions is done" imply camera is done.
 - **WIRE PROTOCOL: byte-perfect with shipped Windows, UNCHANGED for 14+ sessions.** T1–T27 all green.
   This is the crown jewel — cross-platform interop is real.
 - **Shipped Windows repo (`nty-classroom-macos`, branch v1.2-multiselect @ 4e0467a): NEVER modified.**
@@ -29,7 +32,7 @@ After today, macOS builds/LIVE tests STOP indefinitely (borrowed MacBook returne
   engine). Nobody should re-panic about CPU (TT-9 mixer was ~10% of one core at N=50 on M2).
 
 ## 2. BLOCKED WITHOUT A MAC (cannot build or test)
-TT-10 system-audio (see the probe, §5) · **TT-11 conference — the flagship, needs ≥2 Macs** · TT-12
+TT-10 system-audio (see the probe, §5) · **camera view** (teacher watches a student — `docs/TT-CAMERA-VIEW-SCOPE.md`; entangled with the conference relay) · **TT-11 conference — the flagship, needs ≥2 Macs** · TT-12
 file + net-movie · TT-13 packaging + UDP discovery · TT-14 remote control · TT-15 demonstration ·
 TT-16 recording · TT-17 breakout · TT-18 exam/quiz · **7 Student-track V2 items** · UI polish ·
 license-key UI · P35 code-signing/notarization. Plus the two workarounds for 11.2.1 (§4, Finding 1).
@@ -55,6 +58,7 @@ not four point-fixes. All four are **fixed in the macOS port** already (as refer
 | 5 | `ScreenStreamStop` routes **lossy** | `src/ClassroomCtrl.Teacher/Services/ControlServer.cs:302-308` | Stop enqueued on the same queue that's full of tail-end video → the one message that must survive is the likeliest evicted | reliable | student **stuck in full-screen viewer** |
 | 6 | `SendHandLowerAsync` **lossy despite its doc** | `src/ClassroomCtrl.Teacher/Services/ControlServer.cs:655-673` (doc says "Reliable channel."; body `BroadcastAsync`). **Same doc/impl mismatch:** `BroadcastReactionAsync` `:675-685` | doc claims reliable, impl is lossy → Recognize dropped under load | reliable | student's hand stays raised (desync) |
 | 7 | `AudioStreamStart/Stop` route **lossy** (NEW, found in TT-10-B) | `src/ClassroomCtrl.Teacher/Services/ControlServer.cs:790-796` | Stop on the lossy queue while frames use a separate channel → Stop evicted; **student has NO timeout and RE-CREATES the player on a straggler frame** (`MainWindow.xaml.cs:1259` `_audioPlayer ??= new AudioPlayer()`) → playback session held open indefinitely | reliable Start/Stop (done in port) | every student's audio session stuck open |
+| 8? | **CANDIDATE (unverified) — conference-camera STOP** | port `ControlServer.cs:1702` relay is lossy; shipped analogous | the `ConferenceCameraStop` **relay** is lossy → stale peer camera tile (cosmetic). 🔴 **Privacy check for whoever builds camera/TT-11:** verify the SOURCE-side capture-stop (`ConferenceEnd`→`CameraStreamer.StopAsync`) is reliable end-to-end — a dropped capture-stop = a student filmed unaware. Teacher's own `CameraStop` 0x0462 IS reliable ✅. | verify + make capture-stop reliable | privacy if capture-stop is lossy (VERIFY) |
 
 ---
 
