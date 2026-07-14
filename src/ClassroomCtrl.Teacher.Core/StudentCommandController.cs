@@ -3,27 +3,28 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClassroomCtrl.Shared.Protocol;
 
-namespace ClassroomCtrl.Avalonia.Teacher.Services;
+namespace ClassroomCtrl.Teacher.Core;
 
 /// <summary>
-/// TT-5 (macOS port) — the single entry point the Teacher UI calls to issue a
-/// per-student command (lock/unlock/power), mirroring TT-3's <c>ScreenViewController</c>.
+/// TT-5 (macOS port) — the single entry point the Teacher UI calls to issue a per-student
+/// command (lock/unlock/power), mirroring TT-3's <c>ScreenViewController</c>. Promoted from
+/// the Teacher app into Teacher.Core (the UI-agnostic layer) so its guarantees are protected
+/// by the committed <c>--teacherselftest</c>, not a scratchpad gate. It has NO Avalonia
+/// dependency — the confirm prompt is an injected <c>Func&lt;string, Task&lt;bool&gt;&gt;</c>,
+/// so the Avalonia modal (ConfirmDialog) stays in the app and is wired in as this delegate.
+///
 /// It owns the two policies that would otherwise be easy to get wrong in the UI:
+///   1. THE SEND-PATH RULE — every command is routed <c>reliable:true</c> (the never-drop
+///      channel). Hardcoded here, asserted by the gate's fake sink. This is the fix for the
+///      shipped v1.2.1-class lossy per-student-command bug.
+///   2. CONFIRMATION — the three power actions (irreversible, expensive at 50 seats) are gated
+///      behind a confirm prompt, matching the shipped Windows Teacher. Lock/unlock are
+///      reversible and NOT confirmed.
 ///
-///   1. THE SEND-PATH RULE — every command is routed <c>reliable:true</c> (the
-///      never-drop channel). Hardcoded here, asserted by the gate's fake sink. This is
-///      the fix for the shipped v1.2.1-class lossy per-student-command bug.
-///   2. CONFIRMATION — the three power actions (irreversible, expensive at 50 seats)
-///      are gated behind a confirm prompt, matching the shipped Windows Teacher. Lock/
-///      unlock are reversible and NOT confirmed. The prompt is an injected delegate so
-///      a headless gate can simulate Yes/No without a real modal (TT-5-C wires it to
-///      the Avalonia confirm dialog); it defaults to auto-confirm only so the type is
-///      constructible in isolation.
-///
-/// Errors are swallowed-and-logged (fire-and-forget from UI event handlers): a failed
-/// send must not crash the Teacher. Platform gating (power offered only to Windows
-/// students) is enforced upstream at the tile/menu via <see cref="StudentPlatform"/>;
-/// this controller trusts its caller for that (the LIVE gate confirms the menu state).
+/// Errors are swallowed-and-logged (fire-and-forget from UI event handlers): a failed send
+/// must not crash the Teacher. Platform gating (power offered only to Windows students) is
+/// enforced upstream at the tile/menu via <see cref="StudentPlatform"/>; this controller
+/// trusts its caller for that (the LIVE gate confirms the menu state).
 /// </summary>
 public sealed class StudentCommandController
 {
@@ -37,13 +38,13 @@ public sealed class StudentCommandController
         Action<string>? log = null)
     {
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
-        // Default: auto-confirm. Production (TT-5-C) injects the modal dialog.
+        // Default: auto-confirm. Production injects the modal dialog (ConfirmDialog).
         _confirmAsync = confirmAsync ?? (_ => Task.FromResult(true));
         _log = log;
     }
 
-    /// <summary>Dispatch a context-menu command for a student. The single surface the UI
-    /// uses; fire-and-forget safe (never throws).</summary>
+    /// <summary>Dispatch a context-menu command for a student. The single surface the UI uses;
+    /// fire-and-forget safe (never throws).</summary>
     public async Task ExecuteAsync(Guid endpointId, StudentCommand command, string studentName, CancellationToken ct = default)
     {
         try
@@ -84,8 +85,8 @@ public sealed class StudentCommandController
         _ => throw new ArgumentOutOfRangeException(nameof(command), command, "Not a power command"),
     };
 
-    /// <summary>The confirm-dialog body for a power action (matches the shipped Yes/No
-    /// intent; irreversible actions get the sharper wording).</summary>
+    /// <summary>The confirm-dialog body for a power action (matches the shipped Yes/No intent;
+    /// irreversible actions get the sharper wording).</summary>
     public static string ConfirmPrompt(StudentCommand command, string studentName) => command switch
     {
         StudentCommand.Logoff => $"Log off “{studentName}”? This ends their session and closes their apps.",

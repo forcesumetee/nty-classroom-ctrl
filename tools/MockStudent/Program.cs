@@ -466,6 +466,78 @@ static class TeacherSelfTest
 
         Console.WriteLine("=== MockStudent --teacherselftest (REAL Teacher.Core on loopback — no LNP, no perms) ===");
 
+        // ── (0) TT-5 COMMAND WIRING — the send-path rule, now PERMANENT (promoted from the
+        //    scratchpad TT5Gate). Drives the REAL StudentCommandController (Teacher.Core) through
+        //    a recording fake sink and asserts the CHANNEL — reliable==true for EVERY command —
+        //    not just that a send occurred. A send-only check passes with the shipped v1.2.1
+        //    per-student lossy bug present (the command IS sent — it's evicted later under load),
+        //    so the distinguishing assertion is the channel. Also covers the platform power-gate
+        //    and the confirm policy. Pure logic (no socket) — the UI-agnostic seam lives in Core.
+        Console.WriteLine("-- (0) TT-5 command wiring: StudentCommandController + recording fake sink --");
+        {
+            // platform power-gate: Windows → offer; everything else → deny (default-deny on "Windows")
+            Check("platform: Windows → power OFFERED", StudentPlatform.CanReceivePower("Microsoft Windows NT 10.0.19045.0"));
+            Check("platform: macOS → power DENIED", !StudentPlatform.CanReceivePower("macOS 26.5.2"));
+            Check("platform: Unix → power DENIED", !StudentPlatform.CanReceivePower("Unix 26.5.2"));
+            Check("platform: Linux → power DENIED", !StudentPlatform.CanReceivePower("Linux 6.1.0"));
+            Check("platform: empty → power DENIED (default-deny)", !StudentPlatform.CanReceivePower(""));
+            Check("platform: null → power DENIED (default-deny)", !StudentPlatform.CanReceivePower(null));
+            Check("platform: whitespace → power DENIED", !StudentPlatform.CanReceivePower("   "));
+            Check("platform: case-insensitive 'windows' → OFFERED", StudentPlatform.CanReceivePower("custom windows image"));
+
+            // send-path rule: EVERY command routed on the reliable channel (assert the CHANNEL)
+            var sink = new RecordingCommandSink();
+            var ctl = new StudentCommandController(sink);   // default confirm = auto-yes
+            var idLock = Guid.NewGuid();
+            await ctl.ExecuteAsync(idLock, StudentCommand.Lock, "Alice");
+            Check("Lock → LockAsync(locked:true, reliable:TRUE), correct endpoint",
+                sink.Last is RecordingCommandSink.LockCall { Locked: true, Reliable: true } lk && lk.Endpoint == idLock);
+            var idUnlock = Guid.NewGuid();
+            await ctl.ExecuteAsync(idUnlock, StudentCommand.Unlock, "Bob");
+            Check("Unlock → LockAsync(locked:false, reliable:TRUE), correct endpoint",
+                sink.Last is RecordingCommandSink.LockCall { Locked: false, Reliable: true } ul && ul.Endpoint == idUnlock);
+            foreach (var (cmd, type) in new[]
+            {
+                (StudentCommand.Logoff, MessageType.ForceLogoff),
+                (StudentCommand.Restart, MessageType.ForceRestart),
+                (StudentCommand.Shutdown, MessageType.ForceShutdown),
+            })
+            {
+                var id = Guid.NewGuid();
+                await ctl.ExecuteAsync(id, cmd, "Cara");
+                Check($"{cmd} → PowerAsync({type}, reliable:TRUE), correct endpoint",
+                    sink.Last is RecordingCommandSink.PowerCall pc && pc.Type == type && pc.Reliable && pc.Endpoint == id);
+            }
+            Check("NO command routed on the LOSSY channel (every reliable==true)", sink.AllReliable);
+
+            // confirmation policy: power gated; lock/unlock never prompt
+            var declineSink = new RecordingCommandSink();
+            var declineCtl = new StudentCommandController(declineSink, confirmAsync: _ => Task.FromResult(false));
+            await declineCtl.ExecuteAsync(Guid.NewGuid(), StudentCommand.Shutdown, "Dan");
+            Check("power confirm=NO → NOTHING sent", declineSink.Count == 0);
+            var acceptSink = new RecordingCommandSink();
+            int powerPrompts = 0;
+            var acceptCtl = new StudentCommandController(acceptSink, confirmAsync: _ => { powerPrompts++; return Task.FromResult(true); });
+            await acceptCtl.ExecuteAsync(Guid.NewGuid(), StudentCommand.Shutdown, "Dan");
+            Check("power confirm=YES → sent on the RELIABLE channel",
+                acceptSink.Last is RecordingCommandSink.PowerCall { Reliable: true, Type: MessageType.ForceShutdown });
+            Check("power prompted exactly once", powerPrompts == 1);
+            int lockPrompts = 0;
+            var noPromptCtl = new StudentCommandController(new RecordingCommandSink(), confirmAsync: _ => { lockPrompts++; return Task.FromResult(true); });
+            await noPromptCtl.ExecuteAsync(Guid.NewGuid(), StudentCommand.Lock, "X");
+            await noPromptCtl.ExecuteAsync(Guid.NewGuid(), StudentCommand.Unlock, "X");
+            Check("lock/unlock NEVER prompt for confirmation", lockPrompts == 0);
+
+            // prompt text + power mapping sanity
+            Check("confirm prompt names the student", StudentCommandController.ConfirmPrompt(StudentCommand.Shutdown, "Zed").Contains("Zed"));
+            Check("logoff/restart/shutdown prompts distinct",
+                StudentCommandController.ConfirmPrompt(StudentCommand.Logoff, "n") != StudentCommandController.ConfirmPrompt(StudentCommand.Restart, "n")
+                && StudentCommandController.ConfirmPrompt(StudentCommand.Restart, "n") != StudentCommandController.ConfirmPrompt(StudentCommand.Shutdown, "n"));
+            Check("ToMessageType(Logoff)=ForceLogoff", StudentCommandController.ToMessageType(StudentCommand.Logoff) == MessageType.ForceLogoff);
+            Check("ToMessageType(Restart)=ForceRestart", StudentCommandController.ToMessageType(StudentCommand.Restart) == MessageType.ForceRestart);
+            Check("ToMessageType(Shutdown)=ForceShutdown", StudentCommandController.ToMessageType(StudentCommand.Shutdown) == MessageType.ForceShutdown);
+        }
+
         // ── Server 1: the REAL student WireClient against the REAL server. ──
         // Large stale window (8 s > the client's 5 s heartbeat) so healthy clients never false-stale.
         await WithServer(8000, Check, "server-1 (real WireClient)", async (server, roster, port) =>
@@ -572,7 +644,7 @@ static class TeacherSelfTest
         });
 
         Console.WriteLine(failures == 0
-            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — real-client interop + roster fix + command delivery + ownership guard + stale-sweep + guaranteed teardown ==="
+            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — command wiring (reliable channel) + real-client interop + roster fix + command delivery + ownership guard + stale-sweep + guaranteed teardown ==="
             : $"\n=== MOCKSTUDENT TEACHERSELFTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
     }
@@ -617,5 +689,33 @@ static class TeacherSelfTest
     {
         for (int t = 0; t < ms && !cond(); t += 25) await Task.Delay(25);
         return cond();
+    }
+}
+
+// TT-5 (promoted from scratchpad TT5Gate) — a recording fake IStudentCommandSink for the
+// command-wiring assertions: captures the reliable CHANNEL of every command so
+// --teacherselftest can assert reliable==true PERMANENTLY (the channel is what the shipped
+// v1.2.1 per-student path gets wrong). No transport — pure capture.
+sealed class RecordingCommandSink : IStudentCommandSink
+{
+    public abstract record Call(Guid Endpoint, bool Reliable);
+    public sealed record LockCall(Guid Endpoint, bool Locked, bool Reliable) : Call(Endpoint, Reliable);
+    public sealed record PowerCall(Guid Endpoint, MessageType Type, bool Reliable) : Call(Endpoint, Reliable);
+
+    private readonly List<Call> _calls = new();
+    public int Count => _calls.Count;
+    public Call? Last => _calls.Count > 0 ? _calls[^1] : null;
+    public bool AllReliable => _calls.TrueForAll(c => c.Reliable);
+
+    public Task LockAsync(Guid endpointId, bool locked, bool reliable, CancellationToken ct)
+    {
+        _calls.Add(new LockCall(endpointId, locked, reliable));
+        return Task.CompletedTask;
+    }
+
+    public Task PowerAsync(Guid endpointId, MessageType type, bool reliable, CancellationToken ct)
+    {
+        _calls.Add(new PowerCall(endpointId, type, reliable));
+        return Task.CompletedTask;
     }
 }

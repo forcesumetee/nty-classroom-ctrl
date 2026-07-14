@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using ClassroomCtrl.Avalonia.Teacher.Services;
 using ClassroomCtrl.Avalonia.Teacher.ViewModels;
+using ClassroomCtrl.Teacher.Core;
 
 namespace ClassroomCtrl.Avalonia.Teacher.Views;
 

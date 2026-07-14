@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using ClassroomCtrl.Avalonia.Teacher.Services;
 using ClassroomCtrl.Avalonia.Teacher.ViewModels;
+using ClassroomCtrl.Teacher.Core;
 
 namespace ClassroomCtrl.Avalonia.Teacher;
 

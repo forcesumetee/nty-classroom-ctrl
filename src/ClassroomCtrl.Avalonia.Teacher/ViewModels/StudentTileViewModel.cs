@@ -1,5 +1,5 @@
 using System;
-using ClassroomCtrl.Avalonia.Teacher.Services;
+using ClassroomCtrl.Teacher.Core;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace ClassroomCtrl.Avalonia.Teacher.ViewModels;

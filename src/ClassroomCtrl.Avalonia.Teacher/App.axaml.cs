@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using ClassroomCtrl.Avalonia.Teacher.Services;
 using ClassroomCtrl.Avalonia.Teacher.ViewModels;
 using ClassroomCtrl.Avalonia.Teacher.Views;
+using ClassroomCtrl.Teacher.Core;
 
 namespace ClassroomCtrl.Avalonia.Teacher;
 
