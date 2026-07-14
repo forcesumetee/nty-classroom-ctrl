@@ -43,6 +43,8 @@ bool selfTest = false;
 bool teacherSelfTest = false;
 int classroomN = 0, durationSec = 8;
 bool classroomAudio = false;
+int mixtestN = 0;
+bool mixhost = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -55,11 +57,15 @@ for (int i = 0; i < args.Length; i++)
         case "--classroom": classroomN = int.Parse(args[++i]); break;   // TT-0-D: N replay-clients
         case "--duration": durationSec = int.Parse(args[++i]); break;
         case "--audio": classroomAudio = true; break;                    // TT-9-B: also stream synthetic mic PCM
+        case "--mixtest": mixtestN = int.Parse(args[++i]); break;        // TT-9-D: mixer stall+cap gate
+        case "--mixhost": mixhost = true; break;                          // TT-9-D: teacher-only CPU host
     }
 }
 
 if (teacherSelfTest) return await TeacherSelfTest.RunAsync();
 if (selfTest) return await SelfTest.RunAsync();
+if (mixhost) return await MixHost.RunAsync(port, durationSec);
+if (mixtestN > 0) return await MixTest.RunAsync(mixtestN, durationSec);
 if (classroomN > 0) return await Classroom.RunAsync(ip, port, classroomN, durationSec, classroomAudio);
 return await Interactive.RunAsync(ip, port, name);
 
@@ -365,6 +371,16 @@ sealed class ReplayClient
         try { _ = Wire.SendAsync(MessageType.StudentAudioStreamStop, Array.Empty<byte>(), CancellationToken.None); } catch { }
     }
 
+    /// <summary>TT-9-D — simulate a NETWORK STALL: stop the audio pump WITHOUT sending
+    /// StudentAudioStreamStop, so the teacher's mixer keeps the source REGISTERED and its node
+    /// starves. This is the true non-blocking-invariant test (distinct from StopAudio's clean
+    /// removal): the mix must keep playing for everyone else while this source contributes silence.</summary>
+    public void KillAudio()
+    {
+        var cts = _audioCts; _audioCts = null;
+        cts?.Cancel();   // frames just stop — NO StudentAudioStreamStop sent
+    }
+
     // 16 kHz mono 16-bit PCM, 100 ms (1600 samples), sine at hz. Phase-continuous across frames
     // via the absolute sample index (seq*1600 + i) so consecutive frames don't click at the seam.
     static byte[] Tone(int hz, int seq)
@@ -392,8 +408,15 @@ static class Classroom
         var (golden, keyframes) = await GoldenSample.CaptureScreenH264Async();
         if (golden.Count == 0 || keyframes == 0)
         {
-            Console.WriteLine($"  ❌ golden H.264 capture failed (frames={golden.Count}, keyframes={keyframes}) — is Screen Recording granted?");
-            return 1;
+            if (!audio)
+            {
+                Console.WriteLine($"  ❌ golden H.264 capture failed (frames={golden.Count}, keyframes={keyframes}) — is Screen Recording granted?");
+                return 1;
+            }
+            // TT-9-D: audio load doesn't need the screen golden — continue audio-only so a
+            // headless CLI (no Screen Recording grant) can still drive the teacher-side mixer.
+            Console.WriteLine($"  ⚠ golden H.264 capture failed (no Screen Recording?) — continuing AUDIO-ONLY ({n} synthetic mics)");
+            golden = new List<byte[]>();
         }
         long goldenBytes = golden.Sum(p => (long)p.Length);
         Console.WriteLine($"  golden: {golden.Count} H.264 frames · {keyframes} keyframe(s) · {goldenBytes / 1024}KB — ONE encode, replayed ×{n}");
@@ -429,12 +452,152 @@ static class Classroom
         cts.Cancel();
         try { await Task.WhenAll(runs); } catch { }
 
-        bool ok = finalConnected == n && finalFrames > 0 && (!audio || finalAudio > 0);
+        // Judge an --audio run on AUDIO (screen frames only flow if the teacher requests a stream,
+        // which a mix host does not); a screen-only run on screen frames (the TT-0 stress meaning).
+        bool ok = finalConnected == n && (audio ? finalAudio > 0 : finalFrames > 0);
         var audioNote = audio ? $" · {finalAudio} audio frames (0x032C)" : "";
         Console.WriteLine(ok
             ? $"\n=== CLASSROOM {n} ✅ — {finalConnected}/{n} clients connected · {finalFrames} frames delivered{audioNote} (1 encode → {n} streams) ==="
             : $"\n=== CLASSROOM {n} ❌ — {finalConnected}/{n} connected · {finalFrames} frames{audioNote} ===");
         return ok ? 0 : 1;
+    }
+}
+
+
+// ───────────────────────────── TT-9-D: --mixtest N — mixer stall + cap gate ─────────────────────────────
+// Self-contained: the REAL TeacherSession (ControlServer + TeacherAudioMixer, production wiring) on
+// loopback + N in-process synthetic mic senders (autoAudio ReplayClients — no golden capture, so no
+// Screen Recording needed). Asserts the load-bearing NON-BLOCKING invariant — kill one sender
+// mid-stream (NO stop message = a network stall) and the mix MUST keep advancing, the survivor MUST
+// keep playing, and ONLY the killed source freezes — plus the CAP visible-degradation (N>12 → 12
+// mixed, all N counted). Reports whole-process CPU (an upper bound; the senders share this process —
+// the clean teacher-only figure comes from --mixhost). SKIPs (exit 0) if the native mix engine can't
+// start (no audio output device, e.g. headless CI).
+static class MixTest
+{
+    public static async Task<int> RunAsync(int n, int durationSec)
+    {
+        if (!ClassroomCtrl.Avalonia.Teacher.Services.TeacherAudioMixer.IsSupported)
+        { Console.WriteLine("=== --mixtest SKIP — not macOS ==="); return 0; }
+        if (n < 2) { Console.WriteLine("=== --mixtest needs N ≥ 2 (the stall test needs a survivor) ==="); return 1; }
+
+        const int cap = 12;
+        Console.WriteLine($"=== MockStudent --mixtest {n} (REAL TeacherSession + {n} synthetic mics; cap {cap}) ===");
+
+        using var session = new ClassroomCtrl.Avalonia.Teacher.Services.TeacherSession(0, IPAddress.Loopback);
+        await session.StartAsync();
+        int port = session.BoundPort ?? 0;
+        int lastMixed = 0, lastOpen = 0;
+        session.MixStatusChanged += (m, o, _) => { lastMixed = m; lastOpen = o; };
+
+        var clients = new List<ReplayClient>();
+        for (int i = 0; i < n; i++) clients.Add(new ReplayClient(Array.Empty<byte[]>(), toneHz: 200 + i * 13, autoAudio: true));
+        using var cts = new CancellationTokenSource();
+        var runs = clients.Select((c, i) => c.Wire.RunAsync("127.0.0.1", port, $"Mic-{i:D2}", cts.Token)).ToList();
+
+        await Task.Delay(2500);   // connect + audio ramp (prebuffer + frames flowing)
+
+        // Probe: RenderedFrames advances only if the native engine started (output device present).
+        if (session.MixRenderedFrames() == 0)
+        {
+            Console.WriteLine("=== --mixtest SKIP — native mix engine did not start (no audio output device?) ===");
+            cts.Cancel(); try { await Task.WhenAll(runs); } catch { }
+            session.Dispose();
+            return 0;
+        }
+
+        int failures = 0;
+        void Check(string label, bool ok) { Console.WriteLine((ok ? "  ✅ " : "  ❌ ") + label); if (!ok) failures++; }
+
+        int expectMixed = Math.Min(n, cap);
+        Check($"native mix has {expectMixed} source(s) (min(N,{cap}))", session.MixActiveCount() == expectMixed);
+        if (n > cap)
+            Check($"CAP: {n} mics open → mixed=={cap} (capped), open=={n} (all counted — none silent-dropped)",
+                  lastMixed == cap && lastOpen == n);
+        else
+            Check($"no cap needed: mixed=={n}, open=={n}", lastMixed == n && lastOpen == n);
+
+        Console.WriteLine($"  ℹ mix output RMS={session.MixOutputRms()} (non-zero ⇒ audible mix)");
+
+        // ── CPU over a short window (whole process — upper bound) ──
+        var proc = System.Diagnostics.Process.GetCurrentProcess();
+        var c0 = proc.TotalProcessorTime; var sw = System.Diagnostics.Stopwatch.StartNew();
+        await Task.Delay(Math.Max(2, durationSec) * 1000);
+        proc.Refresh();
+        double cores = (proc.TotalProcessorTime - c0).TotalSeconds / Math.Max(0.001, sw.Elapsed.TotalSeconds);
+        Console.WriteLine($"  ℹ CPU ~{cores * 100:0}% of one core (WHOLE process: {n} senders + server + mix — teacher-only is far lower; use --mixhost)");
+
+        // ── THE DISTINGUISHING GATE: kill one MIXED sender (network stall — no stop message) ──
+        var mixedClients = clients.Where(c => session.MixSourcePlayed(c.Wire.EndpointId) >= 0).ToList();
+        if (mixedClients.Count < 2)
+            Check("stall test needs ≥2 mixed sources", false);
+        else
+        {
+            var killed = mixedClients[0]; var survivor = mixedClients[1];
+            Guid kId = killed.Wire.EndpointId, sId = survivor.Wire.EndpointId;
+            killed.KillAudio();                     // frames STOP; source stays registered → node starves
+            await Task.Delay(1400);                 // let the killed node's pending (≤~1 s) drain to empty
+            long rendered0 = session.MixRenderedFrames(), surv0 = session.MixSourcePlayed(sId), kill0 = session.MixSourcePlayed(kId);
+            await Task.Delay(1200);                  // observation window (killed now frozen)
+            long rendered1 = session.MixRenderedFrames(), surv1 = session.MixSourcePlayed(sId), kill1 = session.MixSourcePlayed(kId);
+
+            Check($"STALL: the mix keeps rendering for the class (rendered {rendered0}→{rendered1})", rendered1 > rendered0);
+            Check($"STALL: the survivor keeps playing (played {surv0}→{surv1})", surv1 > surv0);
+            Check($"STALL: the stalled source froze but stayed in the mix (played {kill0}→{kill1}, ≥0 ⇒ not removed)",
+                  kill1 == kill0 && kill1 >= 0);
+        }
+
+        cts.Cancel(); try { await Task.WhenAll(runs); } catch { }
+        session.Dispose();
+
+        Console.WriteLine(failures == 0
+            ? $"\n=== MIXTEST {n} PASS ✅ — {expectMixed} mixed · cap enforced · one stalled stream never silenced the class ==="
+            : $"\n=== MIXTEST {n} FAIL ❌ ({failures}) ===");
+        return failures == 0 ? 0 : 1;
+    }
+}
+
+
+// ───────────────────────────── TT-9-D: --mixhost — teacher-only mix CPU host ─────────────────────────────
+// Run ONLY the teacher (real TeacherSession = ControlServer + TeacherAudioMixer) on 0.0.0.0:port,
+// auto-open every connecting student's mic, and print per-second teacher-PROCESS CPU + mix status.
+// The clean N=10/25/50 measurement: point `--classroom N --audio --ip <this-mac>` (or real Mac
+// students) at it and read the CPU column — the senders are OTHER processes, so this figure is
+// teacher-only. Ctrl+C or --duration to stop.
+static class MixHost
+{
+    public static async Task<int> RunAsync(int port, int durationSec)
+    {
+        if (!ClassroomCtrl.Avalonia.Teacher.Services.TeacherAudioMixer.IsSupported)
+        { Console.WriteLine("=== --mixhost SKIP — not macOS ==="); return 0; }
+
+        using var session = new ClassroomCtrl.Avalonia.Teacher.Services.TeacherSession(port);
+        await session.StartAsync();
+        Console.WriteLine($"=== MockStudent --mixhost — {session.ListenAddress} — auto-listening to every mic; Ctrl+C to stop ===");
+
+        int mixed = 0, open = 0, cap = 0, students = 0;
+        session.MixStatusChanged += (m, o, c) => { mixed = m; open = o; cap = c; };
+        session.Roster.StudentAdded += (_, e) =>
+        { Interlocked.Increment(ref students); _ = session.ListenToStudentAsync(e.EndpointId, CancellationToken.None); };
+        session.Roster.StudentRemoved += (_, __) => Interlocked.Decrement(ref students);
+
+        using var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, ev) => { ev.Cancel = true; cts.Cancel(); };
+        var proc = System.Diagnostics.Process.GetCurrentProcess();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var lastCpu = proc.TotalProcessorTime; var lastT = sw.Elapsed;
+        while (!cts.IsCancellationRequested && (durationSec <= 0 || sw.Elapsed.TotalSeconds < durationSec))
+        {
+            try { await Task.Delay(1000, cts.Token); } catch { break; }
+            proc.Refresh();
+            var now = sw.Elapsed; var cpu = proc.TotalProcessorTime;
+            double cores = (cpu - lastCpu).TotalSeconds / Math.Max(0.001, (now - lastT).TotalSeconds);
+            lastCpu = cpu; lastT = now;
+            Console.WriteLine($"  [{now.TotalSeconds:0}s] students={Volatile.Read(ref students)} · mix={mixed}/{open} (cap {cap}) · teacher CPU ~{cores * 100:0}% of one core · RMS={session.MixOutputRms()}");
+        }
+        session.Dispose();
+        Console.WriteLine("=== --mixhost stopped ===");
+        return 0;
     }
 }
 

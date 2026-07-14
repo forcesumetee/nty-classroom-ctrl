@@ -136,6 +136,12 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudent
     /// "N of M open — mixing {cap}" indicator when the cap is exceeded (never a silent drop).</summary>
     public event Action<int, int, int>? MixStatusChanged;
 
+    // TT-9-D — mix diagnostics (the --mixtest stall/cap gate + a future mix-level meter).
+    public int MixActiveCount() => _mixer.NativeActiveCount();
+    public long MixRenderedFrames() => _mixer.RenderedFrames();
+    public int MixOutputRms() => _mixer.OutputRms();
+    public long MixSourcePlayed(Guid studentId) => _mixer.SourcePlayed(studentId);
+
     public string ListenAddress
     {
         get
