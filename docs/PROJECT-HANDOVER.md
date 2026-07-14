@@ -108,11 +108,13 @@ at deployment. Affects whether TT-11 peer audio is buildable as specified.
 - **Customer B's all-Mac classroom CANNOT be delivered without a Mac to build + test on.**
 
 ## 5. TT-10 system-audio probe result (last Mac probe — see `docs/TT-10-SYSTEM-AUDIO-PROBE.md`)
-**⚠️ First-party API (ScreenCaptureKit `capturesAudio`) is real + instantiable with NO third-party
-device** — the stream started clean. **Rules out the worst case (❌ needs BlackHole).** But the
-headless probe got **0 audio buffers** (no audio session in a CLI context) → actual delivery needs a
-**foreground-app test on a Mac.** Fallback: Core Audio process taps (14.4+). The teacher-MIC half
-(TT-10-B) is done and independent.
+**✅ RESOLVED 2026-07-14 — system audio IS capturable first-party (no third-party device), and it
+COEXISTS with screen in one SCStream** (audioBuffers=200/nonSilent=41 + screenBuffers=21). Run inside
+the granted Teacher bundle (TCC = the TT-8 Screen Recording grant; a bare binary has no TCC identity —
+that was the earlier 0-buffers, not an API failure). So TOR 11.2.9 (record screen + audio, incl.
+system audio) is **achievable first-party**. Capture is proven; the broadcast/wire build is **TT-10-C**
+(reuses the TT-10-B AudioStreamFrame path + an AVAudioConverter 48k→16k step). Ask the customer whether
+"เสียงของครู" = mic-only or system audio.
 
 ---
 

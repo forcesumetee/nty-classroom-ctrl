@@ -5,6 +5,30 @@ video's soundtrack), or does it need a third-party virtual audio device (BlackHo
 **Contract link:** TOR 11.2.9 requires recording the teacher's screen AND audio — if "เสียงของครู"
 means SYSTEM audio (not just the mic), this answer gates a contract item. **Ask the customer which.**
 
+## ✅ RESOLVED 2026-07-14 — YES, system audio is capturable FIRST-PARTY (and coexists with screen)
+Run inside the **granted Teacher bundle** (`com.nty.classroomctrl.teacher`, which has Screen Recording
+from TT-8) via a temporary `NTY_SCK_AUDIO_PROBE=1` hook → `nty_sysaudio_probe` (one SCStream, audio +
+screen outputs):
+```
+rc=0  audioBuffers=200  nonSilent=41  screenBuffers=21  maxAbs=0.206
+✅ SYSTEM AUDIO CAPTURED FIRST-PARTY (non-silent) — and it COEXISTS with screen in ONE SCStream
+```
+- **✅ System audio IS capturable first-party** — no third-party virtual device (no BlackHole). 200
+  audio buffers in ~4 s, 41 non-silent, peak |amp| 0.206.
+- **✅ COEXISTENCE HOLDS** — audio (200) AND screen (21) buffers from the **same** SCStream → the real
+  use case works: teacher plays a video → students see the picture AND hear the sound from ONE stream.
+- **TCC:** Screen Recording — the **SAME grant TT-8 already uses** (no new permission type). The gate is
+  the **bundle identity**: a bare `swiftc` binary has no identity so TCC can't even list it (that was
+  the earlier 0-buffers, NOT an API failure); a signed .app with `NSScreenCaptureUsageDescription`
+  works. (Earlier headless/bare-binary runs are below, as the journey.)
+- **Format:** SCK delivers **Float32** (48 kHz / 2 ch as configured); the wire needs 16 kHz mono
+  PCM16 → an `AVAudioConverter` resample/downmix step (same as the M20 mic path). This is TT-10-C.
+- **Contract (TOR 11.2.9):** recording the teacher's screen + audio, incl. SYSTEM audio, is
+  **achievable first-party.** Still ask the customer whether "เสียงของครู" = mic-only or system audio —
+  but either way is now unblocked.
+
+---
+### (history — the journey to the ✅ above)
 ## Verdict: ⚠️ First-party API CONFIRMED real + instantiable · audio buffer delivery UNRESOLVED by automation → needs a human run
 
 Ran the ScreenCaptureKit `capturesAudio` path **four times** on the borrowed MacBook Air (M-series):
