@@ -484,6 +484,26 @@ static class TeacherSelfTest
             await r.SendAsync(MessageType.Ping, Array.Empty<byte>(), CancellationToken.None);
             Check("real client Ping → server Pong (liveness)", await WaitUntil(() => Volatile.Read(ref pongs) > 0, 3000));
 
+            // (1b) TT-5-B: per-student COMMAND DELIVERY over the real transport. The
+            // Teacher's LockOne / PowerOne must reach the TARGETED student with the right
+            // MessageType and TargetEndpointId. This is the permanent end-to-end guard for
+            // TT-5's command path (lock/unlock + power). NOTE: the reliable-vs-lossy CHANNEL
+            // choice is NOT observable over a quiescent loopback (both deliver) — the
+            // TT5Gate fake-sink gate asserts reliable:true is chosen. Here we prove the
+            // delivery + targeting the shipped Windows per-student path also relies on.
+            int lockRx = 0, logoffRx = 0;
+            r.EnvelopeReceived += e =>
+            {
+                if (e.Type == MessageType.LockScreen && e.TargetEndpointId == r.EndpointId) Interlocked.Increment(ref lockRx);
+                if (e.Type == MessageType.ForceLogoff && e.TargetEndpointId == r.EndpointId) Interlocked.Increment(ref logoffRx);
+            };
+            await server.LockOneAsync(r.EndpointId, locked: true, CancellationToken.None, reliable: true);
+            Check("LockOne(reliable) → targeted student receives LockScreen (targeted)",
+                await WaitUntil(() => Volatile.Read(ref lockRx) > 0, 3000));
+            await server.PowerOneAsync(r.EndpointId, MessageType.ForceLogoff, CancellationToken.None, reliable: true);
+            Check("PowerOne(reliable, ForceLogoff) → targeted student receives ForceLogoff (targeted)",
+                await WaitUntil(() => Volatile.Read(ref logoffRx) > 0, 3000));
+
             // Clean disconnect removes it from the roster.
             rCts.Cancel(); try { await rRun.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
             Check("clean disconnect removes the student from the roster", await WaitUntil(() => !roster.Contains(r.EndpointId), 3000));
@@ -552,7 +572,7 @@ static class TeacherSelfTest
         });
 
         Console.WriteLine(failures == 0
-            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — real-client interop + roster fix + ownership guard + stale-sweep + guaranteed teardown ==="
+            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — real-client interop + roster fix + command delivery + ownership guard + stale-sweep + guaranteed teardown ==="
             : $"\n=== MOCKSTUDENT TEACHERSELFTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
     }

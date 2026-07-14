@@ -21,7 +21,15 @@ namespace ClassroomCtrl.Teacher.Core;
 /// </summary>
 public sealed class StudentRoster
 {
-    public sealed record Entry(Guid EndpointId, string DisplayName, string MachineName);
+    // TT-5-B (macOS port) — OsVersion is carried through from the student's Hello
+    // (HelloMessage.OsVersion, already on the wire — NOT a wire change). The Teacher
+    // uses it only to decide which per-student actions to OFFER: power (logoff/
+    // restart/shutdown) is executed by Windows students but is a no-op on Mac
+    // students (they have no power handler yet — a Student-track gap), so the tile
+    // gates the power menu on this string. Windows Students report
+    // "Microsoft Windows NT ..."; Mac Students report "macOS x.y.z"
+    // (RuntimeInformation.OSDescription). See StudentPlatform.CanReceivePower.
+    public sealed record Entry(Guid EndpointId, string DisplayName, string MachineName, string OsVersion);
 
     private readonly Dictionary<Guid, Entry> _byId = new();
     private readonly object _gate = new();
@@ -39,7 +47,7 @@ public sealed class StudentRoster
 
     private void OnJoined(object? sender, HelloMessage h)
     {
-        var entry = new Entry(h.EndpointId, h.DisplayName, h.MachineName);
+        var entry = new Entry(h.EndpointId, h.DisplayName, h.MachineName, h.OsVersion);
         lock (_gate) _byId[h.EndpointId] = entry;   // add, or update on reconnect
         StudentAdded?.Invoke(this, entry);
     }

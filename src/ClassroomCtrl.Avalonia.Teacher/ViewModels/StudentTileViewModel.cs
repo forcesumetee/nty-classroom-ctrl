@@ -1,4 +1,5 @@
 using System;
+using ClassroomCtrl.Avalonia.Teacher.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace ClassroomCtrl.Avalonia.Teacher.ViewModels;
@@ -25,6 +26,19 @@ public partial class StudentTileViewModel : ObservableObject
     [ObservableProperty] private string displayName;
     [ObservableProperty] private string machineName;
 
+    /// <summary>The student's reported OS (from Hello). Drives <see cref="CanReceivePower"/>;
+    /// may change on reconnect, so it's observable and re-notifies the derived flag.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanReceivePower))]
+    private string osVersion;
+
+    /// <summary>TT-5-B — whether the power actions (logoff/restart/shutdown) should be
+    /// OFFERED for this student. True only for Windows students (they execute power);
+    /// false for Mac/unknown (no macOS power handler yet). The context menu binds the
+    /// power items' IsEnabled to this; lock/unlock are always enabled (both platforms
+    /// enforce them).</summary>
+    public bool CanReceivePower => StudentPlatform.CanReceivePower(OsVersion);
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PresenceColorHex))]
     private TilePresence presence = TilePresence.Connected;
@@ -41,10 +55,11 @@ public partial class StudentTileViewModel : ObservableObject
         _ => "#9AA0A6",                           // grey (stale)
     };
 
-    public StudentTileViewModel(Guid endpointId, string displayName, string machineName)
+    public StudentTileViewModel(Guid endpointId, string displayName, string machineName, string osVersion = "")
     {
         EndpointId = endpointId;
         this.displayName = displayName;
         this.machineName = machineName;
+        this.osVersion = osVersion;
     }
 }

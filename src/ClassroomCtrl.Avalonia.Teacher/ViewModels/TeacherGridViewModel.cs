@@ -42,12 +42,13 @@ public partial class TeacherGridViewModel : ObservableObject
         {
             var existing = Students.FirstOrDefault(t => t.EndpointId == e.EndpointId);
             if (existing is null)
-                Students.Add(new StudentTileViewModel(e.EndpointId, e.DisplayName, e.MachineName));
+                Students.Add(new StudentTileViewModel(e.EndpointId, e.DisplayName, e.MachineName, e.OsVersion));
             else
             {
                 // Reconnect on the same EndpointId → update in place (no duplicate tile).
                 existing.DisplayName = e.DisplayName;
                 existing.MachineName = e.MachineName;
+                existing.OsVersion = e.OsVersion;   // re-notifies CanReceivePower
                 existing.Presence = TilePresence.Connected;
             }
         });

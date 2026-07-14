@@ -21,7 +21,7 @@ namespace ClassroomCtrl.Avalonia.Teacher.Services;
 /// Extracted (not inlined in App) so the socket-teardown is unit-testable — the
 /// same "never leave :7777 bound" discipline as TeacherHost / the TT-1 self-tests.
 /// </summary>
-public sealed class TeacherSession : IDisposable, IStudentStreamSource
+public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudentCommandSink
 {
     private readonly ControlServer _server;
     private bool _disposed;
@@ -58,6 +58,17 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource
 
     public Task StopStudentStreamAsync(Guid studentId, CancellationToken ct)
         => _server.StopStudentStreamAsync(studentId, ct);
+
+    // ─────── TT-5-B: IStudentCommandSink — the per-student command seam ───────
+    // Pure re-exposure of the already-ported ControlServer command methods (TT-1-C),
+    // forwarding the reliable flag so the controller's reliable:true reaches the
+    // never-drop channel. Same passthrough shape as IStudentStreamSource above.
+
+    public Task LockAsync(Guid endpointId, bool locked, bool reliable, CancellationToken ct)
+        => _server.LockOneAsync(endpointId, locked, ct, reliable);
+
+    public Task PowerAsync(Guid endpointId, MessageType type, bool reliable, CancellationToken ct)
+        => _server.PowerOneAsync(endpointId, type, ct, reliable);
 
     public string ListenAddress
     {

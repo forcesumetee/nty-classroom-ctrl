@@ -33,6 +33,16 @@
     <Border x:Name="CardRoot" CornerRadius="12" ClipToBounds="True" Cursor="Hand"
             Classes.selected="{Binding IsSelected}"
             PointerPressed="Card_Pressed">
+        <!-- TT-5-B — per-student command menu. Lock/Unlock are enforced on BOTH Mac and
+             Windows students, so they're always enabled. Power actions (added TT-5-C) are
+             gated on CanReceivePower. The menu inherits the card's DataContext (the tile
+             VM); CommandItem_Click reads each item's Tag and raises CommandRequested. -->
+        <Border.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="Lock screen" Tag="Lock" Click="CommandItem_Click"/>
+                <MenuItem Header="Unlock screen" Tag="Unlock" Click="CommandItem_Click"/>
+            </ContextMenu>
+        </Border.ContextMenu>
         <Grid RowDefinitions="*,Auto">
             <!-- Screen preview plate (thumbnail deferred to TT-3/TT-4). -->
             <Border Grid.Row="0" Background="#0D1224" CornerRadius="11,11,0,0" ClipToBounds="True" MinHeight="124">
