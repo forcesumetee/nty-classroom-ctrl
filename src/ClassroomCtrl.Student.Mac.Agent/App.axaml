@@ -1,0 +1,38 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClassroomCtrl.Student.Mac.Agent.ViewModels"
+             x:Class="ClassroomCtrl.Student.Mac.Agent.App"
+             x:DataType="vm:AgentViewModel"
+             RequestedThemeVariant="Light">
+
+    <Application.Styles>
+        <FluentTheme />
+    </Application.Styles>
+
+    <!-- Native macOS menubar item (NSStatusItem). Icon + tooltip + the dynamic status/teacher
+         lines bind to AgentViewModel (set as Application.DataContext in code-behind); the menu
+         itself is the native NSMenu, so it already reads as a clean, professional system menu. -->
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon Icon="{Binding TrayIcon}"
+                      ToolTipText="{Binding ToolTip}">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="{Binding StatusText}" IsEnabled="False"/>
+                        <NativeMenuItem Header="{Binding TeacherText}"
+                                        IsEnabled="False"
+                                        IsVisible="{Binding HasTeacher}"/>
+                        <NativeMenuItemSeparator/>
+                        <NativeMenuItem Header="Open Chat…"
+                                        Command="{Binding OpenChatCommand}"/>
+                        <NativeMenuItem Header="Open Downloads Folder"
+                                        Command="{Binding OpenDownloadsCommand}"/>
+                        <NativeMenuItemSeparator/>
+                        <NativeMenuItem Header="Quit NTY ClassroomCtrl"
+                                        Command="{Binding QuitCommand}"/>
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
+</Application>

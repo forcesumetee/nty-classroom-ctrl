@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>ClassroomCtrl.Student.Mac.Agent</AssemblyName>
+    <RootNamespace>ClassroomCtrl.Student.Mac.Agent</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClassroomCtrl.Shared.Wire\ClassroomCtrl.Shared.Wire.csproj" />
+    <!-- Shared screen decode (H264DecoderWrapper + ScreenFrameDecoder) for the broadcast viewer. -->
+    <ProjectReference Include="..\ClassroomCtrl.Avalonia.Media\ClassroomCtrl.Avalonia.Media.csproj" />
+  </ItemGroup>
+
+  <!-- Copy the native VideoToolbox decoder next to the output so LibraryImport("NtyCapture")
+       resolves at runtime (H.264 decode). Guarded so a build without the dylib still succeeds. -->
+  <ItemGroup Condition="Exists('..\..\native\NtyCapture\libNtyCapture.dylib')">
+    <None Include="..\..\native\NtyCapture\libNtyCapture.dylib">
+      <Link>libNtyCapture.dylib</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ClassroomCtrl.Student.Mac.Agent.ViewModels"
+        x:Class="ClassroomCtrl.Student.Mac.Agent.Views.BroadcastWindow"
+        x:DataType="vm:BroadcastViewModel"
+        Title="Teacher's Screen"
+        WindowState="FullScreen"
+        WindowDecorations="None"
+        Topmost="True"
+        Background="#0B0E14">
+
+    <!-- Full-screen takeover: the teacher's frame fills the display (aspect-preserved, centered),
+         letterboxed against a neutral near-black surface. No chrome, no clutter — attention on the
+         broadcast. A calm centered status shows while waiting / between frames. -->
+    <Grid>
+        <Image Source="{Binding CurrentFrame}" Stretch="Uniform"/>
+
+        <StackPanel IsVisible="{Binding IsWaiting}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+            <TextBlock Text="NTY ClassroomCtrl" FontSize="13" FontWeight="SemiBold"
+                       Foreground="#5B6B86" HorizontalAlignment="Center"/>
+            <TextBlock Text="{Binding StatusText}" FontSize="18"
+                       Foreground="#C4CBD6" HorizontalAlignment="Center"/>
+        </StackPanel>
+    </Grid>
+</Window>

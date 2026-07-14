@@ -232,4 +232,24 @@ public enum MessageType : ushort
     // who requested) so only the requester gets the verdict.
     ConferenceShareRequest  = 0x0686,   // S→T, ConferenceShareRequestMessage
     ConferenceShareResponse = 0x0687,   // T→S, ConferenceShareResponseMessage
+
+    // Local IPC only (0x0F00-0x0FFF) — macOS daemon (Service) ↔ tray Agent over the Unix
+    // domain socket. These NEVER travel the Teacher TCP wire, so they do not touch the
+    // T1-T26 cross-platform contract; a Teacher/Student that doesn't know them never sees them.
+    /// <summary>Service→Agent: a file finished (or failed) reassembly + save on the daemon.
+    /// Payload = FileReceivedNotifyMessage. Lets the tray UI toast; the file is already on disk.</summary>
+    FileReceivedNotify = 0x0F00,
+    /// <summary>Service→Agent: the daemon's TCP link to the Teacher changed (or a snapshot on Agent connect).
+    /// Payload = TeacherStatusMessage. Drives the tray's Status/Teacher lines.</summary>
+    TeacherStatusNotify = 0x0F01,
+    /// <summary>Agent→Service: the student typed a chat reply. Payload = ChatSendRequestMessage (just the text).
+    /// The daemon wraps it in a proper ChatMessage (its own identity) + ChatBroadcast and sends it to the Teacher.
+    /// (Teacher→Agent chat needs no IPC-only type — the daemon forwards the wire ChatBroadcast/ChatDirect as-is.)</summary>
+    ChatSendRequest = 0x0F02,
+    /// <summary>Service→Agent: a quiz/survey to present. Payload = QuizQuestionMessage (re-wrapped from the
+    /// Teacher's wire QuizStart). Pops the QuizWindow.</summary>
+    QuizBroadcast = 0x0F03,
+    /// <summary>Agent→Service: the student's chosen option. Payload = QuizSubmitRequestMessage.
+    /// The daemon stamps identity into a QuizAnswerMessage and sends it to the Teacher (wire QuizAnswerSubmit).</summary>
+    QuizSubmitRequest = 0x0F04,
 }

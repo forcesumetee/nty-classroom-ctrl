@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ClassroomCtrl.Student.Mac.Agent.ViewModels"
+        x:Class="ClassroomCtrl.Student.Mac.Agent.Views.QuizWindow"
+        x:DataType="vm:QuizViewModel"
+        Title="Class Quiz"
+        Width="460" SizeToContent="Height" MinWidth="400"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True"
+        CanResize="False"
+        Background="#F7F8FA">
+
+    <!-- Modern-government quiz card: clear question, single-choice radios, one prominent navy action.
+         Centered + Topmost so the student notices it; closeable/minimizable once answered. -->
+    <Border Padding="26,24">
+        <StackPanel Spacing="18">
+            <TextBlock Text="CLASS QUIZ" FontSize="11.5" FontWeight="SemiBold"
+                       Foreground="#1B3A6B"/>
+
+            <TextBlock Text="{Binding Question}" FontSize="19" FontWeight="SemiBold"
+                       Foreground="#16181D" TextWrapping="Wrap" LineHeight="26"/>
+
+            <ItemsControl ItemsSource="{Binding Options}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:QuizOption">
+                        <RadioButton GroupName="quizChoice"
+                                     Content="{Binding Text}"
+                                     IsChecked="{Binding IsSelected}"
+                                     Margin="0,5" FontSize="14.5" Foreground="#20242B"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="✓ Answer submitted — you may close this window."
+                       IsVisible="{Binding HasSubmitted}"
+                       Foreground="#1E7E34" FontSize="13" FontWeight="SemiBold"/>
+
+            <Button Content="Submit Answer" Command="{Binding SubmitCommand}"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Background="#1B3A6B" Foreground="White" FontSize="14" FontWeight="SemiBold"
+                    Padding="0,13" CornerRadius="8"/>
+        </StackPanel>
+    </Border>
+</Window>

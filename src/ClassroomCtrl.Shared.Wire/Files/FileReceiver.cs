@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Security.Cryptography;
-using ClassroomCtrl.Shared.Protocol;
 
-namespace ClassroomCtrl.Avalonia.Sandbox.Services;
+namespace ClassroomCtrl.Shared.Protocol;
 
 /// <summary>Outcome of one completed (or failed) file transfer.</summary>
 public sealed record FileReceiveResult(string FileName, string? SavedPath, bool Ok, long SizeBytes, string? Error);
@@ -17,9 +13,13 @@ public sealed record FileReceiveResult(string FileName, string? SavedPath, bool 
 /// hid student-audio mixing. This reassembles chunks by TransferId, VERIFIES the SHA-256 the teacher
 /// announced (a truncated/corrupt transfer is reported, never silently saved), and writes the file.
 ///
-/// Pure: no Avalonia, no UI thread — System.IO + MessagePack + Shared.Wire only. The ConnectionViewModel
-/// dispatch feeds it (after the StudentEnvelopeFilter.IsForMe gate, so a targeted send only lands on its
-/// target), and the headless gate (MockStudent --filetest) drives the SAME code end-to-end.
+/// Pure: no Avalonia, no UI thread — System.IO + Shared.Wire types only. It lives in Shared.Wire so BOTH
+/// receivers share one implementation:
+///   • the Avalonia UI student (ConnectionViewModel) — saves + toasts while the tray app is open, AND
+///   • the headless macOS daemon (MacClassroomWorker) — saves independently of the UI so a closed tray
+///     never breaks a transfer (e.g. exam-material distribution). The daemon then sends the UI only a
+///     lightweight FileReceivedNotify, not the raw chunks.
+/// The headless gate (MockStudent --filetest) drives the SAME code end-to-end.
 ///
 /// Targeting is NOT this class's concern: a file targeted at student A is dropped for B by IsForMe
 /// BEFORE it ever reaches B's FileReceiver (the distinguishing negative rides the same filter as every

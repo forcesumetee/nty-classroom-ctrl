@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  NTY ClassroomCtrl — macOS Student Daemon (LaunchDaemon)
+
+  A *system* LaunchDaemon (not a per-user LaunchAgent): launchd starts it at boot, as root,
+  before any user logs in, and restarts it if it ever exits (KeepAlive). Running as root is
+  what lets the daemon execute /sbin/shutdown -r/-h now, enforce policy, and drive the lock
+  overlay across sessions.
+
+  ── INSTALL ─────────────────────────────────────────────────────────────────────
+    # 1. Put the daemon binary at the path referenced below (self-contained publish, no .NET needed):
+    sudo mkdir -p "/Library/Application Support/NTY/ClassroomCtrl"
+    sudo cp -R <publish-output>/ "/Library/Application Support/NTY/ClassroomCtrl/"
+
+    # 2. Install this plist into the system LaunchDaemons directory with the required ownership/mode
+    #    (launchd refuses to load a plist that isn't root:wheel 644):
+    sudo cp com.nty.classroom.daemon.plist /Library/LaunchDaemons/
+    sudo chown root:wheel /Library/LaunchDaemons/com.nty.classroom.daemon.plist
+    sudo chmod 644       /Library/LaunchDaemons/com.nty.classroom.daemon.plist
+
+    # 3. Load + start it (modern bootstrap API; RunAtLoad makes it start immediately):
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.nty.classroom.daemon.plist
+    #   (legacy equivalent:  sudo launchctl load -w /Library/LaunchDaemons/com.nty.classroom.daemon.plist)
+
+  ── VERIFY / STOP ───────────────────────────────────────────────────────────────
+    sudo launchctl print   system/com.nty.classroom.daemon      # state, PID, last exit
+    sudo launchctl kickstart -k system/com.nty.classroom.daemon # force restart
+    sudo launchctl bootout  system/com.nty.classroom.daemon     # stop + unload
+    tail -f "/Library/Logs/NTY/classroom-daemon.err.log"        # live logs
+  ─────────────────────────────────────────────────────────────────────────────────
+-->
+<plist version="1.0">
+<dict>
+    <!-- Reverse-DNS identifier; must match the file name and the launchctl target label. -->
+    <key>Label</key>
+    <string>com.nty.classroom.daemon</string>
+
+    <!-- The daemon executable (argv[0]) and any arguments. Absolute path required. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Application Support/NTY/ClassroomCtrl/ClassroomCtrl.Student.Mac</string>
+    </array>
+
+    <!-- Run at boot, before login. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Always keep it alive: launchd relaunches the daemon if it crashes or is killed. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Explicitly run as root (LaunchDaemons default to root, but we state it for clarity/audit). -->
+    <key>UserName</key>
+    <string>root</string>
+
+    <!-- Interactive priority so teacher power/lock/policy commands aren't throttled as background work. -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+
+    <!-- Back off at least 10 s between respawns so a crash-loop can't peg the CPU. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Optional: point the daemon at the Teacher without a teacher.txt file.
+         Remove this block to fall back to ~/Library/Application Support/NTY/ClassroomCtrl/teacher.txt. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DOTNET_gcServer</key>
+        <string>0</string>
+        <!-- <key>NTY_TEACHER_IP</key>   <string>192.168.1.10</string> -->
+        <!-- <key>NTY_TEACHER_PORT</key> <string>7777</string> -->
+    </dict>
+
+    <!-- Capture stdout/stderr (the daemon logs via Microsoft.Extensions.Logging console) to disk. -->
+    <key>StandardOutPath</key>
+    <string>/Library/Logs/NTY/classroom-daemon.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Library/Logs/NTY/classroom-daemon.err.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Library/Application Support/NTY/ClassroomCtrl</string>
+</dict>
+</plist>

@@ -23,6 +23,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using ClassroomCtrl.Avalonia.Sandbox.Services;
 using ClassroomCtrl.Shared.Protocol;
 using MessagePack;
@@ -113,6 +114,36 @@ static class Frame
         return read;
     }
 
+    /// <summary>
+    /// Broadcast a real file to the connected student as the shipped Teacher does:
+    /// FileAnnounce (with SHA-256 + chunk count) → FileChunk × N (64 KB) → FileComplete.
+    /// The macOS daemon reassembles + verifies + saves it, then toasts the Agent.
+    /// </summary>
+    public static async Task SendFileAsync(NetworkStream s, string path, Guid sender, CancellationToken ct = default)
+    {
+        const int ChunkSize = 64 * 1024;
+        var bytes = await File.ReadAllBytesAsync(path, ct);
+        var sha = Convert.ToHexString(SHA256.HashData(bytes));
+        var transferId = Guid.NewGuid();
+        var name = Path.GetFileName(path);
+        int chunkCount = (bytes.Length + ChunkSize - 1) / ChunkSize;
+
+        await SendAsync(s, MessageType.FileAnnounce, MessagePackSerializer.Serialize(new FileAnnounceMessage
+        { TransferId = transferId, FileName = name, SizeBytes = bytes.Length, Sha256Hex = sha, ChunkCount = chunkCount }), sender, ct);
+
+        for (int i = 0; i < chunkCount; i++)
+        {
+            int off = i * ChunkSize, len = Math.Min(ChunkSize, bytes.Length - off);
+            var data = new byte[len];
+            Buffer.BlockCopy(bytes, off, data, 0, len);
+            await SendAsync(s, MessageType.FileChunk, MessagePackSerializer.Serialize(new FileChunkMessage
+            { TransferId = transferId, ChunkIndex = i, Data = data }), sender, ct);
+        }
+
+        await SendAsync(s, MessageType.FileComplete, MessagePackSerializer.Serialize(new FileCompleteMessage
+        { TransferId = transferId, FileName = name }), sender, ct);
+    }
+
     public static byte[] LockPayload() => Array.Empty<byte>();
 
     public static byte[] StreamStartPayload(VideoCodec codec = VideoCodec.Mjpeg) =>
@@ -187,6 +218,35 @@ static class Server
             {
                 if (line == "lock") { await Frame.SendAsync(live, MessageType.LockScreen, Frame.LockPayload(), teacherId); Console.WriteLine("→ LockScreen"); }
                 else if (line == "unlock") { await Frame.SendAsync(live, MessageType.UnlockScreen, Frame.LockPayload(), teacherId); Console.WriteLine("→ UnlockScreen"); }
+                else if (line == "lockdemo")
+                {
+                    // Self-releasing lock: kiosk shield up, then AUTO-UNLOCK after 8 s. Safe on a single
+                    // Mac — the shield hides the menu bar + disables Cmd+Tab, so you can't reach this
+                    // terminal to type "unlock" while it's up. (Backstops if this ever fails: quit
+                    // MockTeacher → dead-man auto-unlocks after 45 s; or kill the daemon → OS releases.)
+                    await Frame.SendAsync(live, MessageType.LockScreen, Frame.LockPayload(), teacherId);
+                    Console.WriteLine("→ LockScreen (auto-unlock in 8 s) …");
+                    await Task.Delay(8000);
+                    await Frame.SendAsync(live, MessageType.UnlockScreen, Frame.LockPayload(), teacherId);
+                    Console.WriteLine("→ UnlockScreen (auto)");
+                }
+                else if (line.StartsWith("file "))
+                {
+                    var path = line[5..].Trim().Trim('"');
+                    if (!File.Exists(path)) Console.WriteLine($"(no such file: {path})");
+                    else { await Frame.SendFileAsync(live, path, teacherId); Console.WriteLine($"→ File broadcast: {Path.GetFileName(path)}"); }
+                }
+                else if (line == "quiz")
+                {
+                    var q = new QuizQuestionMessage
+                    {
+                        QuizId = Guid.NewGuid(),
+                        Question = "What is the capital of Thailand?",
+                        Options = new() { "Bangkok", "Chiang Mai", "Phuket", "Khon Kaen" },
+                    };
+                    await Frame.SendAsync(live, MessageType.QuizStart, MessagePackSerializer.Serialize(q), teacherId);
+                    Console.WriteLine($"→ QuizStart: {q.Question}");
+                }
                 else if (line == "policy") { await Frame.SendAsync(live, MessageType.PolicyApply, Frame.PolicyPayload(), teacherId); Console.WriteLine("→ PolicyApply"); }
                 else if (line == "revert") { await Frame.SendAsync(live, MessageType.PolicyRevert, Array.Empty<byte>(), teacherId); Console.WriteLine("→ PolicyRevert"); }
                 else if (line == "shot") { await Frame.SendAsync(live, MessageType.RequestScreenshot, Array.Empty<byte>(), teacherId); Console.WriteLine("→ RequestScreenshot"); }
@@ -216,6 +276,16 @@ static class Server
                 {
                     var hello = MessagePackSerializer.Deserialize<HelloMessage>(env.Payload);
                     Console.WriteLine($"[Hello] {hello.DisplayName} · {hello.MachineName} · {hello.OsVersion} · proto={hello.ProtocolVersion} · ep={hello.EndpointId.ToString()[..8]}");
+                }
+                else if (env.Type is MessageType.ChatBroadcast or MessageType.ChatDirect)
+                {
+                    var chat = MessagePackSerializer.Deserialize<ChatMessage>(env.Payload);
+                    Console.WriteLine($"[Chat] {chat.SenderName}: {chat.Text}");
+                }
+                else if (env.Type == MessageType.QuizAnswerSubmit)
+                {
+                    var a = MessagePackSerializer.Deserialize<QuizAnswerMessage>(env.Payload);
+                    Console.WriteLine($"[Quiz] {a.StudentName} answered #{a.SelectedIndex} '{a.SelectedText}'");
                 }
                 else if (env.Type == MessageType.Ping)
                 {

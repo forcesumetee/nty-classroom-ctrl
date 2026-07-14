@@ -38,6 +38,11 @@ public sealed partial class H264DecoderWrapper : IDisposable
     // Set by the (synchronous) native callback during a feed; read right after.
     private WriteableBitmap? _pending;
 
+    // When set (via TryDecodeInto), the callback writes into this bitmap instead of allocating a
+    // fresh one — as long as its dimensions match. Lets a real-time viewer double-buffer and avoid a
+    // WriteableBitmap allocation per frame. Null (the TryDecode path) preserves the fresh-bitmap contract.
+    private WriteableBitmap? _reuseTarget;
+
     public static bool IsSupported => OperatingSystem.IsMacOS();
 
     public H264DecoderWrapper()
@@ -72,6 +77,19 @@ public sealed partial class H264DecoderWrapper : IDisposable
         return r == 1 ? _pending : null;   // 1 = a frame was delivered via the callback
     }
 
+    /// <summary>
+    /// Real-time variant of <see cref="TryDecode"/> that decodes INTO <paramref name="reuse"/> when its
+    /// dimensions match the frame — returning the same instance (no allocation). On the first frame or a
+    /// resolution change it allocates a fresh bitmap and returns that (assign it back as the new reuse
+    /// target). Same return semantics as <see cref="TryDecode"/> (null = no frame / can't-decode keyframe).
+    /// </summary>
+    public WriteableBitmap? TryDecodeInto(byte[] annexB, bool isKeyframe, WriteableBitmap? reuse)
+    {
+        _reuseTarget = reuse;
+        try { return TryDecode(annexB, isKeyframe); }
+        finally { _reuseTarget = null; }
+    }
+
     // Native (VideoToolbox) callback — fires synchronously within feed. Recovers the
     // instance from the GCHandle ctx (no per-call marshalling) and copies the frame.
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -87,7 +105,10 @@ public sealed partial class H264DecoderWrapper : IDisposable
         // The native BGRA is valid ONLY during this call (CVPixelBuffer still locked)
         // → copy now. Honor bytesPerRow (stride ≥ width*4 padding — the M16 gotcha):
         // copy row-by-row from the native stride into the WriteableBitmap's stride.
-        var wb = new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96),
+        // Reuse the caller's bitmap when its size matches (real-time double-buffering); else allocate.
+        var wb = _reuseTarget;
+        if (wb is null || wb.PixelSize.Width != width || wb.PixelSize.Height != height)
+            wb = new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96),
                                      PixelFormat.Bgra8888, AlphaFormat.Premul);
         using (var fb = wb.Lock())
         {

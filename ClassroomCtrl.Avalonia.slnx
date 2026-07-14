@@ -5,6 +5,8 @@
     <Project Path="src/ClassroomCtrl.Avalonia.Teacher/ClassroomCtrl.Avalonia.Teacher.csproj" />
     <Project Path="src/ClassroomCtrl.Shared.Wire/ClassroomCtrl.Shared.Wire.csproj" />
     <Project Path="src/ClassroomCtrl.Teacher.Core/ClassroomCtrl.Teacher.Core.csproj" />
+    <Project Path="src/ClassroomCtrl.Student.Mac/ClassroomCtrl.Student.Mac.csproj" />
+    <Project Path="src/ClassroomCtrl.Student.Mac.Agent/ClassroomCtrl.Student.Mac.Agent.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/CrossPlatformInteropTest/CrossPlatformInteropTest.csproj" />
