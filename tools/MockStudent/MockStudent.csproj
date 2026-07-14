@@ -17,5 +17,9 @@
     <!-- TT-1-E: the REAL Teacher.Core server, so the teacherselftest mode drives the real
          student WireClient against the real Mac Teacher server + roster in-process (loopback). -->
     <ProjectReference Include="..\..\src\ClassroomCtrl.Teacher.Core\ClassroomCtrl.Teacher.Core.csproj" />
+    <!-- TT-7-E: the Teacher grid + chat VMs, so the aggregation gate asserts the hand-raise/
+         reaction/chat ATTRIBUTION (A's event -> A's tile, not B's) via the dispatcher-free
+         Apply* methods. Constructing the VMs needs no Avalonia runtime (no Dispatcher touched). -->
+    <ProjectReference Include="..\..\src\ClassroomCtrl.Avalonia.Teacher\ClassroomCtrl.Avalonia.Teacher.csproj" />
   </ItemGroup>
 </Project>

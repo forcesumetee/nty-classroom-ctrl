@@ -31,6 +31,8 @@ using ClassroomCtrl.Avalonia.Sandbox.Services;
 using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Teacher.Services;                 // TT-1-E: real ControlServer
 using ClassroomCtrl.Teacher.Core;                     // TT-1-E: real StudentRoster
+using ClassroomCtrl.Avalonia.Teacher.ViewModels;      // TT-7-E: TeacherGridViewModel / ChatViewModel attribution
+using ClassroomCtrl.Avalonia.Teacher.Services;        // TT-7-E: ITeacherMessaging / ISoundService / NotificationSound
 using Microsoft.Extensions.Logging.Abstractions;      // TT-1-E: NullLogger for the headless server
 using MessagePack;
 
@@ -684,6 +686,61 @@ static class TeacherSelfTest
                 StudentEnvelopeFilter.IsForMe(Envelope.CreateGroupTargeted(MessageType.LockScreen, Array.Empty<byte>(), teacher, room), me, myRoomId: room));
         }
 
+        // ── (0e) TT-7 AGGREGATION / ATTRIBUTION — hand-raise / reaction / chat from 2 students map
+        //    to the RIGHT tile, never a fan-out. Asserts the NEGATIVE (B does NOT light when A raises)
+        //    — the distinguishing property (a "the target got it" check passes with a broadcast-to-all
+        //    bug present). Drives the REAL TeacherGridViewModel / ChatViewModel via their dispatcher-
+        //    free Apply* methods (no Avalonia runtime needed) + a recording sound fake (asserts the
+        //    HandRaise/Chat SOUND actually fired, not just that a flag flipped).
+        Console.WriteLine("-- (0e) TT-7 aggregation: hand-raise / reaction / chat attribution (2 students) --");
+        {
+            using var aggServer = new ControlServer(NullLogger<ControlServer>.Instance, NullLoggerFactory.Instance,
+                IPAddress.Loopback, 0, IPAddress.Loopback, 8000);   // constructed, NOT started (no port bind)
+            var grid = new TeacherGridViewModel(new StudentRoster(aggServer));
+            var sound = new RecordingSoundService();
+            grid.AttachMessaging(new FakeTeacherMessaging(), sound);   // sets sound/notify; events unused (Apply* called directly)
+
+            var idA = Guid.NewGuid(); var idB = Guid.NewGuid();
+            var tileA = new StudentTileViewModel(idA, "Alice", "mac-A");
+            var tileB = new StudentTileViewModel(idB, "Bob", "mac-B");
+            grid.Students.Add(tileA); grid.Students.Add(tileB);
+
+            // A raises → ONLY A's tile lights; B does NOT (the distinguishing negative).
+            grid.ApplyHandRaise(new HandRaiseMessage { StudentId = idA, StudentName = "Alice", IsRaised = true });
+            Check("hand-raise for A → A's tile raised", tileA.IsHandRaised);
+            Check("hand-raise for A → B's tile NOT raised (no wrong-tile fan-out)", !tileB.IsHandRaised);
+            Check("hand-raise for A → A queued order 1", tileA.HandRaiseOrder == 1);
+            Check("hand-raise for A → RaisedHands == [A]", grid.RaisedHands.Count == 1 && grid.RaisedHands[0] == tileA);
+            Check("hand-raise → HandRaise SOUND played (channel, not just a flag)", sound.Played.Contains(NotificationSound.HandRaise));
+
+            // B raises → both up, order preserved (A then B).
+            grid.ApplyHandRaise(new HandRaiseMessage { StudentId = idB, StudentName = "Bob", IsRaised = true });
+            Check("hand-raise for B → B queued order 2 (ordering preserved)", tileB.HandRaiseOrder == 2);
+            Check("hand-raise for B → RaisedHands == [A, B]", grid.RaisedHands.Count == 2 && grid.RaisedHands[0] == tileA && grid.RaisedHands[1] == tileB);
+
+            // reaction for A → only A's tile carries the emoji.
+            grid.ApplyReaction(idA, "🎉");
+            Check("reaction for A → A's tile shows 🎉", tileA.LastReaction == "🎉");
+            Check("reaction for A → B's tile has NO reaction (distinguishing)", string.IsNullOrEmpty(tileB.LastReaction));
+
+            // lower A (the teacher Recognize path) → A cleared, queue collapses to [B].
+            grid.ApplyHandRaise(new HandRaiseMessage { StudentId = idA, IsRaised = false });
+            Check("hand-lower A → A cleared", !tileA.IsHandRaised && tileA.HandRaiseOrder == 0);
+            Check("hand-lower A → RaisedHands == [B]", grid.RaisedHands.Count == 1 && grid.RaisedHands[0] == tileB);
+
+            // an event for an UNKNOWN student is a no-op (never touches A or B).
+            grid.ApplyHandRaise(new HandRaiseMessage { StudentId = Guid.NewGuid(), IsRaised = true });
+            Check("hand-raise for an unknown id → no known tile touched", !tileA.IsHandRaised && grid.RaisedHands.Count == 1);
+
+            // chat attribution: an incoming line is logged under the SENDER's name + plays the chat sound.
+            var chatSound = new RecordingSoundService();
+            var chat = new ChatViewModel(new FakeTeacherMessaging(), chatSound, grid);
+            chat.ApplyIncomingChat(new ClassroomCtrl.Shared.Protocol.ChatMessage { SenderId = idA, SenderName = "Alice", Text = "can you help?" });
+            Check("chat from A → logged as Alice, incoming",
+                chat.Messages.Count == 1 && chat.Messages[0].Sender == "Alice" && chat.Messages[0].Text == "can you help?" && !chat.Messages[0].IsOwn);
+            Check("incoming chat → Chat SOUND played", chatSound.Played.Contains(NotificationSound.Chat));
+        }
+
         // ── Server 1: the REAL student WireClient against the REAL server. ──
         // Large stale window (8 s > the client's 5 s heartbeat) so healthy clients never false-stale.
         await WithServer(8000, Check, "server-1 (real WireClient)", async (server, roster, port) =>
@@ -808,7 +865,7 @@ static class TeacherSelfTest
         });
 
         Console.WriteLine(failures == 0
-            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — command wiring (reliable channel) + real-client interop + roster fix + command delivery + ownership guard + stale-sweep + guaranteed teardown ==="
+            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — command wiring (reliable channel) + TT-7 chat/hand/reaction attribution + real-client interop + roster fix + command delivery + ownership guard + stale-sweep + guaranteed teardown ==="
             : $"\n=== MOCKSTUDENT TEACHERSELFTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
     }
@@ -882,4 +939,28 @@ sealed class RecordingCommandSink : IStudentCommandSink
         _calls.Add(new PowerCall(endpointId, type, reliable));
         return Task.CompletedTask;
     }
+}
+
+// TT-7-E — a no-op ITeacherMessaging. Its events are never raised: the aggregation gate calls the
+// grid/chat Apply* methods directly, so no Avalonia dispatcher is needed. AttachMessaging still
+// wires the (unused) events; passing this satisfies the seam.
+#pragma warning disable CS0067   // events intentionally unused (gate drives Apply* directly)
+sealed class FakeTeacherMessaging : ITeacherMessaging
+{
+    public event EventHandler<ClassroomCtrl.Shared.Protocol.ChatMessage>? ChatReceived;
+    public event EventHandler<HandRaiseMessage>? HandRaiseReceived;
+    public event EventHandler<(Guid SenderId, ReactionMessage Msg)>? ReactionReceived;
+    public Task BroadcastChatAsync(string text, CancellationToken ct) => Task.CompletedTask;
+    public Task SendDirectMessageAsync(Guid endpointId, string text, CancellationToken ct) => Task.CompletedTask;
+    public Task BroadcastReactionAsync(ReactionMessage msg, CancellationToken ct) => Task.CompletedTask;
+    public Task SendHandLowerAsync(Guid studentId, CancellationToken ct) => Task.CompletedTask;
+}
+#pragma warning restore CS0067
+
+// TT-7-E — records which notification sounds fired, so the gate asserts the CHANNEL (a hand-raise
+// actually plays a HandRaise sound), not merely that a tile flag flipped.
+sealed class RecordingSoundService : ISoundService
+{
+    public List<NotificationSound> Played { get; } = new();
+    public void Play(NotificationSound sound) => Played.Add(sound);
 }

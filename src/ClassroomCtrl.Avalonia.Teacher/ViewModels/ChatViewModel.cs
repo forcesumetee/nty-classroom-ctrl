@@ -45,16 +45,20 @@ public partial class ChatViewModel : ObservableObject
         _messaging.ChatReceived += OnChatReceived;
     }
 
-    // Inbound fires on a transport background thread → marshal before touching Messages.
+    // Inbound fires on a transport background thread → marshal, then apply (pure) below.
     private void OnChatReceived(object? sender, ChatMessage c) =>
-        Dispatcher.UIThread.Post(() =>
-        {
-            bool direct = c.RecipientId.HasValue;
-            Messages.Add(new ChatLineViewModel(c.SenderName, c.Text, isOwn: false, isDirect: direct,
-                                               scope: direct ? "direct" : ""));
-            _sound.Play(NotificationSound.Chat);
-            _notify?.Invoke($"💬 {c.SenderName}: {Trunc(c.Text)}");
-        });
+        Dispatcher.UIThread.Post(() => ApplyIncomingChat(c));
+
+    /// <summary>Pure inbound-chat handling (dispatcher-free so the TT-7-E gate asserts sender
+    /// attribution directly): log the line under the sender's name + play the chat sound.</summary>
+    internal void ApplyIncomingChat(ChatMessage c)
+    {
+        bool direct = c.RecipientId.HasValue;
+        Messages.Add(new ChatLineViewModel(c.SenderName, c.Text, isOwn: false, isDirect: direct,
+                                           scope: direct ? "direct" : ""));
+        _sound.Play(NotificationSound.Chat);
+        _notify?.Invoke($"💬 {c.SenderName}: {Trunc(c.Text)}");
+    }
 
     [RelayCommand]
     private void ClearDmTarget() => DmTarget = null;

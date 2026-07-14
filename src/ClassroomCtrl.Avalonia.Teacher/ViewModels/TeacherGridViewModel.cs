@@ -212,42 +212,54 @@ public partial class TeacherGridViewModel : ObservableObject
         messaging.ReactionReceived += OnReactionReceived;
     }
 
-    // The ATTRIBUTION guard: a hand-raise for StudentId X lights ONLY the tile whose
-    // EndpointId == X. If X isn't in the roster, nothing happens — never a fan-out to all
-    // tiles. This is the distinguishing property the TT-7-E aggregation gate asserts.
+    // Handlers fire on a transport background thread → marshal, then call the pure Apply* below.
     private void OnHandRaiseReceived(object? sender, HandRaiseMessage msg) =>
-        Dispatcher.UIThread.Post(() =>
-        {
-            var tile = Students.FirstOrDefault(t => t.EndpointId == msg.StudentId);
-            if (tile is null) return;
-
-            if (msg.IsRaised)
-            {
-                if (tile.IsHandRaised) return;   // idempotent (dup raise)
-                tile.IsHandRaised = true;
-                tile.HandRaiseOrder = ++_handSeq;
-                RaisedHands.Add(tile);
-                _sound?.Play(NotificationSound.HandRaise);
-                _notify?.Invoke($"✋ {tile.DisplayName} raised their hand");
-            }
-            else LowerLocal(tile);
-        });
+        Dispatcher.UIThread.Post(() => ApplyHandRaise(msg));
 
     private void OnReactionReceived(object? sender, (Guid SenderId, ReactionMessage Msg) e) =>
         Dispatcher.UIThread.Post(() =>
         {
-            var tile = Students.FirstOrDefault(t => t.EndpointId == e.SenderId);
-            if (tile is null) return;
             var emoji = e.Msg.Emoji;
-            tile.LastReaction = emoji;
+            if (!ApplyReaction(e.SenderId, emoji)) return;
             // Reactions are ephemeral: clear after a few seconds unless a newer, different one
             // has replaced it. (Clock-skew makes the wire ExpiresAtMs unreliable across machines,
-            // so we use a local timer.)
+            // so we use a local timer.) The timer stays here (dispatcher-bound); ApplyReaction is pure.
             DispatcherTimer.RunOnce(() =>
             {
-                if (tile.LastReaction == emoji) tile.LastReaction = "";
+                var t = Students.FirstOrDefault(x => x.EndpointId == e.SenderId);
+                if (t is not null && t.LastReaction == emoji) t.LastReaction = "";
             }, TimeSpan.FromSeconds(4));
         });
+
+    /// <summary>THE ATTRIBUTION guard (dispatcher-free so the TT-7-E gate asserts it directly):
+    /// a hand-raise for StudentId X touches ONLY the tile whose EndpointId == X. If X isn't in
+    /// the roster, nothing happens — never a fan-out to all tiles. That negative (B does NOT
+    /// light when A raises) is the distinguishing property the committed gate checks.</summary>
+    internal void ApplyHandRaise(HandRaiseMessage msg)
+    {
+        var tile = Students.FirstOrDefault(t => t.EndpointId == msg.StudentId);
+        if (tile is null) return;
+        if (msg.IsRaised)
+        {
+            if (tile.IsHandRaised) return;   // idempotent (dup raise)
+            tile.IsHandRaised = true;
+            tile.HandRaiseOrder = ++_handSeq;
+            RaisedHands.Add(tile);
+            _sound?.Play(NotificationSound.HandRaise);
+            _notify?.Invoke($"✋ {tile.DisplayName} raised their hand");
+        }
+        else LowerLocal(tile);
+    }
+
+    /// <summary>Pure reaction attribution: set the emoji on ONLY the sender's tile. Returns
+    /// whether a tile matched (so the caller schedules the auto-clear). Dispatcher-free.</summary>
+    internal bool ApplyReaction(Guid senderId, string emoji)
+    {
+        var tile = Students.FirstOrDefault(t => t.EndpointId == senderId);
+        if (tile is null) return false;
+        tile.LastReaction = emoji;
+        return true;
+    }
 
     /// <summary>Teacher "Recognize" — lower one student's hand (targeted HandLower) and clear
     /// it locally. Invoked by the tile's own RecognizeCommand (set as its callback). Fire-and-
