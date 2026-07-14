@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Pure C# (SHA-256 + a machine-id read); no Avalonia, no native. Cross-platform-buildable so
+         the wire-compat harness / gate can reference it. NOT yet referenced by either app — activation
+         is deliberately UNWIRED for the demo (see PROJECT-HANDOVER). -->
+  </PropertyGroup>
+
+</Project>
