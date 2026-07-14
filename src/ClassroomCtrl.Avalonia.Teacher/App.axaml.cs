@@ -18,6 +18,7 @@ public partial class App : Application
     private TeacherScreenBroadcaster? _screenBroadcaster;
     private TeacherMicBroadcaster? _micBroadcaster;
     private TeacherSystemAudioBroadcaster? _sysAudioBroadcaster;
+    private TeacherRecorder? _recorder;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -87,6 +88,11 @@ public partial class App : Application
             _sysAudioBroadcaster = new TeacherSystemAudioBroadcaster(_session);
             mainVm.ShareAudio = new ShareAudioViewModel(_sysAudioBroadcaster);
 
+            // TT-13 (TOR 11.2.9): Record the teacher's screen + system audio to ~/Movies/NTY Recordings
+            // via the native AVAssetWriter recorder. Screen Recording TCC (same grant as Share My Screen).
+            _recorder = new TeacherRecorder();
+            mainVm.Record = new RecordViewModel(_recorder);
+
             // Double-tap a tile → open (or focus) that student's live screen view.
             window.StudentActivated += tile =>
                 _screenViews.OpenOrFocus(tile.EndpointId, tile.DisplayName, tile.MachineName);
@@ -109,8 +115,8 @@ public partial class App : Application
             // while the server is still alive to send the stop), THEN release :7777 —
             // never leave a student streaming or the port bound. Both hooks are
             // idempotent, so firing both is safe.
-            window.Closing += (_, _) => { _ = _sysAudioBroadcaster?.StopAsync(); _ = _micBroadcaster?.StopAsync(); _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
-            desktop.ShutdownRequested += (_, _) => { _ = _sysAudioBroadcaster?.StopAsync(); _ = _micBroadcaster?.StopAsync(); _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
+            window.Closing += (_, _) => { _recorder?.Stop(); _ = _sysAudioBroadcaster?.StopAsync(); _ = _micBroadcaster?.StopAsync(); _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
+            desktop.ShutdownRequested += (_, _) => { _recorder?.Stop(); _ = _sysAudioBroadcaster?.StopAsync(); _ = _micBroadcaster?.StopAsync(); _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
         }
         base.OnFrameworkInitializationCompleted();
     }

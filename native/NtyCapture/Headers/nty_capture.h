@@ -356,6 +356,20 @@ int nty_input_guard_is_enabled(void);
 void nty_input_guard_set_stall_ms(int ms);
 void nty_input_test_synthesize(int keycode, uint64_t flags, int count);
 
+/*
+ * TT-13 / TOR 11.2.9 — record the teacher's SCREEN + system AUDIO to a .mov (AVAssetWriter).
+ *   nty_record_start(path)  0 ok / -2 no display / -3 SCK start (grant Screen Recording + RELAUNCH)
+ *                           / -4 needs macOS 13 / -5 already recording / -6 writer init
+ *   nty_record_stop()       0 ok / -1 not recording
+ *   nty_record_is_active()  1/0
+ *   nty_record_video_frames / nty_record_audio_frames — appended-sample counters (gate + UI).
+ */
+int nty_record_start(const char *path);
+int nty_record_stop(void);
+int nty_record_is_active(void);
+int64_t nty_record_video_frames(void);
+int64_t nty_record_audio_frames(void);
+
 #ifdef __cplusplus
 }
 #endif

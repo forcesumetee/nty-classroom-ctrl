@@ -63,6 +63,15 @@
                                TextTrimming="CharacterEllipsis"
                                IsVisible="{Binding FileStatus, Converter={x:Static ac:StringConverters.IsNotNullOrEmpty}}"/>
                     <Button Content="📄 Send File" Click="SendFile_Click" Cursor="Hand" Padding="12,5"/>
+                    <!-- TT-13 (TOR 11.2.9): Record teacher screen + audio → ~/Movies/NTY Recordings.
+                         Loud red status while recording (mirrors the Talk / Share Audio pattern). -->
+                    <TextBlock Text="{Binding Record.Status}" VerticalAlignment="Center" FontSize="11"
+                               Foreground="#EA4335" FontWeight="SemiBold" MaxWidth="380"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding Record.Status, Converter={x:Static ac:StringConverters.IsNotNullOrEmpty}}"/>
+                    <Button Content="{Binding Record.ButtonText}" Command="{Binding Record.ToggleCommand}"
+                            Cursor="Hand" Padding="12,5"
+                            IsVisible="{Binding Record, Converter={x:Static ac:ObjectConverters.IsNotNull}}"/>
                     <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                                FontSize="13" FontWeight="SemiBold"
                                Foreground="{StaticResource ConfTextPrimaryBrush}"/>

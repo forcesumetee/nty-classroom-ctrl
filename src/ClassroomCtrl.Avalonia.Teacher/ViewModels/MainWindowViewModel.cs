@@ -34,6 +34,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>TT-10-C — the "Share Computer Audio" VM (set by App).</summary>
     [ObservableProperty] private ShareAudioViewModel? shareAudio;
 
+    /// <summary>TT-13 (TOR 11.2.9) — the "Record" toggle VM (set by App).</summary>
+    [ObservableProperty] private RecordViewModel? record;
+
     /// <summary>TT-7-C — the transient notification banner (hand-raise / incoming chat).
     /// null = hidden. Auto-clears after a few seconds.</summary>
     [ObservableProperty] private string? toast;
