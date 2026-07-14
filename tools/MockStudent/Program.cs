@@ -741,6 +741,29 @@ static class TeacherSelfTest
             Check("incoming chat → Chat SOUND played", chatSound.Played.Contains(NotificationSound.Chat));
         }
 
+        // ── (0f) TT-8 TEACHER SCREEN-SHARE — broadcast reaches EVERY student (unlike a targeted
+        //    command) + the extracted ScreenFrameDecoder (Media) dispatch/fallback-signal. Decode
+        //    of real pixels is LIVE-proven (needs Skia); here we assert the routing + the signal.
+        Console.WriteLine("-- (0f) TT-8 teacher screen-share: broadcast routing + ScreenFrameDecoder signal --");
+        {
+            var teacher = Guid.NewGuid(); var me = Guid.NewGuid();
+            Check("IsForMe: ScreenStreamStart broadcast → ACT (the whole class sees the teacher's screen)",
+                StudentEnvelopeFilter.IsForMe(Envelope.Create(MessageType.ScreenStreamStart, Array.Empty<byte>(), teacher), me));
+            Check("IsForMe: ScreenStreamStop broadcast → ACT",
+                StudentEnvelopeFilter.IsForMe(Envelope.Create(MessageType.ScreenStreamStop, Array.Empty<byte>(), teacher), me));
+
+            var dec = new ClassroomCtrl.Avalonia.Media.ScreenFrameDecoder();
+            var h264Key = new ScreenStreamFrameMessage { FrameData = new byte[] { 0, 0, 0, 1, 0x67, 1, 2, 3 }, Codec = VideoCodec.H264, IsKeyframe = true, Width = 1920, Height = 1080 };
+            Check("decoder: undecodable H.264 KEYFRAME → null + LastKeyframeDecodeFailed (fallback signal)",
+                dec.Decode(h264Key) is null && dec.LastKeyframeDecodeFailed);
+            var h264Delta = new ScreenStreamFrameMessage { FrameData = new byte[] { 0, 0, 0, 1, 0x41, 9 }, Codec = VideoCodec.H264, IsKeyframe = false };
+            Check("decoder: H.264 DELTA before a keyframe → null, NOT a failure (waiting)",
+                dec.Decode(h264Delta) is null && !dec.LastKeyframeDecodeFailed);
+            Check("decoder: empty MJPEG payload → null (no throw)",
+                ClassroomCtrl.Avalonia.Media.ScreenFrameDecoder.DecodeMjpeg(Array.Empty<byte>()) is null);
+            dec.Dispose();
+        }
+
         // ── Server 1: the REAL student WireClient against the REAL server. ──
         // Large stale window (8 s > the client's 5 s heartbeat) so healthy clients never false-stale.
         await WithServer(8000, Check, "server-1 (real WireClient)", async (server, roster, port) =>
@@ -778,6 +801,38 @@ static class TeacherSelfTest
             await server.PowerOneAsync(r.EndpointId, MessageType.ForceLogoff, CancellationToken.None, reliable: true);
             Check("PowerOne(reliable, ForceLogoff) → targeted student receives ForceLogoff (targeted)",
                 await WaitUntil(() => Volatile.Read(ref logoffRx) > 0, 3000));
+
+            // (1c) TT-8 — teacher SCREEN-SHARE broadcast reaches the student (Start → Frame → Stop),
+            // and the frame payload round-trips intact (dims/codec/seq/bytes). This is the teacher→
+            // students path (the inverse of the per-student command path in 1b).
+            int shareStart = 0, shareStop = 0, frameRx = 0;
+            ScreenStreamFrameMessage? gotFrame = null;
+            r.EnvelopeReceived += e =>
+            {
+                if (e.Type == MessageType.ScreenStreamStart) Interlocked.Increment(ref shareStart);
+                else if (e.Type == MessageType.ScreenStreamStop) Interlocked.Increment(ref shareStop);
+                else if (e.Type == MessageType.ScreenStreamFrame)
+                {
+                    gotFrame = MessagePackSerializer.Deserialize<ScreenStreamFrameMessage>(e.Payload);
+                    Interlocked.Increment(ref frameRx);   // barrier: publishes gotFrame before the poll reads it
+                }
+            };
+            await server.BroadcastScreenStreamControlAsync(true, CancellationToken.None);
+            Check("teacher Share START → student receives ScreenStreamStart",
+                await WaitUntil(() => Volatile.Read(ref shareStart) > 0, 3000));
+            var testFrame = new ScreenStreamFrameMessage
+            {
+                FrameData = new byte[] { 1, 2, 3, 4, 5 }, Width = 1280, Height = 720,
+                Codec = VideoCodec.Mjpeg, IsKeyframe = true, FrameSeq = 7,
+            };
+            await server.BroadcastScreenFrameAsync(testFrame, CancellationToken.None);
+            Check("teacher screen frame → student receives it intact (1280×720, Mjpeg, seq 7, 5 bytes)",
+                await WaitUntil(() => Volatile.Read(ref frameRx) > 0, 3000)
+                && gotFrame is not null && gotFrame.Width == 1280 && gotFrame.Height == 720
+                && gotFrame.Codec == VideoCodec.Mjpeg && gotFrame.FrameSeq == 7 && gotFrame.FrameData.Length == 5);
+            await server.BroadcastScreenStreamControlAsync(false, CancellationToken.None);
+            Check("teacher Share STOP (reliable, bug #5) → student receives ScreenStreamStop",
+                await WaitUntil(() => Volatile.Read(ref shareStop) > 0, 3000));
 
             // Clean disconnect removes it from the roster.
             rCts.Cancel(); try { await rRun.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
@@ -865,7 +920,7 @@ static class TeacherSelfTest
         });
 
         Console.WriteLine(failures == 0
-            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — command wiring (reliable channel) + TT-7 chat/hand/reaction attribution + real-client interop + roster fix + command delivery + ownership guard + stale-sweep + guaranteed teardown ==="
+            ? "\n=== MOCKSTUDENT TEACHERSELFTEST PASS ✅ — command wiring (reliable channel) + TT-7 chat/hand/reaction attribution + TT-8 screen-share broadcast + real-client interop + roster fix + command delivery + ownership guard + stale-sweep + guaranteed teardown ==="
             : $"\n=== MOCKSTUDENT TEACHERSELFTEST FAIL ❌ ({failures} check(s)) ===");
         return failures == 0 ? 0 : 1;
     }
