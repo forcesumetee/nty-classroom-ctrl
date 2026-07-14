@@ -42,6 +42,7 @@ string name = $"MockStudent ({Environment.MachineName})";
 bool selfTest = false;
 bool teacherSelfTest = false;
 int classroomN = 0, durationSec = 8;
+bool classroomAudio = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -53,12 +54,13 @@ for (int i = 0; i < args.Length; i++)
         case "--name": name = args[++i]; break;
         case "--classroom": classroomN = int.Parse(args[++i]); break;   // TT-0-D: N replay-clients
         case "--duration": durationSec = int.Parse(args[++i]); break;
+        case "--audio": classroomAudio = true; break;                    // TT-9-B: also stream synthetic mic PCM
     }
 }
 
 if (teacherSelfTest) return await TeacherSelfTest.RunAsync();
 if (selfTest) return await SelfTest.RunAsync();
-if (classroomN > 0) return await Classroom.RunAsync(ip, port, classroomN, durationSec);
+if (classroomN > 0) return await Classroom.RunAsync(ip, port, classroomN, durationSec, classroomAudio);
 return await Interactive.RunAsync(ip, port, name);
 
 
@@ -273,18 +275,35 @@ sealed class ReplayClient
 {
     public WireClient Wire { get; } = new();
     readonly IReadOnlyList<byte[]> _golden;
+    readonly int _toneHz;                 // TT-9-B: a distinct tone per seat → the teacher-side mix is
+                                          //         separable, and the kill-one-sender stall test can
+                                          //         name exactly which stream it dropped.
+    readonly bool _autoAudio;             // self-start the synthetic mic on connect (load generator)
     CancellationTokenSource? _replayCts;
+    CancellationTokenSource? _audioCts;
     public long FramesSent;
+    public long AudioFramesSent;
 
-    public ReplayClient(IReadOnlyList<byte[]> golden)
+    public ReplayClient(IReadOnlyList<byte[]> golden, int toneHz = 440, bool autoAudio = false)
     {
         _golden = golden;
+        _toneHz = toneHz;
+        _autoAudio = autoAudio;
         Wire.EnvelopeReceived += env =>
         {
-            if (env.Type == MessageType.StudentStreamStart) StartReplay();
-            else if (env.Type == MessageType.StudentStreamStop) _replayCts?.Cancel();
+            switch (env.Type)
+            {
+                case MessageType.StudentStreamStart: StartReplay(); break;
+                case MessageType.StudentStreamStop: _replayCts?.Cancel(); break;
+                case MessageType.MicMonitorStart: StartAudio(); break;   // TT-9-B: teacher opened my mic (faithful trigger)
+                case MessageType.MicMonitorStop: StopAudio(); break;
+            }
         };
-        Wire.StatusChanged += s => { if (s == WireStatus.Disconnected) _replayCts?.Cancel(); };
+        Wire.StatusChanged += s =>
+        {
+            if (s == WireStatus.Disconnected) { _replayCts?.Cancel(); StopAudio(); }
+            else if (s == WireStatus.Connected && _autoAudio) StartAudio();
+        };
     }
 
     void StartReplay()
@@ -305,15 +324,70 @@ sealed class ReplayClient
             }
         }, ct);
     }
+
+    // TT-9-B — the synthetic mic. StudentAudioStreamStart (0x032B) then continuous 100 ms
+    // StudentAudioStreamFrame (0x032C) PCM (16 kHz mono 16-bit, 3200 B) — a sine at _toneHz.
+    // NO VAD / silence gate: continuous once the mic is open, matching the shipped student
+    // (StudentAudioBroadcaster). Idempotent — a second Start (MicMonitorStart + auto) is a no-op.
+    public void StartAudio()
+    {
+        if (_audioCts is { IsCancellationRequested: false }) return;
+        _audioCts = new CancellationTokenSource();
+        var ct = _audioCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try { await Wire.SendAsync(MessageType.StudentAudioStreamStart, Array.Empty<byte>(), ct); }
+            catch { return; }
+            int seq = 0;
+            while (!ct.IsCancellationRequested)
+            {
+                var msg = new AudioStreamFrameMessage
+                {
+                    PcmData = Tone(_toneHz, seq),
+                    SampleRate = 16000, Channels = 1, BitsPerSample = 16,
+                    TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    FrameSeq = seq + 1,
+                };
+                try { await Wire.SendAsync(MessageType.StudentAudioStreamFrame, MessagePackSerializer.Serialize(msg), ct); }
+                catch { return; }
+                Interlocked.Increment(ref AudioFramesSent);
+                seq++;
+                try { await Task.Delay(100, ct); } catch { return; }
+            }
+        }, ct);
+    }
+
+    public void StopAudio()
+    {
+        var cts = _audioCts; _audioCts = null;
+        if (cts is null) return;
+        cts.Cancel();
+        try { _ = Wire.SendAsync(MessageType.StudentAudioStreamStop, Array.Empty<byte>(), CancellationToken.None); } catch { }
+    }
+
+    // 16 kHz mono 16-bit PCM, 100 ms (1600 samples), sine at hz. Phase-continuous across frames
+    // via the absolute sample index (seq*1600 + i) so consecutive frames don't click at the seam.
+    static byte[] Tone(int hz, int seq)
+    {
+        var pcm = new byte[3200];
+        double step = 2.0 * Math.PI * hz / 16000.0;
+        for (int i = 0; i < 1600; i++)
+        {
+            short s = (short)(0.2 * 32767 * Math.Sin((seq * 1600L + i) * step));
+            pcm[i * 2] = (byte)(s & 0xFF);
+            pcm[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
+        }
+        return pcm;
+    }
 }
 
 
 // ───────────────────────────── --classroom N: N replay-clients, one process ─────────────────────────────
 static class Classroom
 {
-    public static async Task<int> RunAsync(string ip, int port, int n, int durationSec)
+    public static async Task<int> RunAsync(string ip, int port, int n, int durationSec, bool audio)
     {
-        Console.WriteLine($"=== MockStudent --classroom {n} → {ip}:{port} (1 golden encode, {n} replay-clients, {durationSec}s) ===");
+        Console.WriteLine($"=== MockStudent --classroom {n} → {ip}:{port} (1 golden encode, {n} replay-clients, {durationSec}s{(audio ? ", +synthetic mic 0x032C" : "")}) ===");
 
         var (golden, keyframes) = await GoldenSample.CaptureScreenH264Async();
         if (golden.Count == 0 || keyframes == 0)
@@ -323,32 +397,43 @@ static class Classroom
         }
         long goldenBytes = golden.Sum(p => (long)p.Length);
         Console.WriteLine($"  golden: {golden.Count} H.264 frames · {keyframes} keyframe(s) · {goldenBytes / 1024}KB — ONE encode, replayed ×{n}");
+        if (audio) Console.WriteLine($"  TT-9-B: each seat also streams continuous 16 kHz mono PCM (~256 kbps/mic → ~{n * 256 / 1000.0:0.0} Mbps aggregate at {n} mics)");
 
         var clients = new List<ReplayClient>();
-        for (int i = 0; i < n; i++) clients.Add(new ReplayClient(golden));
+        // distinct tone per seat (220 Hz, +20 Hz each) → the teacher-side mix is separable by ear/FFT.
+        for (int i = 0; i < n; i++) clients.Add(new ReplayClient(golden, toneHz: 220 + i * 20, autoAudio: audio));
         using var cts = new CancellationTokenSource();
         var runs = clients.Select((c, i) => c.Wire.RunAsync(ip, port, $"Replay-{i:D2}", cts.Token)).ToList();
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        long lastFrames = 0;
+        long lastFrames = 0, lastAudio = 0;
         while (sw.Elapsed.TotalSeconds < durationSec)
         {
             await Task.Delay(2000);
             int connected = clients.Count(c => c.Wire.Status == WireStatus.Connected);
             long total = clients.Sum(c => c.FramesSent);
             double fps = (total - lastFrames) / 2.0; lastFrames = total;
-            Console.WriteLine($"  [{sw.Elapsed.TotalSeconds:0}s] connected={connected}/{n} · frames sent={total} · ~{fps:0} fps aggregate");
+            if (audio)
+            {
+                long au = clients.Sum(c => c.AudioFramesSent);
+                double afps = (au - lastAudio) / 2.0; lastAudio = au;
+                Console.WriteLine($"  [{sw.Elapsed.TotalSeconds:0}s] connected={connected}/{n} · screen={total} (~{fps:0} fps) · audio={au} (~{afps:0} frm/s ≈ {afps / 10:0} mic-s worth)");
+            }
+            else
+                Console.WriteLine($"  [{sw.Elapsed.TotalSeconds:0}s] connected={connected}/{n} · frames sent={total} · ~{fps:0} fps aggregate");
         }
 
         int finalConnected = clients.Count(c => c.Wire.Status == WireStatus.Connected);
         long finalFrames = clients.Sum(c => c.FramesSent);
+        long finalAudio = clients.Sum(c => c.AudioFramesSent);
         cts.Cancel();
         try { await Task.WhenAll(runs); } catch { }
 
-        bool ok = finalConnected == n && finalFrames > 0;
+        bool ok = finalConnected == n && finalFrames > 0 && (!audio || finalAudio > 0);
+        var audioNote = audio ? $" · {finalAudio} audio frames (0x032C)" : "";
         Console.WriteLine(ok
-            ? $"\n=== CLASSROOM {n} ✅ — {finalConnected}/{n} clients connected · {finalFrames} frames delivered (1 encode → {n} streams) ==="
-            : $"\n=== CLASSROOM {n} ❌ — {finalConnected}/{n} connected · {finalFrames} frames ===");
+            ? $"\n=== CLASSROOM {n} ✅ — {finalConnected}/{n} clients connected · {finalFrames} frames delivered{audioNote} (1 encode → {n} streams) ==="
+            : $"\n=== CLASSROOM {n} ❌ — {finalConnected}/{n} connected · {finalFrames} frames{audioNote} ===");
         return ok ? 0 : 1;
     }
 }
