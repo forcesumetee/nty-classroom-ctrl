@@ -259,6 +259,41 @@ permission bundle (**Screen Recording** for broadcast, **Camera**, **Microphone*
 NOT needed for the Teacher), LaunchAgent if auto-start is wanted. *LIVE:* fresh signed `.app`,
 grants persist across relaunch, full session with Windows Students.
 
+### Remaining phases — risk + multi-peer at a glance (ratings 2026-07-14)
+
+Risk = residual difficulty/uncertainty for THIS port (research + new-native + UI weight). 🔴 MULTI-PEER
+= inherently multi-student **topology** (fan-out/relay/mix), so it MUST be LIVE-tested with ≥2 students
+per the TT-6-D standing rule; ⚠️ = milder multi-student behavior (aggregation / broadcast-at-scale).
+
+| Phase | Risk | Multi-peer | Why |
+|---|---|---|---|
+| **TT-7** Chat + notifications + hand-raise + reactions | **LOW** | ⚠️ aggregation | Portable C# handlers + chat rail + NSSound. DM targeting now filtered (TT-6-D). Hand-raise/reactions from N students → verify the *right* student's surfaces (≥2-student check). |
+| **TT-8** Teacher "Share My Screen" | **LOW–MED** | ⚠️ broadcast fan-out | Reuses M17 capture + M18 encode (both LIVE). Needs Screen Recording TCC (P35 friction). One-to-many broadcast to N students unverified at scale. |
+| **TT-9** Student audio mixing | **MED** | 🔴 **YES** | Extends M20 single-stream → per-student jitter buffer + one mix bus. Meaningless with one student; mixing/drift is the risk. |
+| **TT-10** Teacher audio broadcast + mic-monitor | **MED–HIGH** | ⚠️ (monitor targeted) | Teacher-mic broadcast reuses M20 (low). Mic-monitor is targeted → covered by the TT-6-D filter. **"Share Computer Audio" system-loopback has no clean macOS equiv → investigation sub-phase** (§6). |
+| **TT-11** Camera + Conference (star relay) | **HIGH** | 🔴 **YES (flagship)** | The star-topology relay (who sees whose cam/share) is inherently multi-peer + never multi-student-tested (subsumes the M19 re-test), **plus** the large Conference UI port (gallery/tile/share/sidebar/toolbar). Size L. |
+| **TT-12** File distribution | **LOW** | ⚠️ broadcast fan-out | FileAnnounce/Chunk/Complete on the reliable channel + storage path. Portable. Size S. |
+| **TT-13** System integration + packaging | **MED** | no | NSUserDefaults + `.app` packaging + permission bundle + LaunchAgent. Packaging/TCC friction; **overlaps P35** (signing/notarization). |
+
+**Multi-peer topology phases (build + LIVE with ≥2 students from the start): TT-9, TT-11.** TT-7/TT-8/
+TT-12 have milder multi-student behavior (aggregation / broadcast-at-scale) — still worth a ≥2-student
+LIVE, lower risk.
+
+### End-game ordering (confirmed 2026-07-14)
+
+Remaining **feature** phases → **polish** → **license** → **signing** → **ship**:
+
+1. **TT-7 … TT-13** — the remaining feature phases (this roadmap).
+2. **UI POLISH** — visual parity with the shipped Windows Teacher, **keeping the macOS idioms**
+   deliberately chosen (e.g. the TT-6 click model, ⌘-shortcuts, Cancel-default confirms). Not a
+   pixel-copy — a native-feeling equivalent.
+3. **LICENSE / ACTIVATE KEY** — offline activation key stored in config (NSUserDefaults / config.json).
+   **Parked until the Teacher track is functionally complete** (per the user); do not investigate early.
+4. **P35 — Developer ID signing + notarization** — eliminates the ad-hoc-rebuild TCC re-prompt
+   (M22/32-F / TT-4-D friction), enables wide deployment. **TT-13 assembles the bundle; P35 signs +
+   notarizes it.**
+5. **SHIP.**
+
 ---
 
 ## 6. Genuinely-new native pieces (everything else is reuse)
@@ -302,6 +337,29 @@ Everything else (screen capture, H.264 encode, camera, mic capture, single-strea
   control (`0x0480-0x0486`), demo/annotation/screen-pen (`0x0440-0x0452`), net movie
   (`0x0470-0x0473`), recording (NReco/ffmpeg → AVAssetWriter), breakout rooms (`0x0600-0x0625`),
   exam/quiz + charts + Excel/Word export (`0x0700-0x0703`), UDP discovery beacon (7778).
+
+### Cross-track follow-ups (deferred, tracked — current as of 2026-07-14)
+
+Distinct from the optional *features* above: these are **known gaps/fixes** surfaced by the port, each
+recorded so it isn't re-investigated. None block the current Teacher-track phases.
+
+- **Windows-track follow-ups (4) — all found/fixed in the macOS port, all v1.2.x candidates; shipped
+  repo untouched:** ① **v1.2.1 installer** (ship — customer commitment); ② **teacher-mic `WaveInEvent`
+  robustness** (M20 — brittle fixed-format capture); ③ **roster namespace-gap** (peerId vs EndpointId →
+  wrong-student-greys-out at 50; found TT-1, fixed in port); ④ **per-student lossy-channel** (per-student
+  commands defaulted `reliable:false` → DropOldest; found TT-5-A, fixed in port). *Reports to the Windows
+  team; we do not touch the shipped repo.*
+- **Student-track follow-ups (macOS enforcement gaps — block Mac-only feature parity for customer B):**
+  **macOS power execution** (Sandbox has no logoff/restart/shutdown handler — power is a no-op on Mac;
+  Teacher disables it per-platform) and **macOS policy enforcement** (Sandbox shows a policy badge but
+  enforces nothing — why TT-5/TT-6 deferred policy).
+- **Multi-peer re-tests (from TT-6-D — single-student-blind):** **Conference/peer-camera relay (M19)**
+  (highest — a dedicated 2-Mac-student re-test; subsumed into TT-11) and **Student Demonstration**
+  (DemoFrame rebroadcast), if/when ported.
+- **Distribution / platform validation:** **P35** (Developer ID signing + notarization — the ad-hoc-
+  rebuild TCC re-prompt); **multi-display lock validation** (M21 validated single-display; multi-display
+  code-correct but untested); **screenshot / per-student recording / quality-report** gaps (the deferred
+  remainder of the shipped StudentScreenWindow, noted in TT-4).
 
 ---
 
