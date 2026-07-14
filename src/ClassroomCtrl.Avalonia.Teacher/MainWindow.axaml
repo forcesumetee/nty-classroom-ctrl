@@ -40,6 +40,14 @@
                             </Style>
                         </Button.Styles>
                     </Button>
+                    <!-- TT-10-C: Share Computer Audio (system audio → students). Pairs with Share My Screen. -->
+                    <TextBlock Text="{Binding ShareAudio.Status}" VerticalAlignment="Center" FontSize="11"
+                               Foreground="#EA4335" FontWeight="SemiBold" MaxWidth="220"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding ShareAudio.Status, Converter={x:Static ac:StringConverters.IsNotNullOrEmpty}}"/>
+                    <Button Content="{Binding ShareAudio.ButtonText}" Command="{Binding ShareAudio.ToggleCommand}"
+                            Cursor="Hand" Padding="12,5"
+                            IsVisible="{Binding ShareAudio, Converter={x:Static ac:ObjectConverters.IsNotNull}}"/>
                     <!-- TT-8-C: Share My Screen (+ status; visible errors, not a silent no-op). -->
                     <TextBlock Text="{Binding ScreenShare.Status}" VerticalAlignment="Center" FontSize="11"
                                Foreground="{StaticResource ConfTextSecondaryBrush}" MaxWidth="320"

@@ -16,6 +16,7 @@
 
 import Foundation
 import AVFoundation
+import ScreenCaptureKit   // TT-10 system-audio probe (nty_sysaudio_probe)
 
 /// PCM frame callback (29-B). `pcm` = `length` bytes of signed 16-bit LE samples
 /// (call-scoped — copy before returning). sampleRate/channels describe the frame
@@ -487,4 +488,219 @@ public func nty_mix_output_rms() -> Int32 {
 @_cdecl("nty_mix_source_played")
 public func nty_mix_source_played(_ sourceId: Int32) -> Int64 {
     MixState.lock.lock(); let s = MixState.session; MixState.lock.unlock(); return s?.played(sourceId) ?? -1
+}
+
+// MARK: - TT-10 system-audio PROBE (temporary; called from the granted Teacher bundle) --------------
+// Answers: with Screen Recording actually granted (bundle identity), do NON-SILENT system-audio
+// buffers arrive from SCStreamConfiguration.capturesAudio, AND do audio + screen coexist in ONE
+// SCStream (the real use case: teacher plays a video → students see picture AND hear sound)?
+// Synchronous (blocks the caller ~durationMs) so the .NET side gets a clean answer. Out-params:
+// audioBuffers, nonSilentAudio (Float32 |amp|>0.001), screenBuffers, maxAbs×1000. Returns 0 ok,
+// -2 no display, -3 SCK start error (e.g. TCC not granted — grant + RELAUNCH the bundle).
+
+// SCK AUDIO is macOS 13.0+ (the dylib targets 12.3) → gate behind @available; the @_cdecl entry
+// does a runtime #available check. All shared state lives in the collector (a class) so the Task
+// closure never mutates captured locals (strict-concurrency clean).
+@available(macOS 13.0, *)
+private final class ProbeCollector: NSObject, SCStreamOutput, SCStreamDelegate {
+    var audio = 0, nonSilent = 0, screen = 0
+    var maxAbs: Float = 0
+    var errText = ""
+    var startErr: Int32 = 0
+    var stream: SCStream?
+    let lock = NSLock()
+    func stream(_ s: SCStream, didOutputSampleBuffer sb: CMSampleBuffer, of type: SCStreamOutputType) {
+        if type == .screen { lock.lock(); screen += 1; lock.unlock(); return }
+        guard type == .audio else { return }
+        lock.lock(); audio += 1; lock.unlock()
+        guard let bb = CMSampleBufferGetDataBuffer(sb) else { return }
+        var len = 0; var ptr: UnsafeMutablePointer<Int8>?
+        CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &len, dataPointerOut: &ptr)
+        guard let p = ptr, len >= 4 else { return }
+        var localMax: Float = 0
+        p.withMemoryRebound(to: Float32.self, capacity: len / 4) { fp in
+            for i in 0..<(len / 4) { let v = abs(fp[i]); if v > localMax { localMax = v } }
+        }
+        lock.lock(); if localMax > maxAbs { maxAbs = localMax }; if localMax > 0.001 { nonSilent += 1 }; lock.unlock()
+    }
+    func stream(_ s: SCStream, didStopWithError e: Error) { lock.lock(); errText = "\(e)"; lock.unlock() }
+}
+
+@available(macOS 13.0, *)
+private func runSysAudioProbe(_ durationMs: Int32,
+                             _ outAudio: UnsafeMutablePointer<Int32>?,
+                             _ outNonSilent: UnsafeMutablePointer<Int32>?,
+                             _ outScreen: UnsafeMutablePointer<Int32>?,
+                             _ outMaxAbsMilli: UnsafeMutablePointer<Int32>?) -> Int32 {
+    let collector = ProbeCollector()
+    let setup = DispatchSemaphore(value: 0)
+    Task {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard let display = content.displays.first else { collector.startErr = -2; setup.signal(); return }
+            let cfg = SCStreamConfiguration()
+            cfg.capturesAudio = true            // ← the system-audio tap
+            cfg.sampleRate = 48000
+            cfg.channelCount = 2
+            cfg.width = 640; cfg.height = 480    // real screen output IN THE SAME STREAM (coexistence test)
+            cfg.minimumFrameInterval = CMTime(value: 1, timescale: 5)
+            let stream = SCStream(filter: SCContentFilter(display: display, excludingWindows: []),
+                                  configuration: cfg, delegate: collector)
+            try stream.addStreamOutput(collector, type: .audio, sampleHandlerQueue: DispatchQueue(label: "probe.a"))
+            try stream.addStreamOutput(collector, type: .screen, sampleHandlerQueue: DispatchQueue(label: "probe.s"))
+            try await stream.startCapture()
+            collector.stream = stream
+            setup.signal()
+        } catch {
+            collector.lock.lock(); collector.errText = "\(error)"; collector.lock.unlock()
+            collector.startErr = -3; setup.signal()
+        }
+    }
+
+    _ = setup.wait(timeout: .now() + 8)
+    if collector.startErr != 0 {
+        NSLog("[nty_sysaudio_probe] start error: \(collector.errText)")
+        return collector.startErr
+    }
+    Thread.sleep(forTimeInterval: Double(max(1000, durationMs)) / 1000.0)   // collect buffers
+    let stop = DispatchSemaphore(value: 0)
+    let s = collector.stream
+    Task { try? await s?.stopCapture(); stop.signal() }
+    _ = stop.wait(timeout: .now() + 3)
+
+    collector.lock.lock()
+    outAudio?.pointee = Int32(collector.audio)
+    outNonSilent?.pointee = Int32(collector.nonSilent)
+    outScreen?.pointee = Int32(collector.screen)
+    outMaxAbsMilli?.pointee = Int32(min(1000.0, collector.maxAbs * 1000.0))
+    collector.lock.unlock()
+    return 0
+}
+
+@_cdecl("nty_sysaudio_probe")
+public func nty_sysaudio_probe(_ durationMs: Int32,
+                               _ outAudio: UnsafeMutablePointer<Int32>?,
+                               _ outNonSilent: UnsafeMutablePointer<Int32>?,
+                               _ outScreen: UnsafeMutablePointer<Int32>?,
+                               _ outMaxAbsMilli: UnsafeMutablePointer<Int32>?) -> Int32 {
+    if #available(macOS 13.0, *) {
+        return runSysAudioProbe(durationMs, outAudio, outNonSilent, outScreen, outMaxAbsMilli)
+    }
+    return -4   // SCK audio needs macOS 13.0+
+}
+
+// MARK: - TT-10-C "Share Computer Audio" — capture SYSTEM audio → wire PCM (proven by the probe) ----
+// SCK capturesAudio, asking SCK for the WIRE rate directly (16 kHz mono) so there's no resampler:
+// each SCK Float32 buffer → clamp → Int16 → accumulate → emit 100 ms / 3200-byte frames via the same
+// NtyPcmCallback the mic path uses. The teacher then broadcasts these as AudioStreamFrame 0x0329
+// (TT-10-B path, no wire change) → students play them with their existing playback. TCC = Screen
+// Recording (a signed bundle — the probe proved a bare binary has no TCC identity). macOS 13.0+.
+
+@available(macOS 13.0, *)
+private final class SysAudioSession: NSObject, SCStreamOutput, SCStreamDelegate {
+    let ctx: UnsafeMutableRawPointer?
+    let callback: NtyPcmCallback
+    let samplesPerFrame = 1600            // 100 ms @ 16 kHz
+    var accum: [Int16] = []
+    var stream: SCStream?
+    let lock = NSLock()
+
+    init(_ ctx: UnsafeMutableRawPointer?, _ cb: @escaping NtyPcmCallback) { self.ctx = ctx; self.callback = cb }
+
+    func start() -> Int32 {
+        let setup = DispatchSemaphore(value: 0)
+        let errBox = ProbeCollector()   // reuse as a tiny thread-safe int box (startErr/stream)
+        Task {
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                guard let display = content.displays.first else { errBox.startErr = -2; setup.signal(); return }
+                let cfg = SCStreamConfiguration()
+                cfg.capturesAudio = true
+                cfg.sampleRate = 16000        // ask SCK for the wire rate directly → no resampler
+                cfg.channelCount = 1
+                cfg.width = 2; cfg.height = 2  // audio-only intent; a throwaway video output keeps the stream running
+                cfg.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+                let s = SCStream(filter: SCContentFilter(display: display, excludingWindows: []),
+                                 configuration: cfg, delegate: self)
+                try s.addStreamOutput(self, type: .audio, sampleHandlerQueue: DispatchQueue(label: "sysaud.a"))
+                try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: DispatchQueue(label: "sysaud.s"))
+                try await s.startCapture()
+                errBox.stream = s
+                setup.signal()
+            } catch {
+                NSLog("[nty_sysaudio_start] \(error)"); errBox.startErr = -3; setup.signal()
+            }
+        }
+        _ = setup.wait(timeout: .now() + 8)
+        if errBox.startErr != 0 { return errBox.startErr }
+        self.stream = errBox.stream
+        return 0
+    }
+
+    func stop() {
+        let s = self.stream; self.stream = nil
+        let sem = DispatchSemaphore(value: 0)
+        Task { try? await s?.stopCapture(); sem.signal() }
+        _ = sem.wait(timeout: .now() + 3)
+    }
+
+    func stream(_ st: SCStream, didOutputSampleBuffer sb: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard type == .audio else { return }   // ignore the throwaway screen output
+        guard let bb = CMSampleBufferGetDataBuffer(sb) else { return }
+        var len = 0; var ptr: UnsafeMutablePointer<Int8>?
+        CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &len, dataPointerOut: &ptr)
+        guard let p = ptr, len >= 4 else { return }
+        let n = len / 4
+
+        var toEmit: [[Int16]] = []
+        lock.lock()
+        p.withMemoryRebound(to: Float32.self, capacity: n) { fp in
+            for i in 0..<n {
+                var v = fp[i]; if v > 1 { v = 1 } else if v < -1 { v = -1 }
+                accum.append(Int16(v * 32767))
+            }
+        }
+        while accum.count >= samplesPerFrame {
+            toEmit.append(Array(accum[0..<samplesPerFrame]))
+            accum.removeFirst(samplesPerFrame)
+        }
+        lock.unlock()
+
+        for frame in toEmit {
+            frame.withUnsafeBytes { raw in
+                callback(ctx, raw.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                         Int32(samplesPerFrame * 2), 16000, 1)
+            }
+        }
+    }
+    func stream(_ st: SCStream, didStopWithError e: Error) { NSLog("[nty_sysaudio] stopped: \(e)") }
+}
+
+private enum SysAudState {
+    static let lock = NSLock()
+    static var session: AnyObject?
+}
+
+/// TT-10-C — start SYSTEM-audio capture (SCK), delivering 100 ms PCM16 16 kHz mono frames via `cb`.
+/// Returns 0, -2 no display, -3 SCK/TCC error (Screen Recording), -4 null cb, -5 pre-macOS-13.
+@_cdecl("nty_sysaudio_start")
+public func nty_sysaudio_start(_ cb: NtyPcmCallback?, _ ctx: UnsafeMutableRawPointer?) -> Int32 {
+    guard let cb = cb else { return -4 }
+    if #available(macOS 13.0, *) {
+        SysAudState.lock.lock(); defer { SysAudState.lock.unlock() }
+        if SysAudState.session != nil { return -3 }
+        let s = SysAudioSession(ctx, cb)
+        let rc = s.start()
+        if rc == 0 { SysAudState.session = s }
+        return rc
+    }
+    return -5
+}
+
+@_cdecl("nty_sysaudio_stop")
+public func nty_sysaudio_stop() {
+    if #available(macOS 13.0, *) {
+        SysAudState.lock.lock(); let s = SysAudState.session as? SysAudioSession; SysAudState.session = nil; SysAudState.lock.unlock()
+        s?.stop()
+    }
 }

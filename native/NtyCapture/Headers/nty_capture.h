@@ -253,6 +253,19 @@ void nty_audio_play_stop(void);
  *   nty_mix_output_rms     — last mixed-output RMS 0..100 (level meter).
  *   nty_mix_source_played  — frames PLAYED for a source (freezes on stall; -1 if unregistered).
  */
+/*
+ * TT-10-C — "Share Computer Audio": capture SYSTEM audio (ScreenCaptureKit capturesAudio, macOS 13+)
+ * and deliver 100 ms PCM16 16 kHz mono frames via nty_pcm_cb (SCK is asked for 16 kHz mono directly,
+ * no resampler). TCC = Screen Recording (a SIGNED BUNDLE — a bare binary has no TCC identity). The
+ * teacher broadcasts these as AudioStreamFrame 0x0329 (no wire change). Proven by nty_sysaudio_probe.
+ *   nty_sysaudio_start — 0 ok, -2 no display, -3 SCK/Screen-Recording error, -4 null cb, -5 pre-13.
+ *   nty_sysaudio_stop  — stop + release. Safe when idle.
+ *   nty_sysaudio_probe — diagnostic (out: audioBuffers, nonSilent, screenBuffers, maxAbs×1000); 0 ok / -2 / -3 / -4 pre-13.
+ */
+int nty_sysaudio_start(nty_pcm_cb cb, void *ctx);
+void nty_sysaudio_stop(void);
+int nty_sysaudio_probe(int durationMs, int *outAudioBuffers, int *outNonSilent, int *outScreenBuffers, int *outMaxAbsMilli);
+
 int nty_mix_start(int sampleRate, int channels);
 void nty_mix_add(int sourceId);
 void nty_mix_push(int sourceId, const uint8_t *data, int length);
