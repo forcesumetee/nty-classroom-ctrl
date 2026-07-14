@@ -1,16 +1,27 @@
 # Teacher Track Roadmap — macOS ClassroomCtrl Teacher (Avalonia)
 
-**Status:** TT-0…TT-5 COMPLETE + LIVE-confirmed (2026-07-14) — MockStudent harness · Teacher.Core
+**Status:** TT-0…TT-6 COMPLETE + LIVE-confirmed (2026-07-14) — MockStudent harness · Teacher.Core
 (transport + router + roster) · windowed Teacher (live student grid) · per-student **live screen view
 (MJPEG + H.264 decode)**, proven against BOTH a shipped, unmodified Windows Student (OpenH264→VT
 interop) and a Mac Student (our M18 VideoToolbox H.264 — customer B's path) · **core commands
 (lock/unlock + power)** — a Mac Student is hard-locked (M21 kiosk), a Windows Student locks + logs off,
 power platform-gated, every command on the reliable channel. **Both biggest risks are now retired:**
 the SCALE gate (TT-3 — screens are on-demand, 1–4 concurrent, not a 40-tile wall, §7) and the BITSTREAM
-(TT-4 — one uniform Annex-B Baseline shape from every student, §5/§6). What remains (TT-6…TT-13) is
+(TT-4 — one uniform Annex-B Baseline shape from every student, §5/§6). What remains (TT-7…TT-13) is
 **known work with no research risk**, except the TT-10 system-audio-loopback investigation (§6/§7).
-**TT-6 next** (multi-select + bulk actions, v1.2). The Mac Teacher can now **see AND command** students.
-Hand-off doc for a parallel shift.
+**TT-7 next** (chat + notifications + hand-raise + reactions). The Mac Teacher can now **see AND
+command** students (multi-select + bulk incl.). Hand-off doc for a parallel shift.
+
+> 🔴 **STANDING LIVE-GATE RULE (added TT-6-D):** any per-student command / per-student routing
+> feature MUST be LIVE-tested with **≥2 students connected, one of them not the target** — one
+> student cannot distinguish a targeted send from a broadcast. TT-6-D found a wrong-blast-radius
+> bug (missing Student `IsForMe` filter) that had been latent since TT-3 precisely because every
+> prior LIVE ran with a single Mac student. **Still single-student-blind, on the roadmap now:**
+> the multi-peer *topology* features — **Conference/peer-camera relay (M19)** (highest; wants a
+> dedicated 2-Mac-student re-test), **Student Demonstration**, and the future **TT-9 audio mixing**
+> + **breakout/group routing** (`TargetGroupId`) — must be built + LIVE-tested with ≥2 students.
+> The targeted-*command* class (lock/power/policy/DM/screen-stream/mic) is CLOSED by the TT-6-D
+> filter guard. See `docs/TT-6-FINDINGS.md`.
 **Author context:** drafted 2026-07-13 after Phase 31-B (Student track), grounded in a
 structural map of the shipped Windows Teacher (`/Users/fewfee/Dev/nty-classroom-macos`,
 v1.2.1, .NET 10 / WPF). **That shipped repo is READ-ONLY — copy from it, never modify it.**
@@ -118,7 +129,7 @@ lock/policy + bulk).
 | **TT-3** | **Receive + display student screens — MJPEG** | no | **M** | Request a Windows Student's screen → see it live (MJPEG) |
 | **TT-4 ✅** | **H.264 student-screen DECODE (VTDecompressionSession)** | **YES** | **M** (done) | ✅ LIVE — Windows (OpenH264) AND Mac (VideoToolbox) students → decoded + displayed |
 | **TT-5 ✅** | **Core commands: lock/unlock + power** (policy deferred) | no | **M** (done) | ✅ LIVE — Mac Teacher locks a Mac Student (M21 kiosk) + locks/logs-off a Windows Student; power platform-gated |
-| **TT-6** | **Multi-select + bulk actions (v1.2)** | no | **M** | Select N Windows Students → bulk lock/policy/mute/file/power |
+| **TT-6 ✅** | **Multi-select + bulk (lock/unlock + power)** | no | **M** (done) | ✅ LIVE — select N → bulk lock/unlock/power (platform-skip); **found+fixed a wrong-blast-radius Student-filter bug** |
 | TT-7 | Chat + notifications + hand-raise + reactions | no | M | Two-way chat; hand-raise/reaction surfaces on the Mac Teacher |
 | TT-8 | Teacher screen broadcast ("Share My Screen") | no (reuse M17/M18) | M | Mac Teacher shares screen → Windows Students display it |
 | TT-9 | Student audio talkback — multi-student mixing | extend M20 | M | Hear multiple Windows Students' mics mixed on the Mac Teacher |
@@ -195,10 +206,23 @@ delivery checks) · T1-T27. See `docs/TT-5-FINDINGS.md`. *(Original plan below.)
 **Full-circle interop:** these are the exact messages the *macOS Student* already receives (M15/M21) —
 now a macOS Teacher sends them. *LIVE:* Mac Teacher ⇄ Windows Student for each.
 
-**TT-6 — Multi-select + bulk (v1.2).** Port `_selectedTileIds`, `HasSelection`, Shift-range anchor,
-`SelectAll`/`ClearSelection`, the `Bulk*` `[RelayCommand]`s (`MainViewModel.cs:3777-4024`), and the
-floating `BulkToolbar` (`MainWindow.xaml:803-905`) → AXAML with slide-in. *LIVE:* select N Windows
-Students → bulk lock/policy/mute/file/power with "Sending i of N…" progress.
+**TT-6 — Multi-select + bulk ✅ COMPLETE + LIVE (2026-07-14).** Shipped **lock/unlock + power**
+(policy/mic/file deferred with their features — no dead buttons). Selection logic as the UI-agnostic
+`TileSelectionModel` (Teacher.Core, committed-gated); **macOS click idiom** (plain=select-one,
+⌘=toggle, Shift=range, ⌘A/Esc — a deliberate divergence from shipped's plain-click-toggles). Bulk
+routes through `StudentCommandController.ExecuteBulkAsync` → the reliable-channel guard covers bulk by
+construction; **platform-aware bulk power** skips Mac students with a visible report; count-aware
+Cancel-default confirm. Floating `BulkToolbar` (AXAML, slide-in, "Sending i of N"). **This phase's
+LIVE gate found + fixed a wrong-blast-radius bug** — the port had dropped the shipped Student's
+`IsForMe` receive filter (Service→single-process port), so targeted commands hit every Mac student;
+fixed with `StudentEnvelopeFilter.IsForMe` (default-deny) guarding `ConnectionViewModel.Dispatch`.
+Gates: `--teacherselftest` 74, `--selftest` 9. See `docs/TT-6-FINDINGS.md`. *(Original plan below.)*
+
+**TT-6 (original plan) — Multi-select + bulk (v1.2).** Port `_selectedTileIds`, `HasSelection`,
+Shift-range anchor, `SelectAll`/`ClearSelection`, the `Bulk*` `[RelayCommand]`s
+(`MainViewModel.cs:3777-4024`), and the floating `BulkToolbar` (`MainWindow.xaml:803-905`) → AXAML
+with slide-in. *LIVE:* select N Windows Students → bulk lock/policy/mute/file/power with "Sending i
+of N…" progress.
 
 **TT-7 — Chat + notifications.** Chat rail + `Views/NotificationOverlay` + `Services/SoundService`
 (`System.Media.SoundPlayer` → NSSound/AVAudioPlayer). Handlers: chat, hand-raise, reaction,

@@ -1,4 +1,11 @@
-# TT-4 Findings — H.264 screen decode (VTDecompressionSession) · COMPLETE (LIVE-confirmed)
+# TT-4 Findings — H.264 screen decode (VTDecompressionSession) · COMPLETE (LIVE-confirmed; targeting corrected TT-6-D)
+
+> ⚠️ **CORRECTION (2026-07-14, found TT-6-D):** as with TT-3, the per-student **screen-stream
+> request was latently mis-targeted** — with the Mac Student's `IsForMe` filter missing, a
+> targeted `RequestStudentStream(A)` would have made every connected Mac student stream. This
+> phase's LIVE pass was **valid for what it tested** — H.264 decode (VideoToolbox) of both
+> encoders' bitstreams, one Mac student connected — but "only the requested student streams" was
+> **unverified**. Fixed by the TT-6-D receive-side filter. See `docs/TT-6-FINDINGS.md`.
 
 **Goal:** the Mac Teacher DECODES a student's H.264 screen stream — the one big new native
 piece. **LIVE gate met, both sub-gates:** a **Mac Student** (our M18 VideoToolbox encoder,

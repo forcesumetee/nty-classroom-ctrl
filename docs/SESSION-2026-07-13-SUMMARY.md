@@ -295,7 +295,7 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
    `docs/TEACHER-TRACK-ROADMAP.md`. **TT-0 (MockStudent) + TT-1 (Teacher.Core: transport + router +
    roster) + TT-2 (windowed Teacher — live student grid) + TT-3 (per-student live screen view, MJPEG)
    + TT-4 (H.264 screen DECODE, VTDecompressionSession) + TT-5 (core commands — lock/unlock + power)
-   COMPLETE + LIVE-confirmed 2026-07-14.**
+   + TT-6 (multi-select + bulk lock/unlock/power) COMPLETE + LIVE-confirmed 2026-07-14.**
    Scenario 3 (Mac T + Win S) spans the whole chain: a shipped, **unmodified Windows Student joins the
    roster (TT-1), appears as a live TILE (TT-2), and its screen renders live — MJPEG (TT-3) AND H.264
    (TT-4, OpenH264→VideoToolbox interop)** — plus the **network-cut → 15 s stale-sweep → tile-gone**
@@ -336,12 +336,29 @@ a195338  27-A-2: native ScreenCaptureKit helper + permission + .app bundle
    default). **Policy + mic monitor deferred.** Gates: TT5Gate 23/23 (asserts the CHANNEL, not just the
    send) · `--teacherselftest` 22/22 (+2 delivery checks) · T1-T27. See `docs/TT-5-*`.
 
-   **The Mac Teacher now:** server + roster + live grid + **live screen view (MJPEG + H.264, from
-   Windows & Mac students)** + **core commands (lock/unlock + power, platform-gated, reliable)**. Both
-   biggest Teacher-track risks — scale (TT-3) and the bitstream (TT-4) — are retired. **Next: TT-6**
-   (multi-select + bulk actions, v1.2 — reuses the TT-5 command path; bulk already routes reliable:true
-   in the shipped code). **The Mac Teacher can now SEE and COMMAND students** — the critical path for
-   customer B (Mac teacher + Mac students, 50 seats).
+   **🟢 TT-6 MULTI-SELECT + BULK DONE (2026-07-14) — and it found a wrong-blast-radius bug in the
+   "complete" Student track.** Bulk lock/unlock/power over a selection (macOS click idiom
+   plain/⌘/Shift/⌘A/Esc — a deliberate divergence from shipped; platform-aware bulk power skips Mac
+   with a visible report; count-aware Cancel-default confirm; bulk routes through the guarded
+   controller). **The LIVE gate exposed that the port had dropped the shipped Student's `IsForMe`
+   receive filter** (the shipped Student is 2 processes — Service runs IsForMe — and the port
+   collapsed them into one, unfiltered), so EVERY targeted command (lock/power/policy/DM/mic/**screen-
+   stream**) hit EVERY Mac student. Latent since TT-3 because every prior LIVE ran with ONE Mac
+   student (broadcast ≡ targeted with one peer; TT-5-D was a false pass). **Fixed:**
+   `StudentEnvelopeFilter.IsForMe` (default-deny) guarding `ConnectionViewModel.Dispatch`; committed
+   negative gates (`--teacherselftest` 74, `--selftest` 9) assert the negative for Lock + StudentStream.
+   Shipped Windows VERIFIED clean (customer A never exposed). See `docs/TT-6-*`.
+
+   **🔴 STANDING LIVE RULE (from TT-6-D):** per-student features are LIVE-tested with **≥2 students,
+   one not the target**. Still single-student-blind + on the roadmap: multi-peer *topology* —
+   Conference/peer-camera relay (M19, wants a 2-Mac re-test), Student Demonstration, future TT-9 audio
+   mixing + breakout/group routing.
+
+   **The Mac Teacher now:** server + roster + live grid + **live screen view (MJPEG + H.264)** +
+   **core commands (lock/unlock + power)** + **multi-select + bulk**, all correctly targeted. Both
+   biggest Teacher-track risks — scale (TT-3) and the bitstream (TT-4) — retired. **Next: TT-7** (chat
+   + notifications + hand-raise + reactions). **The Mac Teacher can now SEE and COMMAND students** —
+   the critical path for customer B (Mac teacher + Mac students, 50 seats).
 2. **Phase 35 — Distribution** — Developer ID codesign + notarization (stops the ad-hoc-rebuild TCC
    re-prompt; a *relaunch* of the same built bundle already keeps grants) + `.pkg`/`.dmg` installer +
    self-contained runtime bundling (for .NET-less lab Macs). Makes the Student track deployable at scale.

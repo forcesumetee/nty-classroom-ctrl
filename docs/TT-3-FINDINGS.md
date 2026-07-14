@@ -1,4 +1,13 @@
-# TT-3 Findings — per-student live screen view (MJPEG) · COMPLETE (LIVE-confirmed)
+# TT-3 Findings — per-student live screen view (MJPEG) · COMPLETE (LIVE-confirmed; targeting corrected TT-6-D)
+
+> ⚠️ **CORRECTION (2026-07-14, found TT-6-D):** the per-student **screen-stream request was
+> latently mis-targeted** during this phase. `RequestStudentStream(A)` is `CreateTargeted` and
+> broadcast to all peers, but the Mac Student's receive-side `IsForMe` filter was missing, so
+> **every** connected Mac student would have started streaming, not just the requested one (a
+> silent screen-capture privacy issue). This phase's LIVE pass was **valid for what it tested** —
+> MJPEG capture/encode/wire/decode/render of the requested screen, with **one** Mac student
+> connected — but "only the requested student streams" was **unverified**. Fixed by the TT-6-D
+> receive-side filter (`StudentEnvelopeFilter.IsForMe`). See `docs/TT-6-FINDINGS.md`.
 
 **Goal:** the Mac Teacher opens a **live screen view of one student**, driven by the already-ported
 frame flow (TT-1-C). **LIVE gate met: a real, shipped, unmodified Windows Student's screen rendered
