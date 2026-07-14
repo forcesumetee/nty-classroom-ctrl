@@ -29,3 +29,6 @@ probe_bundle_result.txt
 tools/SckAudioProbe/sck_gui
 tools/SckAudioProbe/sck_probe
 tools/SckAudioProbe/sck_gui2
+
+# TT-13 demo kit (build artifact)
+NTY-DEMO/
