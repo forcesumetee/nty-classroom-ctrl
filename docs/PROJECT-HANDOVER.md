@@ -22,7 +22,11 @@ After today, macOS builds/LIVE tests STOP indefinitely (borrowed MacBook returne
   - **TT-10-B: "Talk to Class"** — teacher mic → all students (LIVE-pending user test; gate-proven)
   - **TT-10-C: "Share Computer Audio"** — teacher SYSTEM audio → all students (first-party SCK
     `capturesAudio`, no wire change; pairs with Share My Screen for video-with-sound; LIVE-pending;
-    wire path gate-proven, capture proven by the probe)
+    wire path gate-proven, capture proven by the probe). **⚠️ Known risk to check at LIVE:** it asks
+    SCK for **16 kHz mono directly** (the probe used 48 kHz stereo). If the audio sounds
+    wrong-pitch/garbled, SCK didn't honor 16k/mono → the fix is an `AVAudioConverter` (device-rate →
+    16k mono int16) in `SysAudioSession.stream(_:didOutputSampleBuffer:)` (the M20 mic path has the
+    pattern). If it sounds correct, no change needed.
 - 🔴 **NOT DONE — camera view:** the teacher **cannot open a student's camera**. It is NOT built and
   is entangled with the conference relay (TT-11). Fully scoped ready-to-build in
   `docs/TT-CAMERA-VIEW-SCOPE.md`. Don't let "audio both directions is done" imply camera is done.
