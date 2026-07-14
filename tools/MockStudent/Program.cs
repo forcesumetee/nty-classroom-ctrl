@@ -168,6 +168,7 @@ sealed class StudentAgent
     readonly CameraStreamer _camera = new();
     readonly AudioStreamer _audio = new();
     readonly Action<string> _log;
+    int _teacherAudioFrames;   // TT-10-B LIVE receipt counter
 
     public StudentAgent(Action<string> log)
     {
@@ -202,6 +203,16 @@ sealed class StudentAgent
                     break;
                 case MessageType.MicMonitorStop:
                     await _audio.StopAsync(); _log("MicMonitorStop → stop"); break;
+                // TT-10-B LIVE — count the teacher's Talk broadcast (receipt evidence for the
+                // second student without playing it; the Sandbox student plays it audibly).
+                case MessageType.AudioStreamStart:
+                    _teacherAudioFrames = 0;
+                    _log("🎙 teacher TALK started (AudioStreamStart) — counting frames"); break;
+                case MessageType.AudioStreamFrame:
+                    if (Interlocked.Increment(ref _teacherAudioFrames) % 25 == 1)
+                        _log($"🎙 teacher audio frame #{_teacherAudioFrames} received"); break;
+                case MessageType.AudioStreamStop:
+                    _log($"🎙 teacher TALK stopped (AudioStreamStop) — {_teacherAudioFrames} frames total"); break;
                 default:
                     _log($"received {Dispatch.Describe(env)}"); break;
             }
@@ -1000,6 +1011,18 @@ static class TeacherSelfTest
             Check("IsForMe: ScreenStreamStop broadcast → ACT",
                 StudentEnvelopeFilter.IsForMe(Envelope.Create(MessageType.ScreenStreamStop, Array.Empty<byte>(), teacher), me));
 
+            // TT-10-B — the filter must NOT eat teacher audio: Start/Stop are broadcast
+            // (TargetEndpointId == Empty) → IsForMe ACT. Frames are early-handled BEFORE the
+            // filter in the Student's Dispatch (the high-freq bypass, like ScreenStreamFrame) —
+            // assert the filter would pass them anyway, so even a bypass regression can't
+            // silently kill teacher audio.
+            Check("IsForMe: AudioStreamStart broadcast → ACT (bug-#7 reliable control reaches all)",
+                StudentEnvelopeFilter.IsForMe(Envelope.Create(MessageType.AudioStreamStart, Array.Empty<byte>(), teacher), me));
+            Check("IsForMe: AudioStreamStop broadcast → ACT",
+                StudentEnvelopeFilter.IsForMe(Envelope.Create(MessageType.AudioStreamStop, Array.Empty<byte>(), teacher), me));
+            Check("IsForMe: AudioStreamFrame broadcast → ACT (frames bypass the filter; belt-and-braces)",
+                StudentEnvelopeFilter.IsForMe(Envelope.Create(MessageType.AudioStreamFrame, Array.Empty<byte>(), teacher), me));
+
             var dec = new ClassroomCtrl.Avalonia.Media.ScreenFrameDecoder();
             var h264Key = new ScreenStreamFrameMessage { FrameData = new byte[] { 0, 0, 0, 1, 0x67, 1, 2, 3 }, Codec = VideoCodec.H264, IsKeyframe = true, Width = 1920, Height = 1080 };
             Check("decoder: undecodable H.264 KEYFRAME → null + LastKeyframeDecodeFailed (fallback signal)",
@@ -1106,6 +1129,42 @@ static class TeacherSelfTest
             Check("targeted-at-A StudentStreamStart: bystander C DROPS it (no wrong screen capture)",
                 await WaitUntil(() => CRx(MessageType.StudentStreamStart) is not null, 3000)
                 && !StudentEnvelopeFilter.IsForMe(CRx(MessageType.StudentStreamStart)!, c.client.EndpointId));
+
+            // (2c) TT-10-B — teacher TALK broadcast reaches ALL students (the distinguishing
+            // property for a BROADCAST — the mirror of TT-6-D's "only the target acts"). With
+            // 3 connected: Start (reliable, bug #7) → A AND C both receive; a 3200-byte PCM
+            // frame (lossy-class audio channel) → both receive it intact; Stop (reliable) →
+            // both receive. One receiver would pass with a targeted-send bug present; TWO
+            // independent receivers prove the fan-out.
+            int aAudStart = 0, aAudStop = 0, aAudFrame = 0, cAudStart = 0, cAudStop = 0, cAudFrame = 0;
+            AudioStreamFrameMessage? aGot = null, cGot = null;
+            a.client.EnvelopeReceived += e =>
+            {
+                if (e.Type == MessageType.AudioStreamStart) Interlocked.Increment(ref aAudStart);
+                else if (e.Type == MessageType.AudioStreamStop) Interlocked.Increment(ref aAudStop);
+                else if (e.Type == MessageType.AudioStreamFrame)
+                { aGot = MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(e.Payload); Interlocked.Increment(ref aAudFrame); }
+            };
+            c.client.EnvelopeReceived += e =>
+            {
+                if (e.Type == MessageType.AudioStreamStart) Interlocked.Increment(ref cAudStart);
+                else if (e.Type == MessageType.AudioStreamStop) Interlocked.Increment(ref cAudStop);
+                else if (e.Type == MessageType.AudioStreamFrame)
+                { cGot = MessagePackSerializer.Deserialize<AudioStreamFrameMessage>(e.Payload); Interlocked.Increment(ref cAudFrame); }
+            };
+            await server.BroadcastAudioStreamControlAsync(true, CancellationToken.None);
+            Check("Talk START (reliable, bug #7) → BOTH A and C receive AudioStreamStart",
+                await WaitUntil(() => Volatile.Read(ref aAudStart) > 0 && Volatile.Read(ref cAudStart) > 0, 3000));
+            var pcm = new byte[3200]; for (int i = 0; i < pcm.Length; i++) pcm[i] = (byte)(i & 0xFF);
+            await server.BroadcastAudioFrameAsync(new AudioStreamFrameMessage
+            { PcmData = pcm, SampleRate = 16000, Channels = 1, BitsPerSample = 16, FrameSeq = 42 }, CancellationToken.None);
+            Check("Talk frame (lossy-class audio channel) → BOTH receive it intact (3200 B, 16 kHz mono, seq 42)",
+                await WaitUntil(() => Volatile.Read(ref aAudFrame) > 0 && Volatile.Read(ref cAudFrame) > 0, 3000)
+                && aGot is { FrameSeq: 42, SampleRate: 16000, Channels: 1 } && aGot.PcmData.Length == 3200
+                && cGot is { FrameSeq: 42, SampleRate: 16000, Channels: 1 } && cGot.PcmData.Length == 3200);
+            await server.BroadcastAudioStreamControlAsync(false, CancellationToken.None);
+            Check("Talk STOP (reliable, bug #7 — no stuck playback session) → BOTH receive AudioStreamStop",
+                await WaitUntil(() => Volatile.Read(ref aAudStop) > 0 && Volatile.Read(ref cAudStop) > 0, 3000));
 
             b.cts.Cancel(); try { await b.run.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
             Check("disconnecting the MIDDLE student removes B", await WaitUntil(() => !roster.Contains(b.client.EndpointId), 3000));

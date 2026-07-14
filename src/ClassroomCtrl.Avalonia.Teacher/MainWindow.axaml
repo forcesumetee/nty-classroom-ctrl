@@ -25,6 +25,21 @@
                                Foreground="{StaticResource ConfTextSecondaryBrush}" MaxWidth="260"
                                TextTrimming="CharacterEllipsis"
                                IsVisible="{Binding Grid.MixStatus, Converter={x:Static ac:StringConverters.IsNotNullOrEmpty}}"/>
+                    <!-- TT-10-B: Talk to Class. The ON state is LOUD (red button + live status) — a
+                         teacher must NEVER be broadcasting without knowing it. -->
+                    <TextBlock Text="{Binding Talk.Status}" VerticalAlignment="Center" FontSize="11"
+                               Foreground="#EA4335" FontWeight="SemiBold" MaxWidth="240"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding Talk.Status, Converter={x:Static ac:StringConverters.IsNotNullOrEmpty}}"/>
+                    <Button Content="{Binding Talk.ButtonText}" Command="{Binding Talk.ToggleCommand}"
+                            Cursor="Hand" Padding="12,5"
+                            IsVisible="{Binding Talk, Converter={x:Static ac:ObjectConverters.IsNotNull}}">
+                        <Button.Styles>
+                            <Style Selector="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                            </Style>
+                        </Button.Styles>
+                    </Button>
                     <!-- TT-8-C: Share My Screen (+ status; visible errors, not a silent no-op). -->
                     <TextBlock Text="{Binding ScreenShare.Status}" VerticalAlignment="Center" FontSize="11"
                                Foreground="{StaticResource ConfTextSecondaryBrush}" MaxWidth="320"

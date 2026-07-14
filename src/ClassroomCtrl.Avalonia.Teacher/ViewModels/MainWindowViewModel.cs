@@ -27,6 +27,10 @@ public partial class MainWindowViewModel : ObservableObject
     /// button binds when it arrives.</summary>
     [ObservableProperty] private ScreenShareViewModel? screenShare;
 
+    /// <summary>TT-10-B — the "Talk to Class" VM (set by App). Observable so the header
+    /// button binds when it arrives.</summary>
+    [ObservableProperty] private TalkViewModel? talk;
+
     /// <summary>TT-7-C — the transient notification banner (hand-raise / incoming chat).
     /// null = hidden. Auto-clears after a few seconds.</summary>
     [ObservableProperty] private string? toast;

@@ -21,7 +21,7 @@ namespace ClassroomCtrl.Avalonia.Teacher.Services;
 /// Extracted (not inlined in App) so the socket-teardown is unit-testable — the
 /// same "never leave :7777 bound" discipline as TeacherHost / the TT-1 self-tests.
 /// </summary>
-public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudentCommandSink, ITeacherMessaging, ITeacherScreenSink
+public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudentCommandSink, ITeacherMessaging, ITeacherScreenSink, ITeacherAudioSink
 {
     private readonly ControlServer _server;
     private readonly TeacherAudioMixer _mixer;
@@ -121,6 +121,16 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudent
 
     public Task BroadcastScreenFrameAsync(ScreenStreamFrameMessage frame, CancellationToken ct)
         => _server.BroadcastScreenFrameAsync(frame, ct);
+
+    // ─────── TT-10-B: ITeacherAudioSink — teacher "Talk to Class" broadcast ───────
+    // Passthrough to the already-ported ControlServer sends (Start/Stop reliable — bug #7;
+    // frames on the dedicated lossy-class audio channel).
+
+    public Task BroadcastAudioStreamControlAsync(bool start, CancellationToken ct)
+        => _server.BroadcastAudioStreamControlAsync(start, ct);
+
+    public Task BroadcastAudioFrameAsync(AudioStreamFrameMessage frame, CancellationToken ct)
+        => _server.BroadcastAudioFrameAsync(frame, ct);
 
     // ─────── TT-9-C: teacher mic-monitor + multi-student mix ───────
     // Open/close a targeted student's mic (MicMonitorStart/Stop, already ported); the

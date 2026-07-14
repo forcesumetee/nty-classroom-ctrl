@@ -16,6 +16,7 @@ public partial class App : Application
     private ScreenViewController? _screenViews;
     private StudentCommandController? _commands;
     private TeacherScreenBroadcaster? _screenBroadcaster;
+    private TeacherMicBroadcaster? _micBroadcaster;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -73,6 +74,12 @@ public partial class App : Application
             _screenBroadcaster = new TeacherScreenBroadcaster(_session);
             mainVm.ScreenShare = new ScreenShareViewModel(_screenBroadcaster);
 
+            // TT-10-B: Talk to Class — teacher mic → AudioStreamFrame broadcast to all students
+            // (Start/Stop reliable — bug #7; frames on the dedicated lossy-class audio channel).
+            // The session is the ITeacherAudioSink. No AEC (TT-11): co-located rigs need headphones.
+            _micBroadcaster = new TeacherMicBroadcaster(_session);
+            mainVm.Talk = new TalkViewModel(_micBroadcaster);
+
             // Double-tap a tile → open (or focus) that student's live screen view.
             window.StudentActivated += tile =>
                 _screenViews.OpenOrFocus(tile.EndpointId, tile.DisplayName, tile.MachineName);
@@ -90,8 +97,8 @@ public partial class App : Application
             // while the server is still alive to send the stop), THEN release :7777 —
             // never leave a student streaming or the port bound. Both hooks are
             // idempotent, so firing both is safe.
-            window.Closing += (_, _) => { _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
-            desktop.ShutdownRequested += (_, _) => { _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
+            window.Closing += (_, _) => { _ = _micBroadcaster?.StopAsync(); _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
+            desktop.ShutdownRequested += (_, _) => { _ = _micBroadcaster?.StopAsync(); _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
         }
         base.OnFrameworkInitializationCompleted();
     }

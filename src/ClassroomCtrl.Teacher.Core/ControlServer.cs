@@ -834,13 +834,19 @@ public class ControlServer : IDisposable
 
     // ─────── Phase 4 Part 3a: Teacher → all students audio broadcast ───────
 
-    /// <summary>Send Start/Stop control message for audio broadcast.</summary>
+    /// <summary>Send Start/Stop control message for audio broadcast.
+    /// TT-10-B (SHIPPED BUG #7 class — same as #5 ScreenStreamStop / #6 hand-lower): the shipped
+    /// Windows Teacher routes these on the LOSSY DropOldest queue. A dropped STOP leaves every
+    /// student's playback session open — a stuck state — so both control messages route RELIABLE
+    /// here ("does dropping this leave a stuck state?" → yes). Audio FRAMES stay on the dedicated
+    /// lossy-class audio channel (BroadcastAudioAsync below) — hot + ephemeral; reliable would
+    /// head-of-line stall the class behind one slow peer.</summary>
     public Task BroadcastAudioStreamControlAsync(bool start, CancellationToken ct)
     {
         var type = start ? MessageType.AudioStreamStart : MessageType.AudioStreamStop;
         var env = Envelope.Create(type, Array.Empty<byte>(), _teacherId);
         _logger.LogInformation("Audio stream {Type}", start ? "START" : "STOP");
-        return _tcp.BroadcastAsync(env, ct);
+        return _tcp.BroadcastReliableAsync(env, ct);
     }
 
     /// <summary>Send a single audio frame to all students.
