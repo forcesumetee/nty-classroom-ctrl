@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- TT-13-B: hardened-runtime entitlements required for a .NET app to run signed + notarized.
+         The app is NOT App-Sandboxed (it needs raw local-network sockets + screen capture), so these
+         are the code-signing (cs.*) relaxations the CoreCLR/JIT needs, NOT sandbox device entitlements.
+         Camera/Mic/Screen/Local-Network are gated by TCC via the Info.plist usage strings, not here.
+
+         allow-jit + allow-unsigned-executable-memory: the .NET JIT writes then executes code pages.
+         disable-library-validation: lets the app load libNtyCapture.dylib and the CoreCLR dylibs,
+           which are NOT signed by the same Team ID as the app (required for self-signed AND for a
+           Developer-ID build that ships third-party/native dylibs).
+         allow-dyld-environment-variables: CoreCLR/host may consult DYLD_* during startup. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+</dict>
+</plist>

@@ -25,11 +25,12 @@ DYLIB="libNtyCapture.dylib"
 echo "[1/5] building native dylib"
 ( cd native/NtyCapture && ./build.sh >/dev/null )
 
-echo "[2/5] publishing Sandbox ($CONFIG, $RID, framework-dependent)"
-# Framework-dependent — needs the .NET runtime on the target Mac. Self-contained bundling (for
-# .NET-less lab Macs) is a P35/distribution concern, kept out of this dev-level bundle.
+echo "[2/5] publishing Sandbox ($CONFIG, $RID, SELF-CONTAINED)"
+# TT-13-B: SELF-CONTAINED — bundles the .NET runtime INTO the .app so it runs on a lab Mac with no
+# .NET installed. Removes the per-machine "install .NET first" step (the 50-machine deployment
+# blocker). Larger bundle (~150 MB) but that's a non-issue for USB/network deploy.
 PUB="$(mktemp -d)"
-dotnet publish "$PROJ" -c "$CONFIG" -r "$RID" --self-contained false \
+dotnet publish "$PROJ" -c "$CONFIG" -r "$RID" --self-contained true \
     -p:EnableWindowsTargeting=true -o "$PUB" >/dev/null
 
 echo "[3/5] assembling ${APP}"
@@ -40,6 +41,9 @@ cp -R "$PUB"/. "${APP}/Contents/MacOS/"
 cp "native/NtyCapture/${DYLIB}" "${APP}/Contents/MacOS/"
 cp scripts/Info.plist "${APP}/Contents/Info.plist"
 rm -rf "$PUB"
+# Strip debug symbols: never shipped, and codesign misdetects .pdb as unsigned nested code
+# ("code object is not signed at all: In subcomponent …pdb"), breaking the bundle seal.
+find "${APP}/Contents/MacOS" -name "*.pdb" -delete
 
 echo "[4/5] verifying bundle"
 # apphost named in Info.plist must exist
@@ -66,9 +70,10 @@ else
     echo "  dylib deps: all absolute system paths (no @rpath) — resolves in the bundle"
 fi
 
-echo "[5/5] ad-hoc codesign"
-codesign --force --deep --sign - "$APP"
-codesign --verify --deep --strict "$APP" && echo "  codesign verify: OK"
+echo "[5/5] codesign (hardened runtime + entitlements, notarization-ready)"
+# shellcheck source=lib-sign.sh
+source scripts/lib-sign.sh
+sign_bundle "$APP" "scripts/nty.entitlements"
 
 echo "OK: built ${APP}"
 echo
@@ -78,7 +83,7 @@ echo
 echo "  AUTO-START (32-E 'Start at Login'): move the bundle to a STABLE location first, e.g."
 echo "      mv \"${APP}\" /Applications/     # the LaunchAgent self-targets the bundle path"
 echo
-echo "  Permissions: grant Screen Recording (System Settings ▸ Privacy) then RELAUNCH; Camera/Mic"
-echo "  prompt on first use (immediate); Accessibility via System Settings ▸ Privacy ▸ Accessibility."
-echo "  Rebuild caveat: the ad-hoc signature changes on rebuild → TCC re-prompts (P35 fixes this;"
-echo "  a RELAUNCH of the same built bundle keeps its grants)."
+echo "  Permissions: first launch opens the onboarding window; grant Screen Recording then RELAUNCH;"
+echo "  Camera/Mic prompt on first use; Accessibility via System Settings ▸ Privacy ▸ Accessibility."
+echo "  With the STABLE self-signed identity, grants SURVIVE rebuilds (TT-13-B); with ad-hoc they"
+echo "  re-prompt on rebuild. Gatekeeper trust (clean download double-click) still needs P35 notarization."

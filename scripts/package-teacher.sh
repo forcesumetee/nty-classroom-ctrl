@@ -26,9 +26,10 @@ DYLIB="libNtyCapture.dylib"
 echo "[1/5] building native dylib"
 ( cd native/NtyCapture && ./build.sh >/dev/null )
 
-echo "[2/5] publishing Teacher ($CONFIG, $RID, framework-dependent)"
+echo "[2/5] publishing Teacher ($CONFIG, $RID, SELF-CONTAINED)"
+# TT-13-B: SELF-CONTAINED — bundles the .NET runtime into the .app (runs on a Mac with no .NET).
 PUB="$(mktemp -d)"
-dotnet publish "$PROJ" -c "$CONFIG" -r "$RID" --self-contained false \
+dotnet publish "$PROJ" -c "$CONFIG" -r "$RID" --self-contained true \
     -p:EnableWindowsTargeting=true -o "$PUB" >/dev/null
 
 echo "[3/5] assembling ${APP}"
@@ -38,6 +39,8 @@ cp -R "$PUB"/. "${APP}/Contents/MacOS/"
 cp "native/NtyCapture/${DYLIB}" "${APP}/Contents/MacOS/"
 cp scripts/Info.Teacher.plist "${APP}/Contents/Info.plist"
 rm -rf "$PUB"
+# Strip debug symbols: never shipped, and codesign misdetects .pdb as unsigned nested code, breaking the seal.
+find "${APP}/Contents/MacOS" -name "*.pdb" -delete
 
 echo "[4/5] verifying bundle"
 if [[ ! -f "${APP}/Contents/MacOS/${EXE}" ]]; then
@@ -60,13 +63,15 @@ else
     echo "  dylib deps: all absolute system paths (no @rpath) — resolves in the bundle"
 fi
 
-echo "[5/5] ad-hoc codesign"
-codesign --force --deep --sign - "$APP"
-codesign --verify --deep --strict "$APP" && echo "  codesign verify: OK"
+echo "[5/5] codesign (hardened runtime + entitlements, notarization-ready)"
+# shellcheck source=lib-sign.sh
+source scripts/lib-sign.sh
+sign_bundle "$APP" "scripts/nty.entitlements"
 
 echo "OK: built ${APP}"
 echo
 echo "  Run:  open \"./${APP}\""
-echo "  TT-8 Share My Screen: click 'Share My Screen' → grant Screen Recording (System Settings ▸"
-echo "  Privacy ▸ Screen Recording) → RELAUNCH the bundle → Share again (the grant is live after relaunch)."
-echo "  Rebuild caveat: the ad-hoc signature changes on rebuild → TCC re-prompts (P35 fixes this)."
+echo "  First launch opens the Teacher onboarding window (TT-13-B): grant Screen Recording (for Share"
+echo "  My Screen / Share Computer Audio) and Microphone (for Talk to Class), then RELAUNCH the bundle."
+echo "  With the STABLE self-signed identity, grants SURVIVE rebuilds; ad-hoc re-prompts. Gatekeeper"
+echo "  trust (clean download double-click) still needs P35 notarization."
