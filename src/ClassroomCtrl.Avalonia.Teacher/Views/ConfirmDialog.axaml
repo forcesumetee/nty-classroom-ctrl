@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ClassroomCtrl.Avalonia.Teacher.Views.ConfirmDialog"
+        Width="400" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{StaticResource ConfWindowBgBrush}"
+        Title="Confirm">
+    <!-- TT-5-C — the power-action confirmation modal (Avalonia has no MessageBox).
+         SAFETY: "Cancel" is the DEFAULT (Enter) and Escape button, so a stray keypress
+         CANCELS a shutdown/restart/logoff rather than confirming it — a deliberate
+         improvement over the shipped Yes/No MessageBox whose default was Yes. Confirm
+         requires an explicit click. -->
+    <StackPanel Margin="22" Spacing="20">
+        <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="14" LineHeight="20"
+                   Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+            <Button x:Name="NoButton" Content="Cancel" Click="No_Click" MinWidth="96"
+                    IsCancel="True" IsDefault="True"/>
+            <Button x:Name="YesButton" Content="Confirm" Click="Yes_Click" MinWidth="96"
+                    Background="#D93025" Foreground="White"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

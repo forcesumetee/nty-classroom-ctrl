@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using ClassroomCtrl.Avalonia.Teacher.Services;
 using ClassroomCtrl.Avalonia.Teacher.ViewModels;
+using ClassroomCtrl.Avalonia.Teacher.Views;
 
 namespace ClassroomCtrl.Avalonia.Teacher;
 
@@ -29,16 +30,19 @@ public partial class App : Application
             // the session is the frame source (IStudentStreamSource).
             _screenViews = new ScreenViewController(_session);
 
-            // TT-5-B: per-student commands (lock/unlock; power in TT-5-C). The session is
-            // the command sink (IStudentCommandSink); reliable:true is baked into the
-            // controller. The confirm delegate stays default here (auto-confirm) — power
-            // isn't in the menu until TT-5-C wires the real Avalonia confirm dialog.
-            _commands = new StudentCommandController(_session, log: msg => Console.Error.WriteLine($"[cmd] {msg}"));
-
             var window = new MainWindow
             {
                 DataContext = new MainWindowViewModel(_session.Grid, _session.ListenAddress),
             };
+
+            // TT-5-B/C: per-student commands. The session is the command sink
+            // (IStudentCommandSink); reliable:true is baked into the controller. Power
+            // actions are confirmed via the Avalonia ConfirmDialog (modal over the main
+            // window) — the controller only sends when the teacher confirms.
+            _commands = new StudentCommandController(
+                _session,
+                confirmAsync: msg => ConfirmDialog.ShowAsync(window, msg),
+                log: msg => Console.Error.WriteLine($"[cmd] {msg}"));
 
             // Double-tap a tile → open (or focus) that student's live screen view.
             window.StudentActivated += tile =>

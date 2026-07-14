@@ -30,6 +30,7 @@ public partial class StudentTileViewModel : ObservableObject
     /// may change on reconnect, so it's observable and re-notifies the derived flag.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanReceivePower))]
+    [NotifyPropertyChangedFor(nameof(PowerUnavailableReason))]
     private string osVersion;
 
     /// <summary>TT-5-B — whether the power actions (logoff/restart/shutdown) should be
@@ -38,6 +39,12 @@ public partial class StudentTileViewModel : ObservableObject
     /// power items' IsEnabled to this; lock/unlock are always enabled (both platforms
     /// enforce them).</summary>
     public bool CanReceivePower => StudentPlatform.CanReceivePower(OsVersion);
+
+    /// <summary>TT-5-C — the tooltip shown on the (disabled) power menu items for a student
+    /// that can't execute power yet. Null when power IS available, so the tooltip only
+    /// appears where it explains a disabled item.</summary>
+    public string? PowerUnavailableReason =>
+        CanReceivePower ? null : "Power actions aren't available for macOS students yet";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PresenceColorHex))]

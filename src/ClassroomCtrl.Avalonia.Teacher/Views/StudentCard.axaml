@@ -33,14 +33,22 @@
     <Border x:Name="CardRoot" CornerRadius="12" ClipToBounds="True" Cursor="Hand"
             Classes.selected="{Binding IsSelected}"
             PointerPressed="Card_Pressed">
-        <!-- TT-5-B — per-student command menu. Lock/Unlock are enforced on BOTH Mac and
-             Windows students, so they're always enabled. Power actions (added TT-5-C) are
-             gated on CanReceivePower. The menu inherits the card's DataContext (the tile
-             VM); CommandItem_Click reads each item's Tag and raises CommandRequested. -->
+        <!-- TT-5-B/C — per-student command menu. Lock/Unlock are enforced on BOTH Mac and
+             Windows students, so they're always enabled. Power actions are gated on
+             CanReceivePower (Windows only; disabled with a tooltip for macOS students —
+             they have no power handler yet). The menu inherits the card's DataContext (the
+             tile VM); CommandItem_Click reads each item's Tag and raises CommandRequested. -->
         <Border.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="Lock screen" Tag="Lock" Click="CommandItem_Click"/>
                 <MenuItem Header="Unlock screen" Tag="Unlock" Click="CommandItem_Click"/>
+                <Separator/>
+                <MenuItem Header="Log off" Tag="Logoff" Click="CommandItem_Click"
+                          IsEnabled="{Binding CanReceivePower}" ToolTip.Tip="{Binding PowerUnavailableReason}"/>
+                <MenuItem Header="Restart" Tag="Restart" Click="CommandItem_Click"
+                          IsEnabled="{Binding CanReceivePower}" ToolTip.Tip="{Binding PowerUnavailableReason}"/>
+                <MenuItem Header="Shut down" Tag="Shutdown" Click="CommandItem_Click"
+                          IsEnabled="{Binding CanReceivePower}" ToolTip.Tip="{Binding PowerUnavailableReason}"/>
             </ContextMenu>
         </Border.ContextMenu>
         <Grid RowDefinitions="*,Auto">
