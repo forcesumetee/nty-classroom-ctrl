@@ -2,14 +2,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:ClassroomCtrl.Avalonia.Teacher.ViewModels"
         xmlns:views="using:ClassroomCtrl.Avalonia.Teacher.Views"
+        xmlns:ac="using:Avalonia.Data.Converters"
         x:Class="ClassroomCtrl.Avalonia.Teacher.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Width="960" Height="720"
         Background="{StaticResource ConfWindowBgBrush}"
         Title="NTY ClassroomCtrl — Teacher (macOS)">
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,Auto">
         <!-- Header / status bar: title + listen address (what IP to point a student at) + count. -->
-        <Border Grid.Row="0" Background="{StaticResource ConfTitleBarBgBrush}" Padding="16,10">
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource ConfTitleBarBgBrush}" Padding="16,10">
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock Text="NTY ClassroomCtrl — Teacher" FontSize="16" FontWeight="SemiBold"
@@ -24,7 +25,7 @@
         </Border>
 
         <!-- Student grid (WrapPanel 234×220 = the shipped Windows layout) + empty state. -->
-        <Panel Grid.Row="1">
+        <Panel Grid.Row="1" Grid.Column="0">
             <ScrollViewer>
                 <ItemsControl ItemsSource="{Binding Grid.Students}" Margin="14">
                     <ItemsControl.ItemsPanel>
@@ -119,6 +120,99 @@
                     </Button>
                 </Grid>
             </Border>
+
+            <!-- TT-7-C: transient notification banner (hand-raise / incoming chat). Bottom-center so
+                 it doesn't collide with the top bulk toolbar. Auto-clears via the VM timer. -->
+            <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,20"
+                    IsVisible="{Binding Toast, Converter={x:Static ac:ObjectConverters.IsNotNull}}"
+                    Background="{StaticResource ConfTitleBarBgBrush}"
+                    BorderBrush="{StaticResource ConfBorderSubtleBrush}" BorderThickness="1"
+                    CornerRadius="18" Padding="16,8">
+                <TextBlock Text="{Binding Toast}" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+            </Border>
         </Panel>
+
+        <!-- TT-7-C: chat rail — raised-hand queue + class chat (broadcast / DM). Inner DataContext
+             is the ChatViewModel (set by App once the messaging seam exists); null-safe until then. -->
+        <Border Grid.Row="1" Grid.Column="1" Width="300"
+                Background="{StaticResource ConfTitleBarBgBrush}"
+                BorderBrush="{StaticResource ConfBorderSubtleBrush}" BorderThickness="1,0,0,0">
+            <Grid DataContext="{Binding Chat}" x:DataType="vm:ChatViewModel" RowDefinitions="Auto,Auto,*,Auto">
+                <!-- Raised-hand queue (own DataContext = the grid, for RaisedHands + per-tile Recognize). -->
+                <Border Grid.Row="0" DataContext="{Binding Grid}" x:DataType="vm:TeacherGridViewModel"
+                        Padding="12,10" IsVisible="{Binding HasRaisedHands}"
+                        BorderBrush="{StaticResource ConfBorderSubtleBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel>
+                        <TextBlock Text="✋ Raised hands" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource ConfTextSecondaryBrush}" Margin="0,0,0,6"/>
+                        <ItemsControl ItemsSource="{Binding RaisedHands}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:StudentTileViewModel">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                                        <TextBlock Grid.Column="0" Text="{Binding HandRaiseOrder}" FontWeight="Bold"
+                                                   Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                                   VerticalAlignment="Center" Width="18"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding DisplayName}" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource ConfTextPrimaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Button Grid.Column="2" Content="Recognize" FontSize="11" Padding="8,2"
+                                                Cursor="Hand" Command="{Binding RecognizeCommand}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Grid.Row="1" Text="Class chat" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{StaticResource ConfTextSecondaryBrush}" Margin="12,10,12,4"/>
+
+                <!-- Message log. -->
+                <ScrollViewer Grid.Row="2" Padding="12,0">
+                    <ItemsControl ItemsSource="{Binding Messages}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:ChatLineViewModel">
+                                <StackPanel Margin="0,4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding Sender}" FontWeight="SemiBold" FontSize="12"
+                                                   Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding Scope}" FontSize="10"
+                                                   Foreground="{StaticResource ConfTextSecondaryBrush}"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Text}" FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Input: DM target selector + textbox + send. -->
+                <StackPanel Grid.Row="3" Margin="12,8,12,12" Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="To:" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{StaticResource ConfTextSecondaryBrush}"/>
+                        <ComboBox ItemsSource="{Binding Grid.Students}" SelectedItem="{Binding DmTarget}"
+                                  PlaceholderText="Everyone" MinWidth="130" FontSize="12">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:StudentTileViewModel">
+                                    <TextBlock Text="{Binding DisplayName}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Content="Everyone" FontSize="11" Padding="8,2" Cursor="Hand"
+                                Command="{Binding ClearDmTargetCommand}"/>
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox Grid.Column="0" Text="{Binding Draft}" PlaceholderText="Type a message…"
+                                 FontSize="12" AcceptsReturn="False"/>
+                        <Button Grid.Column="1" Content="Send" Margin="6,0,0,0" Cursor="Hand"
+                                Command="{Binding SendCommand}" IsDefault="True"/>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

@@ -1,6 +1,8 @@
 using System;
+using System.Threading.Tasks;
 using ClassroomCtrl.Teacher.Core;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace ClassroomCtrl.Avalonia.Teacher.ViewModels;
 
@@ -52,6 +54,30 @@ public partial class StudentTileViewModel : ObservableObject
 
     /// <summary>Visual single-selection (from the Sandbox shell's Card_Pressed).</summary>
     [ObservableProperty] private bool isSelected;
+
+    // ─────── TT-7-C: hand-raise + reaction (attributed per tile by EndpointId) ───────
+
+    /// <summary>TT-7-C — this student's hand is up. Set ONLY by the grid's HandRaiseReceived
+    /// router, matched by EndpointId == the event's StudentId — so a raise for another student
+    /// can never light this tile (the distinguishing property the TT-7-E gate asserts).</summary>
+    [ObservableProperty] private bool isHandRaised;
+
+    /// <summary>TT-7-C — the order this hand went up (1-based; 0 = down). Drives the "who was
+    /// first" queue so the teacher recognizes students in the order they raised.</summary>
+    [ObservableProperty] private int handRaiseOrder;
+
+    /// <summary>TT-7-C — the student's most recent reaction emoji (transient; cleared on expiry).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasReaction))]
+    private string lastReaction = "";
+
+    public bool HasReaction => !string.IsNullOrEmpty(LastReaction);
+
+    /// <summary>TT-7-C — set by the grid; the tile's Recognize button lowers this hand.</summary>
+    public Func<StudentTileViewModel, Task>? RecognizeCallback { get; set; }
+
+    [RelayCommand]
+    private Task Recognize() => RecognizeCallback?.Invoke(this) ?? Task.CompletedTask;
 
     /// <summary>The presence affordance color (green = connected). The card binds this
     /// through HexToBrushConverter — a legible "this tile is a connected student".</summary>

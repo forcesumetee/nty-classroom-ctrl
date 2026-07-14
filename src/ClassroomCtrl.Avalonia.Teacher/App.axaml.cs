@@ -31,10 +31,9 @@ public partial class App : Application
             // the session is the frame source (IStudentStreamSource).
             _screenViews = new ScreenViewController(_session);
 
-            var window = new MainWindow
-            {
-                DataContext = new MainWindowViewModel(_session.Grid, _session.ListenAddress),
-            };
+            var sound = new SoundService();
+            var mainVm = new MainWindowViewModel(_session.Grid, _session.ListenAddress);
+            var window = new MainWindow { DataContext = mainVm };
 
             // TT-5-B/C: per-student commands. The session is the command sink
             // (IStudentCommandSink); reliable:true is baked into the controller. Power
@@ -48,6 +47,14 @@ public partial class App : Application
             // reliable-channel guard covers bulk too). Attached here — the controller needs the
             // window (for the confirm dialog), which is created after the grid VM.
             _session.Grid.AttachCommands(_commands);
+
+            // TT-7-C: chat rail + hand-raise/reaction routing + notification sounds + toasts.
+            // The session is the ITeacherMessaging seam; the grid attributes each hand-raise/
+            // reaction to the right tile by EndpointId, and the chat VM sends broadcast/DM
+            // (DM reliable:true). ShowToast surfaces a transient banner for both.
+            var chat = new ChatViewModel(_session, sound, _session.Grid, mainVm.ShowToast);
+            mainVm.Chat = chat;
+            _session.Grid.AttachMessaging(_session, sound, mainVm.ShowToast);
 
             // Double-tap a tile → open (or focus) that student's live screen view.
             window.StudentActivated += tile =>

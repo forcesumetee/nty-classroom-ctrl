@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using ClassroomCtrl.Avalonia.Teacher.Services;
+using ClassroomCtrl.Shared.Protocol;
 using ClassroomCtrl.Teacher.Core;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -35,7 +38,15 @@ public partial class TeacherGridViewModel : ObservableObject
 
     public ObservableCollection<StudentTileViewModel> Students { get; } = new();
 
+    /// <summary>TT-7-C — the raised-hand queue, in the order hands went up. The teacher
+    /// recognizes from here (each row has a Recognize button). Kept in sync with the tiles'
+    /// IsHandRaised by the HandRaiseReceived router.</summary>
+    public ObservableCollection<StudentTileViewModel> RaisedHands { get; } = new();
+
     public int ConnectedCount => Students.Count;
+
+    /// <summary>TT-7-C — drives the raised-hand queue's visibility (hidden when no hands up).</summary>
+    public bool HasRaisedHands => RaisedHands.Count > 0;
 
     // TT-6-B — selection aggregates the toolbar binds to.
     public int SelectedCount => _selection.Count;
@@ -53,6 +64,12 @@ public partial class TeacherGridViewModel : ObservableObject
     private StudentCommandController? _commands;
     public void AttachCommands(StudentCommandController commands) => _commands = commands;
 
+    // TT-7-C — chat/hand/reaction seam + sound + toast. Attached by App after the session is up.
+    private ITeacherMessaging? _messaging;
+    private ISoundService? _sound;
+    private Action<string>? _notify;
+    private int _handSeq;
+
     public TeacherGridViewModel(StudentRoster roster)
     {
         _roster = roster;
@@ -60,6 +77,7 @@ public partial class TeacherGridViewModel : ObservableObject
         _roster.StudentRemoved += OnStudentRemoved;
         _selection.SelectionChanged += OnSelectionChanged;
         Students.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ConnectedCount));
+        RaisedHands.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRaisedHands));
     }
 
     // Fires on a transport background thread → marshal to the UI thread before touching
@@ -69,7 +87,10 @@ public partial class TeacherGridViewModel : ObservableObject
         {
             var existing = Students.FirstOrDefault(t => t.EndpointId == e.EndpointId);
             if (existing is null)
-                Students.Add(new StudentTileViewModel(e.EndpointId, e.DisplayName, e.MachineName, e.OsVersion));
+                Students.Add(new StudentTileViewModel(e.EndpointId, e.DisplayName, e.MachineName, e.OsVersion)
+                {
+                    RecognizeCallback = RecognizeHandAsync,   // TT-7-C: tile's Recognize button lowers its hand
+                });
             else
             {
                 // Reconnect on the same EndpointId → update in place (no duplicate tile).
@@ -85,7 +106,11 @@ public partial class TeacherGridViewModel : ObservableObject
         Dispatcher.UIThread.Post(() =>
         {
             var tile = Students.FirstOrDefault(t => t.EndpointId == endpointId);
-            if (tile is not null) Students.Remove(tile);
+            if (tile is not null)
+            {
+                Students.Remove(tile);
+                RaisedHands.Remove(tile);   // a departed student can't stay in the recognize queue
+            }
             // Keep the selection honest after a disconnect (drops the departed id + a stale
             // anchor). Bulk ops already run over a snapshot, so an in-flight bulk is unaffected.
             _selection.Prune(OrderedIds());
@@ -170,5 +195,75 @@ public partial class TeacherGridViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(CanBulkPower));
+    }
+
+    // ─────── TT-7-C: chat/hand/reaction routing — attribution by EndpointId ───────
+    // Inbound events fire on a transport background thread → every tile mutation is marshaled
+    // to the UI thread, same discipline as OnStudentAdded/Removed.
+
+    /// <summary>Wire the chat/hand/reaction seam in. Split from the ctor because the session
+    /// (and sound) are built by App after the roster VM. Idempotent-safe: called once.</summary>
+    public void AttachMessaging(ITeacherMessaging messaging, ISoundService sound, Action<string>? notify = null)
+    {
+        _messaging = messaging;
+        _sound = sound;
+        _notify = notify;
+        messaging.HandRaiseReceived += OnHandRaiseReceived;
+        messaging.ReactionReceived += OnReactionReceived;
+    }
+
+    // The ATTRIBUTION guard: a hand-raise for StudentId X lights ONLY the tile whose
+    // EndpointId == X. If X isn't in the roster, nothing happens — never a fan-out to all
+    // tiles. This is the distinguishing property the TT-7-E aggregation gate asserts.
+    private void OnHandRaiseReceived(object? sender, HandRaiseMessage msg) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            var tile = Students.FirstOrDefault(t => t.EndpointId == msg.StudentId);
+            if (tile is null) return;
+
+            if (msg.IsRaised)
+            {
+                if (tile.IsHandRaised) return;   // idempotent (dup raise)
+                tile.IsHandRaised = true;
+                tile.HandRaiseOrder = ++_handSeq;
+                RaisedHands.Add(tile);
+                _sound?.Play(NotificationSound.HandRaise);
+                _notify?.Invoke($"✋ {tile.DisplayName} raised their hand");
+            }
+            else LowerLocal(tile);
+        });
+
+    private void OnReactionReceived(object? sender, (Guid SenderId, ReactionMessage Msg) e) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            var tile = Students.FirstOrDefault(t => t.EndpointId == e.SenderId);
+            if (tile is null) return;
+            var emoji = e.Msg.Emoji;
+            tile.LastReaction = emoji;
+            // Reactions are ephemeral: clear after a few seconds unless a newer, different one
+            // has replaced it. (Clock-skew makes the wire ExpiresAtMs unreliable across machines,
+            // so we use a local timer.)
+            DispatcherTimer.RunOnce(() =>
+            {
+                if (tile.LastReaction == emoji) tile.LastReaction = "";
+            }, TimeSpan.FromSeconds(4));
+        });
+
+    /// <summary>Teacher "Recognize" — lower one student's hand (targeted HandLower) and clear
+    /// it locally. Invoked by the tile's own RecognizeCommand (set as its callback). Fire-and-
+    /// forget send; a swallowed error can't crash the Teacher.</summary>
+    private async Task RecognizeHandAsync(StudentTileViewModel tile)
+    {
+        LowerLocal(tile);   // optimistic: the queue updates immediately
+        if (_messaging is null) return;
+        try { await _messaging.SendHandLowerAsync(tile.EndpointId, CancellationToken.None); }
+        catch { /* the hand is already lowered locally; a lost lower is re-issuable */ }
+    }
+
+    private void LowerLocal(StudentTileViewModel tile)
+    {
+        tile.IsHandRaised = false;
+        tile.HandRaiseOrder = 0;
+        RaisedHands.Remove(tile);
     }
 }
