@@ -79,6 +79,11 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudent
     public Task PowerAsync(Guid endpointId, MessageType type, bool reliable, CancellationToken ct)
         => _server.PowerOneAsync(endpointId, type, ct, reliable);
 
+    // TT-12: send a file to the class (target null = all; a specific id = one student). Reliable channel.
+    public Task BroadcastFileAsync(string filePath, Guid? targetEndpointId,
+        IProgress<(int sent, int total)>? progress, CancellationToken ct)
+        => _server.BroadcastFileAsync(filePath, ct, targetEndpointId, progress);
+
     // ─────── TT-7-B: ITeacherMessaging — chat / hand-raise / reaction seam ───────
     // Same passthrough shape as the two seams above. The DM send bakes in reliable:true
     // (the seam guarantees a DM never rides the DropOldest queue — TT-5-A discipline).

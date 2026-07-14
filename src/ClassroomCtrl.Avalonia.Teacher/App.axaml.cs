@@ -94,6 +94,11 @@ public partial class App : Application
             // swallows/logs errors so a failed send can't crash the Teacher).
             window.StudentCommandRequested += t =>
                 _ = _commands.ExecuteAsync(t.Vm.EndpointId, t.Command, t.Vm.DisplayName);
+            // TT-12: Send File to Class — pick a file, broadcast to all students on the RELIABLE
+            // channel (dropped chunks corrupt the file). App owns the picker (window.StorageProvider)
+            // and the session; MainWindow only raises the request.
+            window.SendFileToClassRequested += () => _ = SendFileToClassAsync(window, mainVm);
+
             // A student leaving (roster removal, a background thread) closes their open
             // screen view → stops the stream. HandleStudentDisconnected marshals to UI.
             _session.Roster.StudentRemoved += (_, id) => _screenViews.HandleStudentDisconnected(id);
@@ -108,5 +113,35 @@ public partial class App : Application
             desktop.ShutdownRequested += (_, _) => { _ = _sysAudioBroadcaster?.StopAsync(); _ = _micBroadcaster?.StopAsync(); _ = _screenBroadcaster?.StopAsync(); _screenViews?.CloseAll(); _session?.Dispose(); };
         }
         base.OnFrameworkInitializationCompleted();
+    }
+
+    // TT-12 — file picker + reliable broadcast to the whole class, with live progress on the header.
+    private async System.Threading.Tasks.Task SendFileToClassAsync(MainWindow window, MainWindowViewModel mainVm)
+    {
+        if (_session is null) return;
+        try
+        {
+            var files = await window.StorageProvider.OpenFilePickerAsync(
+                new global::Avalonia.Platform.Storage.FilePickerOpenOptions
+                {
+                    Title = "Send a file to the whole class",
+                    AllowMultiple = false,
+                });
+            if (files is null || files.Count == 0) return;   // cancelled
+            var uri = files[0].Path;
+            var path = uri is { IsFile: true } ? uri.LocalPath : null;
+            if (string.IsNullOrEmpty(path)) { mainVm.SetFileStatus("❌ Can't send: no local path for that file"); return; }
+
+            var name = System.IO.Path.GetFileName(path);
+            mainVm.SetFileStatus($"Sending {name}…");
+            var progress = new Progress<(int sent, int total)>(p =>
+                mainVm.SetFileStatus($"Sending {name}… {p.sent}/{p.total}"));
+            await _session.BroadcastFileAsync(path, targetEndpointId: null, progress, System.Threading.CancellationToken.None);
+            mainVm.SetFileStatus($"✅ Sent {name} to the class");
+        }
+        catch (Exception ex)
+        {
+            mainVm.SetFileStatus($"❌ Send failed: {ex.Message}");
+        }
     }
 }

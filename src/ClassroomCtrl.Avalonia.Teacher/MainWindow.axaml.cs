@@ -19,7 +19,15 @@ public partial class MainWindow : Window
     /// the send path (same separation as StudentActivated).</summary>
     public event Action<(StudentTileViewModel Vm, StudentCommand Command)>? StudentCommandRequested;
 
+    /// <summary>TT-12 — raised when "Send File to Class" is clicked. App opens the file picker
+    /// (it owns the StorageProvider + the session) and broadcasts; MainWindow stays unaware of the
+    /// send path (same separation as StudentActivated / StudentCommandRequested).</summary>
+    public event Action? SendFileToClassRequested;
+
     public MainWindow() => InitializeComponent();
+
+    private void SendFile_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => SendFileToClassRequested?.Invoke();
 
     private void Card_DoubleTapped(object? sender, TappedEventArgs e)
     {

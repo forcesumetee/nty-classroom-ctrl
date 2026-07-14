@@ -27,6 +27,9 @@ public partial class StudentSelfTileViewModel : ObservableObject
     /// screen stream / camera) — logged + shown, not enforced.</summary>
     [ObservableProperty] private string lastDeferred = "";
 
+    /// <summary>TT-12 — most recent file the teacher sent to this student (name + outcome).</summary>
+    [ObservableProperty] private string lastFile = "";
+
     /// <summary>Phase 27-C — true while streaming this screen to the teacher.</summary>
     [ObservableProperty] private bool isStreaming;
     [ObservableProperty] private int streamedFrames;

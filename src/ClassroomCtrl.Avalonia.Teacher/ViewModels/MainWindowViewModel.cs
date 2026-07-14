@@ -38,6 +38,13 @@ public partial class MainWindowViewModel : ObservableObject
     /// null = hidden. Auto-clears after a few seconds.</summary>
     [ObservableProperty] private string? toast;
 
+    /// <summary>TT-12 — "Send File to Class" progress / result line (null = idle). Set from App's
+    /// send handler on a background thread → marshal via SetFileStatus.</summary>
+    [ObservableProperty] private string? fileStatus;
+
+    /// <summary>Thread-safe setter for <see cref="FileStatus"/> (the send runs off the UI thread).</summary>
+    public void SetFileStatus(string? text) => Dispatcher.UIThread.Post(() => FileStatus = text);
+
     public MainWindowViewModel(TeacherGridViewModel grid, string listenAddress)
     {
         Grid = grid;

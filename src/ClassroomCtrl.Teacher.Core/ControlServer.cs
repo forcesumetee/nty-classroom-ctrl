@@ -1385,8 +1385,22 @@ public class ControlServer : IDisposable
         _logger.LogInformation("Room chat routed: {Sender} → room {Room}", senderEndpointId, senderRoom);
     }
 
-    public async Task BroadcastFileAsync(string filePath, CancellationToken ct)
+    /// <summary>
+    /// TT-12 — send a file to the class. <paramref name="targetEndpointId"/> null/Empty = whole-class
+    /// broadcast (every student's IsForMe passes); a specific id = only that student (B fails IsForMe
+    /// closed — the same targeting the per-student commands use). All three phases ride the RELIABLE
+    /// channel (dropping any chunk corrupts the file — Phase 10.21). <paramref name="progress"/> reports
+    /// (chunksSent, chunkTotal) for a teacher-side progress bar.
+    /// </summary>
+    public async Task BroadcastFileAsync(string filePath, CancellationToken ct,
+        Guid? targetEndpointId = null, IProgress<(int sent, int total)>? progress = null)
     {
+        // null/Empty target → whole-class broadcast; else a single-student targeted envelope.
+        Envelope Env(MessageType t, byte[] p) =>
+            targetEndpointId is Guid tid && tid != Guid.Empty
+                ? Envelope.CreateTargeted(t, p, _teacherId, tid)
+                : Envelope.Create(t, p, _teacherId);
+
         const int ChunkSize = 64 * 1024;
         var fileInfo = new FileInfo(filePath);
         if (!fileInfo.Exists) throw new FileNotFoundException(filePath);
@@ -1430,9 +1444,9 @@ public class ControlServer : IDisposable
         // report).  Reliable path is FullMode.Wait per peer, so the producer
         // here is back-pressured by the slowest student's TCP drain rate
         // instead of corrupting the stream.
-        await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileAnnounce, announceBytes, _teacherId), ct);
-        _logger.LogInformation("File announce: {Name} ({Size} bytes, {Chunks} chunks)",
-            fileName, size, chunkCount);
+        await _tcp.BroadcastReliableAsync(Env(MessageType.FileAnnounce, announceBytes), ct);
+        _logger.LogInformation("File announce: {Name} ({Size} bytes, {Chunks} chunks){Target}",
+            fileName, size, chunkCount, targetEndpointId is Guid tt && tt != Guid.Empty ? $" → {tt}" : " → all");
         LogDebug($"[BroadcastFile] FileAnnounce sent: sha256={sha256Hex[..16]}...");
 
         using (var fs = File.OpenRead(filePath))
@@ -1452,14 +1466,15 @@ public class ControlServer : IDisposable
                     Data = chunkData,
                 };
                 var chunkBytes = MessagePack.MessagePackSerializer.Serialize(chunk);
-                await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileChunk, chunkBytes, _teacherId), ct);
+                await _tcp.BroadcastReliableAsync(Env(MessageType.FileChunk, chunkBytes), ct);
                 idx++;
+                progress?.Report((idx, chunkCount));
             }
         }
 
         var complete = new FileCompleteMessage { TransferId = transferId, FileName = fileName };
         var completeBytes = MessagePack.MessagePackSerializer.Serialize(complete);
-        await _tcp.BroadcastReliableAsync(Envelope.Create(MessageType.FileComplete, completeBytes, _teacherId), ct);
+        await _tcp.BroadcastReliableAsync(Env(MessageType.FileComplete, completeBytes), ct);
         _logger.LogInformation("File transfer complete: {Name}", fileName);
         LogDebug($"[BroadcastFile] complete: file='{fileName}' chunksSent={chunkCount}");
     }

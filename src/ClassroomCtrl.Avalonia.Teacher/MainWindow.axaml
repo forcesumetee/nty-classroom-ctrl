@@ -56,6 +56,13 @@
                     <Button Content="{Binding ScreenShare.ButtonText}" Command="{Binding ScreenShare.ToggleCommand}"
                             Cursor="Hand" Padding="12,5"
                             IsVisible="{Binding ScreenShare, Converter={x:Static ac:ObjectConverters.IsNotNull}}"/>
+                    <!-- TT-12: Send File to Class. Progress/result shown left of the button; the click
+                         raises SendFileToClassRequested (App owns the picker + the reliable broadcast). -->
+                    <TextBlock Text="{Binding FileStatus}" VerticalAlignment="Center" FontSize="11"
+                               Foreground="{StaticResource ConfTextSecondaryBrush}" MaxWidth="320"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding FileStatus, Converter={x:Static ac:StringConverters.IsNotNullOrEmpty}}"/>
+                    <Button Content="📄 Send File" Click="SendFile_Click" Cursor="Hand" Padding="12,5"/>
                     <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                                FontSize="13" FontWeight="SemiBold"
                                Foreground="{StaticResource ConfTextPrimaryBrush}"/>

@@ -45,6 +45,7 @@ int classroomN = 0, durationSec = 8;
 bool classroomAudio = false;
 int mixtestN = 0;
 bool mixhost = false;
+bool fileTest = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -59,9 +60,11 @@ for (int i = 0; i < args.Length; i++)
         case "--audio": classroomAudio = true; break;                    // TT-9-B: also stream synthetic mic PCM
         case "--mixtest": mixtestN = int.Parse(args[++i]); break;        // TT-9-D: mixer stall+cap gate
         case "--mixhost": mixhost = true; break;                          // TT-9-D: teacher-only CPU host
+        case "--filetest": fileTest = true; break;                        // TT-12: file-transfer E2E gate
     }
 }
 
+if (fileTest) return await FileTest.RunAsync();
 if (teacherSelfTest) return await TeacherSelfTest.RunAsync();
 if (selfTest) return await SelfTest.RunAsync();
 if (mixhost) return await MixHost.RunAsync(port, durationSec);
@@ -1325,4 +1328,129 @@ sealed class RecordingSoundService : ISoundService
 {
     public List<NotificationSound> Played { get; } = new();
     public void Play(NotificationSound sound) => Played.Add(sound);
+}
+
+// ───────────────────────────── TT-12: --filetest — file-transfer E2E gate ─────────────────────────────
+// The permanent Student-track gate for "teacher sends a file to the class". Spins the REAL ControlServer
+// on loopback, connects TWO REAL WireClients (the same transport the Mac Student ships), and feeds each
+// client's frames through the REAL StudentEnvelopeFilter.IsForMe + the REAL FileReceiver — i.e. the exact
+// code path the app runs. Asserts the DISTINGUISHING properties, not the happy path:
+//   • broadcast → BOTH A and B save a BYTE-IDENTICAL file (the SAVED file's SHA-256 == the source's),
+//   • targeted→A → A saves it AND B receives NOTHING (A-only ↛ B), the per-student negative that a
+//     "the target got it" check would miss (it rides the same IsForMe filter as every command — TT-6-D).
+// The reliable channel is exercised implicitly (BroadcastFileAsync uses BroadcastReliableAsync — a lossy
+// path would truncate the 250 KB / 4-chunk transfer and the SHA check would fail).
+static class FileTest
+{
+    public static async Task<int> RunAsync()
+    {
+        int failures = 0;
+        void Check(string label, bool ok)
+        {
+            if (ok) Console.WriteLine($"  ✅ {label}");
+            else { Console.WriteLine($"  ❌ {label}"); failures++; }
+        }
+
+        Console.WriteLine("=== MockStudent --filetest (REAL ControlServer + REAL WireClient + REAL FileReceiver) ===");
+
+        var server = new ControlServer(NullLogger<ControlServer>.Instance, NullLoggerFactory.Instance,
+            IPAddress.Loopback, 0, IPAddress.Loopback, 30000);   // long stale window: file transfer takes a moment
+        var roster = new StudentRoster(server);
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "ntyfiletest-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmpRoot);
+
+        try
+        {
+            await server.StartAsync(CancellationToken.None);
+            int port = server.BoundPort ?? -1;
+            Check("server bound an ephemeral port", port > 0);
+
+            // Two REAL student clients.
+            var aClient = new WireClient(); var aCts = new CancellationTokenSource();
+            var aRun = aClient.RunAsync("127.0.0.1", port, "Alice", aCts.Token);
+            var bClient = new WireClient(); var bCts = new CancellationTokenSource();
+            var bRun = bClient.RunAsync("127.0.0.1", port, "Bob", bCts.Token);
+            Check("2 students joined the roster", await WaitUntil(() => roster.Count == 2, 5000));
+
+            // Real receivers into isolated temp dirs; count completions with volatile ints.
+            var aRecv = new FileReceiver(Path.Combine(tmpRoot, "A"));
+            var bRecv = new FileReceiver(Path.Combine(tmpRoot, "B"));
+            var aResults = new List<FileReceiveResult>(); var bResults = new List<FileReceiveResult>();
+            int aDone = 0, bDone = 0;
+            aRecv.FileReceived += r => { lock (aResults) aResults.Add(r); Interlocked.Increment(ref aDone); };
+            bRecv.FileReceived += r => { lock (bResults) bResults.Add(r); Interlocked.Increment(ref bDone); };
+
+            void Feed(FileReceiver recv, Guid myId, Envelope env)
+            {
+                if (!StudentEnvelopeFilter.IsForMe(env, myId)) return;   // the REAL client-side target filter
+                switch (env.Type)
+                {
+                    case MessageType.FileAnnounce: recv.OnAnnounce(MessagePackSerializer.Deserialize<FileAnnounceMessage>(env.Payload)); break;
+                    case MessageType.FileChunk:    recv.OnChunk(MessagePackSerializer.Deserialize<FileChunkMessage>(env.Payload)); break;
+                    case MessageType.FileComplete: recv.OnComplete(MessagePackSerializer.Deserialize<FileCompleteMessage>(env.Payload)); break;
+                }
+            }
+            var aEnd = aClient.EndpointId; var bEnd = bClient.EndpointId;
+            aClient.EnvelopeReceived += e => Feed(aRecv, aEnd, e);
+            bClient.EnvelopeReceived += e => Feed(bRecv, bEnd, e);
+
+            // A multi-chunk source file (250 KB → 4× 64 KB chunks) — exercises reassembly + ordering.
+            var src = Path.Combine(tmpRoot, "lesson-handout.bin");
+            var payload = new byte[250 * 1024];
+            new Random(12345).NextBytes(payload);
+            File.WriteAllBytes(src, payload);
+            string srcSha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(payload));
+
+            bool SavedMatches(FileReceiveResult r) =>
+                r.Ok && r.SavedPath != null && File.Exists(r.SavedPath)
+                && new FileInfo(r.SavedPath).Length == payload.Length
+                && Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(r.SavedPath))) == srcSha;
+
+            // ── Test 1: whole-class broadcast → BOTH receive byte-identical ──
+            await server.BroadcastFileAsync(src, CancellationToken.None, targetEndpointId: null);
+            Check("broadcast → BOTH A and B complete the transfer",
+                await WaitUntil(() => Volatile.Read(ref aDone) > 0 && Volatile.Read(ref bDone) > 0, 8000));
+            FileReceiveResult aLast, bLast;
+            lock (aResults) aLast = aResults[^1];
+            lock (bResults) bLast = bResults[^1];
+            Check("A saved a BYTE-IDENTICAL file (saved SHA-256 == source, 250 KB)", SavedMatches(aLast));
+            Check("B saved a BYTE-IDENTICAL file (saved SHA-256 == source, 250 KB)", SavedMatches(bLast));
+
+            // ── Test 2: targeted to A only → A gets it, B gets NOTHING (the distinguishing negative) ──
+            lock (aResults) aResults.Clear();
+            lock (bResults) bResults.Clear();
+            Interlocked.Exchange(ref aDone, 0); Interlocked.Exchange(ref bDone, 0);
+            var src2 = Path.Combine(tmpRoot, "for-alice-only.bin");
+            var payload2 = new byte[130 * 1024]; new Random(999).NextBytes(payload2);
+            File.WriteAllBytes(src2, payload2);
+
+            await server.BroadcastFileAsync(src2, CancellationToken.None, targetEndpointId: aEnd);
+            Check("targeted→A: A completes the transfer", await WaitUntil(() => Volatile.Read(ref aDone) > 0, 8000));
+            lock (aResults) Check("targeted→A: A's copy verified OK", aResults.Count > 0 && aResults[^1].Ok);
+            // Generous window for B to (wrongly) receive anything, THEN assert it did not.
+            await Task.Delay(1500);
+            Check("🔴 targeted→A: B received NOTHING (A-only ↛ B — the distinguishing negative)",
+                Volatile.Read(ref bDone) == 0);
+
+            aCts.Cancel(); bCts.Cancel();
+            try { await Task.WhenAll(aRun, bRun).WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
+        }
+        catch (Exception ex) { Check($"scenario threw — {ex.GetType().Name}: {ex.Message}", false); }
+        finally
+        {
+            server.Dispose();
+            try { Directory.Delete(tmpRoot, recursive: true); } catch { }
+        }
+
+        Console.WriteLine(failures == 0
+            ? "\n=== MOCKSTUDENT FILETEST PASS ✅ — teacher→class file transfer: broadcast reaches BOTH byte-identical (SHA-256), targeted reaches ONLY the target (A-only ↛ B), reliable channel, real client + real IsForMe + real FileReceiver ==="
+            : $"\n=== MOCKSTUDENT FILETEST FAIL ❌ ({failures} check(s)) ===");
+        return failures == 0 ? 0 : 1;
+    }
+
+    static async Task<bool> WaitUntil(Func<bool> cond, int ms)
+    {
+        for (int t = 0; t < ms && !cond(); t += 25) await Task.Delay(25);
+        return cond();
+    }
 }

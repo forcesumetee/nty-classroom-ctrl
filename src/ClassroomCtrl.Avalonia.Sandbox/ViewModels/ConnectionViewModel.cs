@@ -67,6 +67,10 @@ public partial class ConnectionViewModel : ObservableObject
     /// four-layer dead-man switch (process-kill / 45 s disconnect grace / 30 min cap / wake).</summary>
     private readonly LockService _lock = new();
 
+    /// <summary>TT-12 — receives teacher-broadcast files (FileAnnounce/Chunk/Complete), verifies the
+    /// announced SHA-256, and saves to ~/Downloads/NTY ClassroomCtrl. Zero-subscriber before TT-12.</summary>
+    private readonly FileReceiver _fileReceiver = new();
+
     /// <summary>Active Conference session (from the Teacher's ConferenceStart); Empty
     /// when not in a Conference. Camera peer-cam frames are gated on this.</summary>
     private Guid _conferenceSessionId;
@@ -162,6 +166,9 @@ public partial class ConnectionViewModel : ObservableObject
         // LockService is the single owner of SelfTile.IsLocked — it stays true through the
         // disconnect grace window and flips false on explicit/auto unlock.
         _lock.LockStateChanged += up => Post(() => SelfTile.IsLocked = up);
+        // TT-12 — surface the received file (name + outcome) on the self tile.
+        _fileReceiver.FileReceived += r => Post(() =>
+            SelfTile.LastFile = r.Ok ? $"📄 {r.FileName} ({r.SizeBytes:N0} B) saved" : $"📄 {r.FileName} — {r.Error}");
         _lock.Log += msg => Post(() => AddLog(WireDirection.System, $"lock: {msg}", 0));
     }
 
@@ -435,6 +442,22 @@ public partial class ConnectionViewModel : ObservableObject
                 TeacherScreen.Reset();
                 TeacherShareStopped?.Invoke();
                 detail = "■ teacher stopped sharing";
+                break;
+            // TT-12 — teacher "Send File to Class". Reassemble on the RELIABLE channel; the SHA-256
+            // is verified in FileReceiver.OnComplete (a truncated transfer is reported, never saved).
+            // Reached only after IsForMe, so a file targeted at another student never lands here.
+            case MessageType.FileAnnounce:
+                var fa = MessagePackSerializer.Deserialize<FileAnnounceMessage>(env.Payload);
+                _fileReceiver.OnAnnounce(fa);
+                detail = $"📄 incoming: {fa.FileName} ({fa.SizeBytes:N0} B, {fa.ChunkCount} chunks)";
+                break;
+            case MessageType.FileChunk:
+                _fileReceiver.OnChunk(MessagePackSerializer.Deserialize<FileChunkMessage>(env.Payload));
+                detail = "chunk";
+                break;
+            case MessageType.FileComplete:
+                var res = _fileReceiver.OnComplete(MessagePackSerializer.Deserialize<FileCompleteMessage>(env.Payload));
+                detail = res.Ok ? $"✅ saved: {res.SavedPath}" : $"❌ {res.FileName}: {res.Error}";
                 break;
             // Remaining capture-class commands: logged + noted, deferred until their
             // native macOS APIs land. No frames produced.
