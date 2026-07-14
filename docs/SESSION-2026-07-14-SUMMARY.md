@@ -82,13 +82,15 @@ Approved A-phase (TT-9-A) → built **TT-9-B → TT-9-C → TT-9-D** autonomousl
 🔴 **Last day of Mac access.** Everything pushed; see `PROJECT-HANDOVER.md` / `STATUS-FOR-TEAM.md` /
 `TOR-COMPLIANCE.md`.
 - **TT-10-B "Talk to Class"** ✅ built + gate-green (teacher mic → all students; **SHIPPED BUG #7** —
-  audio Start/Stop lossy → student playback stuck open — fixed in port). LIVE-pending.
+  audio Start/Stop lossy → student playback stuck open — fixed in port). ✅ **LIVE PASS** (MockB: Start→88 frames→clean Stop).
 - **TT-10 system-audio probe** ✅ **RESOLVED** — SCK `capturesAudio` captures system audio
   first-party (200 buf, non-silent) AND coexists with screen in one SCStream. Gate was **bundle
   identity** (a bare binary has no TCC identity; the granted Teacher bundle works). Rules out the
   BlackHole worst case. `TT-10-SYSTEM-AUDIO-PROBE.md`.
 - **TT-10-C "Share Computer Audio"** ✅ built (system audio → AudioStreamFrame 0x0329, no wire
-  change; pairs with Share My Screen for video-with-sound). LIVE-pending. Wire path gate-covered.
+  change; pairs with Share My Screen). ✅ **LIVE PASS** — 868 frames, normal quality (16k-mono honored,
+  converter unused); + Share-Screen+Audio SIMULTANEOUS to an **unmodified shipped Windows student**
+  (BELL v1.2) → the headline cross-platform capability. See `TT-10-BC-LIVE-CONFIRMATION.md`.
 - **Camera view (teacher watches a student)** 🔴 **NOT built — deliberately abandoned**: the
   student→teacher camera path (`ConferenceCameraFrame`) auto-relays to all peers (= TT-11 star
   topology); no clean 1:1 monitor without a wire add or relay surgery. Fully scoped in

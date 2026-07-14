@@ -3,7 +3,7 @@
 > 🔴 **RE-SCOPE 2026-07-14 — READ §0 (top of file) FIRST.** Customer B (Mac teacher + Mac students,
 > 50 seats) wants ALL 7 previously-"deferred" features. **NO new wire needed** (except restoring
 > `Exam.Shared`). Critical path **CORRECTED** — the conference is *silent* without audio, so TT-9 +
-> TT-10 move onto it. Honest completion (**TT-0…TT-9 LIVE + TT-10-B/-C built 2026-07-14**): **Teacher ~54% · Student ~60% · System ~49%.** 🔴 **FINAL Mac session 2026-07-14 — see `PROJECT-HANDOVER.md` (no more Mac access after today).** System-audio ✅ first-party (probe); camera view NOT built (relay-entangled — `TT-CAMERA-VIEW-SCOPE.md`).
+> TT-10 move onto it. Honest completion (**TT-0…TT-10-C done + LIVE 2026-07-14**): **Teacher ~55% · Student ~60% · System ~49%.** 🔴 **FINAL Mac session 2026-07-14 — see `PROJECT-HANDOVER.md` (no more Mac access after today).** 🎉 **LIVE-proven: Mac Teacher shares video (picture+sound) to an UNMODIFIED shipped Windows student, no wire change.** System-audio ✅ first-party; camera view NOT built (relay-entangled — `TT-CAMERA-VIEW-SCOPE.md`).
 > Companion: `docs/STUDENT-TRACK-ROADMAP-V2.md`. The §5 phase list below is **superseded by §0**
 > where they conflict (§5 kept for the TT-0…TT-6 history).
 
@@ -85,8 +85,8 @@ channels (`_audioOutbox`/`_voiceOutbox` vs the video `_outbox`). Consequences:
 | **TT-7 ✅** | Chat + hand-raise + reactions (+ Mac-Student SEND) | no | ⚠️ aggregation | **M·LOW** | **DONE + LIVE 2026-07-14** — hand-raise send pre-existed; chat/reaction send + DMs reliable; bug #6 fixed |
 | **TT-8 ✅** | Teacher "Share My Screen" | no (reuse M17/M18) | ⚠️ broadcast | **M·LOW–MED** | **DONE + LIVE 2026-07-14** — Teacher bundle (Screen Rec TCC); shared Media decode lib; item #10 done; bug #5 fixed |
 | **TT-9 ✅** | Student audio mixing | extend M20 (native nty_mix_*) | 🟢 no (0x032B/C/D vendored) | **M·MED** | **DONE + LIVE 2026-07-14** — reusable N-node mixer core (TT-11 reuses it); **3 deliberate divergences** (cap w/ visible degrade · gain-norm · one core vs shipped's two mixers); kill-one-sender STALL gate; teacher-only ~10%/core at N=25 **and** N=50 (cap-bounded). See `docs/TT-9-FINDINGS.md` + `TT-9-LIVE-CONFIRMATION.md` |
-| **TT-10-B ✅** | Teacher audio BROADCAST ("Talk to Class") | reuse M20 | 🟢 no | **M·LOW–MED** | **DONE 2026-07-14** (gate-green; LIVE-pending) — teacher mic → all students; SHIPPED BUG #7 (audio Start/Stop lossy) fixed in port. See `PROJECT-HANDOVER.md` |
-| **TT-10-C ✅** | **"Share Computer Audio"** (system audio → students) | SCK capturesAudio | 🟢 no | **M·MED** | **BUILT 2026-07-14** (LIVE-pending) — SCK first-party system-audio → AudioStreamFrame 0x0329; pairs w/ Share My Screen. Probe ✅ (200 buf, coexists w/ screen). See `TT-10-SYSTEM-AUDIO-PROBE.md` |
+| **TT-10-B ✅** | Teacher audio BROADCAST ("Talk to Class") | reuse M20 | 🟢 no | **M·LOW–MED** | **DONE + LIVE 2026-07-14** — teacher mic → all students; SHIPPED BUG #7 (audio Start/Stop lossy) fixed + clean-stop verified live. See `TT-10-BC-LIVE-CONFIRMATION.md` |
+| **TT-10-C ✅** | **"Share Computer Audio"** (system audio → students) | SCK capturesAudio | 🟢 no | **M·MED** | **DONE + LIVE 2026-07-14** — SCK first-party system-audio → AudioStreamFrame 0x0329; LIVE: 868 frames, normal quality (16k-mono honored, no resampler), + Share-Screen+Audio SIMULTANEOUS to an **unmodified shipped Windows student**. See `TT-10-BC-LIVE-CONFIRMATION.md` |
 | **TT-10 (rest)** | mic-monitor (done via TT-9) | reuse M20 | ✅ | — | mic-monitor done via TT-9. 🔴 **TOR 11.2.1 power-ON cannot be met on Apple Silicon** — see `TOR-COMPLIANCE.md` |
 | **TT-11** | Camera + Conference (star relay) **+ peer audio** | reuse M19 + student voice mixer | 🔴 yes (flagship) | **L·HIGH** | + peer audio (rides 0x0640, **NO new wire**; star-relay + student mixer; AEC open — §0.6) |
 | **TT-12a** | File distribution | no | ⚠️ broadcast | **S·LOW** | reliable channel |
@@ -130,7 +130,7 @@ net movie (TT-12b) and UDP discovery (TT-13) fold into those phases. The three *
 
 ### 0.7 Honest completion (updated 2026-07-14 — after TT-9 LIVE + TT-10-B/-C build)
 - **Teacher track: ~54%** — **TT-0…TT-9 done+LIVE, TT-10-B (Talk) + TT-10-C (Share Computer Audio)
-  built/LIVE-pending (~12 of ~19)**. Camera view NOT built (relay-entangled, scoped). TT-9 LIVE on a one-Mac rig (two
+  built + **LIVE** (~12 of ~19)**. Camera view NOT built (relay-entangled, scoped). TT-9 LIVE on a one-Mac rig (two
   co-located sources + headphones); cap/stall/scale proven headlessly. (Was ~37% at re-scope, ~47%
   after batch 1.)
 - **Student track: ~60%** against full customer-B scope — batch 1 added chat-send + reaction-send +

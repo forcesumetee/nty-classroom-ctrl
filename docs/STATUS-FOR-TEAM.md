@@ -2,12 +2,18 @@
 
 One page, plain language. Detail in `PROJECT-HANDOVER.md` / `TOR-COMPLIANCE.md`.
 
+## 🔴 The headline for sales (proven LIVE 2026-07-14)
+**A Mac teacher can play a video, and your existing UNMODIFIED Windows student machines see the
+picture AND hear the sound — with zero changes to the shipped Windows software.** Confirmed live
+against a real shipped Windows v1.2 student. It's the clearest proof that the customer's current
+Windows PCs keep working alongside a Mac teacher.
+
 ## What works today
 A macOS **Student** app that a real Windows-based classroom can already use, and a macOS **Teacher**
 app that does the core of a lesson: see every student's screen, lock/unlock, send commands, chat +
 hand-raise + reactions, **share the teacher's screen**, **hear students** (mixed), and **talk to the
 class**. It talks to the existing Windows software **byte-for-byte** — a Windows student and a Mac work
-together unchanged. **Honest completion vs the full customer-B contract: ~52%.** Teacher ~50%, Student
+together unchanged. **Honest completion vs the full customer-B contract: ~55%.** Teacher ~55% (teacher audio both directions + share-screen-with-sound, all LIVE), Student
 shippable for the base classroom.
 
 ## What doesn't work yet, and why
