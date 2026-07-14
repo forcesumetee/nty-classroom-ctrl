@@ -15,14 +15,19 @@ public partial class StudentCard : UserControl
     /// the sender's DataContext; the card stays unaware of the command controller.</summary>
     public event EventHandler<StudentCommandEventArgs>? CommandRequested;
 
+    /// <summary>TT-6-B — raised on a LEFT-click, carrying the keyboard modifiers. The window
+    /// decodes them into the macOS selection idiom and drives the grid's selection model
+    /// (IsSelected is now owned by that model, not toggled here).</summary>
+    public event EventHandler<SelectionRequestedEventArgs>? SelectionRequested;
+
     public StudentCard() => InitializeComponent();
 
-    // TT-2-C — visual single-selection, from the Sandbox shell: a click toggles
-    // the tile's IsSelected (the .selected border reacts). Bulk/multi-select is later.
+    // TT-6-B — a left-click requests selection (the window applies the macOS idiom via the
+    // grid model). Right-click is left to the ContextMenu and does NOT change selection.
     private void Card_Pressed(object? sender, PointerPressedEventArgs e)
     {
-        if (DataContext is StudentTileViewModel vm)
-            vm.IsSelected = !vm.IsSelected;
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            SelectionRequested?.Invoke(this, new SelectionRequestedEventArgs(e.KeyModifiers));
     }
 
     // TT-5-B — each command MenuItem carries its StudentCommand name in Tag; one handler

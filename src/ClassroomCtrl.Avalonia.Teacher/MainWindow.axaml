@@ -38,7 +38,8 @@
                                  TT-5-B: right-click → per-student command menu (lock/unlock;
                                  power in TT-5-C). -->
                             <views:StudentCard Margin="0,0,14,14" DoubleTapped="Card_DoubleTapped"
-                                               CommandRequested="Card_CommandRequested"/>
+                                               CommandRequested="Card_CommandRequested"
+                                               SelectionRequested="Card_SelectionRequested"/>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

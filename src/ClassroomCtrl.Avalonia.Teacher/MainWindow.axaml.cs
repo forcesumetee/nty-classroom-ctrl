@@ -35,4 +35,37 @@ public partial class MainWindow : Window
         if (sender is Control { DataContext: StudentTileViewModel vm })
             StudentCommandRequested?.Invoke((vm, e.Command));
     }
+
+    // TT-6-B — decode the macOS selection idiom from the click's modifiers and drive the
+    // grid's selection model. ⌘ = Meta on macOS. Range needs Shift; toggle needs ⌘; plain
+    // click selects only this tile.
+    private void Card_SelectionRequested(object? sender, SelectionRequestedEventArgs e)
+    {
+        if (sender is Control { DataContext: StudentTileViewModel vm } && DataContext is MainWindowViewModel mw)
+        {
+            bool cmd = e.Modifiers.HasFlag(KeyModifiers.Meta);
+            bool shift = e.Modifiers.HasFlag(KeyModifiers.Shift);
+            mw.Grid.HandleClick(vm.EndpointId, cmd, shift);
+        }
+    }
+
+    // TT-6-B — ⌘A selects all, Esc clears. Handled at the window so they work regardless of
+    // which tile (if any) has focus.
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel mw)
+        {
+            if (e.Key == Key.A && e.KeyModifiers.HasFlag(KeyModifiers.Meta))
+            {
+                mw.Grid.SelectAllCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                mw.Grid.ClearSelectionCommand.Execute(null);
+                e.Handled = true;
+            }
+        }
+        base.OnKeyDown(e);
+    }
 }

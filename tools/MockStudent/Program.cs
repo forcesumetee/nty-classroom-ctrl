@@ -538,6 +538,67 @@ static class TeacherSelfTest
             Check("ToMessageType(Shutdown)=ForceShutdown", StudentCommandController.ToMessageType(StudentCommand.Shutdown) == MessageType.ForceShutdown);
         }
 
+        // ── (0b) TT-6-B SELECTION MODEL — the UI-agnostic TileSelectionModel (Teacher.Core),
+        //    committed here (not scratchpad). Covers the macOS click idiom (plain=select-only,
+        //    ⌘=toggle, Shift=range), select-all/clear, disconnect-prune, AND the distinguishing
+        //    property: Snapshot() is a COPY, stable across a mid-loop disconnect — a naive model
+        //    (live view) corrupts a bulk op here.
+        Console.WriteLine("-- (0b) TT-6 selection model (TileSelectionModel) --");
+        {
+            var a = Guid.NewGuid(); var b = Guid.NewGuid(); var c = Guid.NewGuid();
+            var d = Guid.NewGuid(); var e = Guid.NewGuid();
+            var ordered = new List<Guid> { a, b, c, d, e };
+            var sel = new TileSelectionModel();
+
+            sel.SelectOnly(a);
+            Check("plain click → selects only that tile", sel.Count == 1 && sel.IsSelected(a));
+            sel.SelectOnly(b);
+            Check("plain click again → deselects the previous (macOS idiom)", sel.Count == 1 && sel.IsSelected(b) && !sel.IsSelected(a));
+
+            sel.Clear(); sel.Toggle(a);
+            Check("⌘-click → adds to selection", sel.IsSelected(a) && sel.Count == 1);
+            sel.Toggle(a);
+            Check("⌘-click again → removes from selection", !sel.IsSelected(a) && sel.Count == 0);
+            sel.SelectOnly(a); sel.Toggle(b);
+            Check("⌘-click extends a multi-selection", sel.Count == 2 && sel.IsSelected(a) && sel.IsSelected(b));
+
+            sel.Clear(); sel.SelectOnly(b);            // anchor = b
+            sel.SelectRange(ordered, d);
+            Check("Shift-range → contiguous anchor..target inclusive", sel.Count == 3 && sel.IsSelected(b) && sel.IsSelected(c) && sel.IsSelected(d));
+            sel.SelectRange(ordered, a);               // re-range from the SAME anchor b
+            Check("Shift-range re-ranges from the fixed anchor", sel.Count == 2 && sel.IsSelected(a) && sel.IsSelected(b) && !sel.IsSelected(d));
+
+            sel.SelectAll(ordered);
+            Check("select-all selects every tile", sel.Count == 5);
+            sel.Clear();
+            Check("clear deselects everything", sel.Count == 0 && !sel.HasSelection);
+
+            // HandleClick dispatch (the decoded-modifier entry point the window calls)
+            sel.Clear();
+            sel.HandleClick(a, cmdKey: false, shiftKey: false, ordered);
+            Check("HandleClick(plain) → SelectOnly", sel.Count == 1 && sel.IsSelected(a));
+            sel.HandleClick(b, cmdKey: true, shiftKey: false, ordered);
+            Check("HandleClick(⌘) → Toggle (multi)", sel.Count == 2 && sel.IsSelected(a) && sel.IsSelected(b));
+            sel.HandleClick(d, cmdKey: false, shiftKey: true, ordered);   // anchor is b (last)
+            Check("HandleClick(Shift) → range from anchor", sel.Count == 3 && sel.IsSelected(b) && sel.IsSelected(c) && sel.IsSelected(d) && !sel.IsSelected(a));
+
+            // disconnect prune
+            sel.Clear(); sel.SelectOnly(a); sel.Toggle(b); sel.Toggle(c);   // {a,b,c}
+            sel.Prune(new List<Guid> { a, c });                            // b disconnected
+            Check("prune drops a disconnected student's selection", sel.Count == 2 && sel.IsSelected(a) && sel.IsSelected(c) && !sel.IsSelected(b));
+            sel.Clear(); sel.SelectOnly(b);                                 // anchor = b
+            sel.Prune(new List<Guid> { a, c });                            // anchor b gone
+            sel.HandleClick(d, cmdKey: false, shiftKey: true, ordered);    // no anchor → degrade to SelectOnly
+            Check("prune clears a stale anchor (range degrades to select-only)", sel.Count == 1 && sel.IsSelected(d));
+
+            // THE DISTINGUISHING TEST — snapshot is a copy, stable across a mid-loop disconnect
+            sel.Clear(); sel.SelectOnly(a); sel.Toggle(b); sel.Toggle(c);  // {a,b,c}
+            var snap = sel.Snapshot();
+            sel.Prune(new List<Guid> { a });                               // b, c disconnect mid-"loop"
+            Check("snapshot is STABLE across a mid-loop disconnect (copy, not live view)",
+                snap.Count == 3 && sel.Count == 1);
+        }
+
         // ── Server 1: the REAL student WireClient against the REAL server. ──
         // Large stale window (8 s > the client's 5 s heartbeat) so healthy clients never false-stale.
         await WithServer(8000, Check, "server-1 (real WireClient)", async (server, roster, port) =>
