@@ -53,6 +53,9 @@
                 <!-- TT-7-C: lower this student's raised hand (only when it's up). -->
                 <MenuItem Header="Recognize (lower hand)" Command="{Binding RecognizeCommand}"
                           IsEnabled="{Binding IsHandRaised}"/>
+                <!-- TT-9-C: open/close this student's mic into the teacher's mix (checkable). -->
+                <MenuItem Header="Listen to mic" Command="{Binding ListenCommand}"
+                          ToggleType="CheckBox" IsChecked="{Binding IsListening, Mode=OneWay}"/>
             </ContextMenu>
         </Border.ContextMenu>
         <Grid RowDefinitions="*,Auto">
@@ -84,6 +87,12 @@
                     <!-- TT-7-C: transient reaction emoji (auto-clears after a few seconds). -->
                     <TextBlock IsVisible="{Binding HasReaction}" Text="{Binding LastReaction}"
                                FontSize="40" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <!-- TT-9-C: teacher-is-listening badge (green mic), bottom-right so it clears
+                         the hand-raise badge (bottom-left). -->
+                    <Border IsVisible="{Binding IsListening}" Background="#34A853" CornerRadius="10"
+                            Padding="6,3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8">
+                        <TextBlock Text="🎙" FontSize="13" Foreground="White"/>
+                    </Border>
                 </Grid>
             </Border>
 

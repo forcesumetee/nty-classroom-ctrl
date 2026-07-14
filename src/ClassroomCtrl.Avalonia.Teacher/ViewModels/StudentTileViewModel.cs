@@ -79,6 +79,19 @@ public partial class StudentTileViewModel : ObservableObject
     [RelayCommand]
     private Task Recognize() => RecognizeCallback?.Invoke(this) ?? Task.CompletedTask;
 
+    // ─────── TT-9-C: teacher mic-monitor (Listen) ───────
+
+    /// <summary>TT-9-C — the teacher is monitoring this student's mic (its PCM feeds the
+    /// mix). Set by the grid after MicMonitorStart/Stop is issued, so the badge + the
+    /// checkable menu item reflect the real listen state.</summary>
+    [ObservableProperty] private bool isListening;
+
+    /// <summary>TT-9-C — set by the grid; the tile's "Listen to mic" toggle opens/closes it.</summary>
+    public Func<StudentTileViewModel, Task>? ListenCallback { get; set; }
+
+    [RelayCommand]
+    private Task Listen() => ListenCallback?.Invoke(this) ?? Task.CompletedTask;
+
     /// <summary>The presence affordance color (green = connected). The card binds this
     /// through HexToBrushConverter — a legible "this tile is a connected student".</summary>
     public string PresenceColorHex => Presence switch

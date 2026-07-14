@@ -24,6 +24,7 @@ namespace ClassroomCtrl.Avalonia.Teacher.Services;
 public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudentCommandSink, ITeacherMessaging, ITeacherScreenSink
 {
     private readonly ControlServer _server;
+    private readonly TeacherAudioMixer _mixer;
     private bool _disposed;
 
     public StudentRoster Roster { get; }
@@ -37,6 +38,14 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudent
         _server = new ControlServer(f.CreateLogger<ControlServer>(), f, IPAddress.Any, port, bindAddress);
         Roster = new StudentRoster(_server);
         Grid = new TeacherGridViewModel(Roster);
+
+        // TT-9-C — mix the students the teacher is listening to. Before this, these three
+        // server events had NO subscriber (student mic PCM was decoded then dropped).
+        _mixer = new TeacherAudioMixer();
+        _mixer.StatusChanged += (mixed, open, cap) => MixStatusChanged?.Invoke(mixed, open, cap);
+        _server.StudentAudioFrameReceived += (_, e) => _mixer.OnFrame(e.StudentId, e.Frame);
+        _server.StudentAudioStreamStopped += (_, id) => _mixer.OnStopped(id);
+        _server.StudentLeft += (_, id) => _mixer.OnStopped(id);   // disconnect → free the mix node
     }
 
     public Task StartAsync() => _server.StartAsync(CancellationToken.None);
@@ -113,6 +122,20 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudent
     public Task BroadcastScreenFrameAsync(ScreenStreamFrameMessage frame, CancellationToken ct)
         => _server.BroadcastScreenFrameAsync(frame, ct);
 
+    // ─────── TT-9-C: teacher mic-monitor + multi-student mix ───────
+    // Open/close a targeted student's mic (MicMonitorStart/Stop, already ported); the
+    // inbound StudentAudioStreamFrame then feeds TeacherAudioMixer (wired in the ctor).
+
+    public Task ListenToStudentAsync(Guid studentId, CancellationToken ct)
+        => _server.SendMicMonitorStartAsync(studentId, ct);
+
+    public Task StopListeningToStudentAsync(Guid studentId, CancellationToken ct)
+        => _server.SendMicMonitorStopAsync(studentId, ct);
+
+    /// <summary>(mixed, open, cap) whenever the listened-mic mix changes — drives a visible
+    /// "N of M open — mixing {cap}" indicator when the cap is exceeded (never a silent drop).</summary>
+    public event Action<int, int, int>? MixStatusChanged;
+
     public string ListenAddress
     {
         get
@@ -128,6 +151,7 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudent
     {
         if (_disposed) return;
         _disposed = true;
+        _mixer.Dispose();    // stop the mix engine + release player nodes
         _server.Dispose();   // _cts.Cancel() + _listener.Stop() → socket released
     }
 

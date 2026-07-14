@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using ClassroomCtrl.Avalonia.Teacher.Services;
 using ClassroomCtrl.Avalonia.Teacher.ViewModels;
 using ClassroomCtrl.Avalonia.Teacher.Views;
@@ -56,6 +57,16 @@ public partial class App : Application
             var chat = new ChatViewModel(_session, sound, _session.Grid, mainVm.ShowToast);
             mainVm.Chat = chat;
             _session.Grid.AttachMessaging(_session, sound, mainVm.ShowToast);
+
+            // TT-9-C: teacher mic-monitor + multi-student mix. The tile's "Listen to mic" toggle
+            // opens/closes a student's mic (MicMonitorStart/Stop); inbound StudentAudioStreamFrame
+            // then feeds the session's TeacherAudioMixer (native N-source mix). The mix status
+            // ("N of M open — mixing 12" when the cap bites) is surfaced on the header, never a
+            // silent drop. MixStatusChanged fires on a transport thread → marshal to the UI.
+            _session.Grid.MicMonitorAction = (id, listen, ct) =>
+                listen ? _session.ListenToStudentAsync(id, ct) : _session.StopListeningToStudentAsync(id, ct);
+            _session.MixStatusChanged += (mixed, open, cap) =>
+                Dispatcher.UIThread.Post(() => _session.Grid.SetMixStatus(mixed, open, cap));
 
             // TT-8-C: Share My Screen — capture the teacher's screen + broadcast to all students
             // (frames lossy; STOP reliable — bug #5). The session is the ITeacherScreenSink.

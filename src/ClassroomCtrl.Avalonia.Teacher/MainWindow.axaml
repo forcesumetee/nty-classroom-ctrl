@@ -19,6 +19,12 @@
                                Foreground="{StaticResource ConfTextSecondaryBrush}" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
+                    <!-- TT-9-C: multi-student mic mix status — "Listening to N mics", or the cap
+                         notice when open mics exceed the mixer cap (visible degradation, not silent). -->
+                    <TextBlock Text="{Binding Grid.MixStatus}" VerticalAlignment="Center" FontSize="11"
+                               Foreground="{StaticResource ConfTextSecondaryBrush}" MaxWidth="260"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding Grid.MixStatus, Converter={x:Static ac:StringConverters.IsNotNullOrEmpty}}"/>
                     <!-- TT-8-C: Share My Screen (+ status; visible errors, not a silent no-op). -->
                     <TextBlock Text="{Binding ScreenShare.Status}" VerticalAlignment="Center" FontSize="11"
                                Foreground="{StaticResource ConfTextSecondaryBrush}" MaxWidth="320"

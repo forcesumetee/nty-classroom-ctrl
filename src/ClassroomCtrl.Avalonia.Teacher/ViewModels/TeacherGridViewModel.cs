@@ -90,6 +90,7 @@ public partial class TeacherGridViewModel : ObservableObject
                 Students.Add(new StudentTileViewModel(e.EndpointId, e.DisplayName, e.MachineName, e.OsVersion)
                 {
                     RecognizeCallback = RecognizeHandAsync,   // TT-7-C: tile's Recognize button lowers its hand
+                    ListenCallback = ToggleListenAsync,       // TT-9-C: tile's Listen toggle opens/closes its mic
                 });
             else
             {
@@ -277,5 +278,42 @@ public partial class TeacherGridViewModel : ObservableObject
         tile.IsHandRaised = false;
         tile.HandRaiseOrder = 0;
         RaisedHands.Remove(tile);
+    }
+
+    // ─────── TT-9-C: teacher mic-monitor + multi-student mix status ───────
+
+    /// <summary>Set by App: open/close a student's mic (studentId, listen?, ct) →
+    /// MicMonitorStart/Stop. Null until wired; the Listen toggle is a no-op until then.</summary>
+    public Func<Guid, bool, CancellationToken, Task>? MicMonitorAction { get; set; }
+
+    /// <summary>Visible mix state — "Listening to N mics", or the cap notice when open mics
+    /// exceed the mixer cap ("M mics open — mixing first C"). Empty when nothing is open.
+    /// The teacher is ALWAYS told when the cap is degrading the mix — never a silent drop.</summary>
+    [ObservableProperty] private string mixStatus = "";
+
+    /// <summary>Update the visible mix indicator. Call on the UI thread (App marshals the
+    /// session's MixStatusChanged). <paramref name="open"/> = mics streaming; <paramref
+    /// name="mixed"/> = those actually in the mix (≤ <paramref name="cap"/>).</summary>
+    public void SetMixStatus(int mixed, int open, int cap)
+    {
+        MixStatus = open <= 0 ? ""
+            : open <= cap ? $"🔊 Listening to {mixed} mic{(mixed == 1 ? "" : "s")}"
+            : $"🔊 {open} mics open — mixing first {cap} (cap)";
+    }
+
+    /// <summary>Toggle the teacher's mic-monitor for one student (MicMonitorStart/Stop). The
+    /// tile flips IsListening only after the send is issued. Fire-and-forget; a swallowed
+    /// error can't crash the Teacher (the toggle is re-issuable).</summary>
+    private async Task ToggleListenAsync(StudentTileViewModel tile)
+    {
+        var action = MicMonitorAction;
+        if (action is null) return;
+        bool turnOn = !tile.IsListening;
+        try
+        {
+            await action(tile.EndpointId, turnOn, CancellationToken.None);
+            tile.IsListening = turnOn;
+        }
+        catch { /* re-issuable */ }
     }
 }

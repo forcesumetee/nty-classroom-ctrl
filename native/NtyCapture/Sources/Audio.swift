@@ -284,3 +284,207 @@ public func nty_audio_play_stop() {
     PlayState.lock.lock(); let s = PlayState.session; PlayState.session = nil; PlayState.lock.unlock()
     s?.stop()
 }
+
+// MARK: - Multi-source mixer (TT-9-C) -----------------------------------------------
+// Teacher-side: mix N students' mic PCM (StudentAudioStreamFrame 0x032C) into one
+// output — path A of TT-9. This is the REUSABLE CORE, keyed by an opaque Int32 source
+// id: TT-11's student-side peer mixer will consume the same nty_mix_* ABI (mix N-1
+// peers, room-bounded). SEPARATE engine + state from capture and single-stream playback.
+//
+// THE LOAD-BEARING INVARIANT (non-blocking mix): ONE AVAudioPlayerNode per source, all
+// summed by the engine's mainMixerNode. A starved node (its sender stalled) plays
+// SILENCE and never blocks — so one stalled student never silences the class. This
+// reproduces the shipped NAudio ReadFully semantics STRUCTURALLY (independent nodes),
+// rather than by a hand-written pre-mix that could reintroduce head-of-line blocking.
+//
+// Per-source gain = 1/sqrt(activeCount): power-preserving so N summed voices don't clip
+// — a DELIBERATE improvement over the shipped StudentAudioMixer (no normalization → it
+// clips at high N). The CAP is enforced by the managed layer (TeacherAudioMixer), which
+// can surface "N of M open" to the teacher; the native core just mixes what it is given.
+//
+// Counters (nty_mix_rendered_frames / _source_played / _output_rms) exist so the
+// TT-9-D kill-one-sender stall test can ASSERT the invariant headlessly: kill a source
+// → rendered_frames keeps advancing (class plays on) + the survivor's played count keeps
+// advancing while the killed source's freezes.
+
+private final class MixSource {
+    let node = AVAudioPlayerNode()
+    let lock = NSLock()
+    var pending = 0
+    var started = false
+    var played: Int64 = 0
+    let prebuffer = 2                    // ~200 ms before play() — absorb arrival jitter
+    let maxPending = 10                  // cap (~1 s) — drop beyond this to bound latency
+}
+
+private final class MixerSession {
+    let engine = AVAudioEngine()
+    let format: AVAudioFormat            // float32 @ rate, mono — engine resamples to device
+    let lock = NSLock()
+    var sources: [Int32: MixSource] = [:]
+    var rendered: Int64 = 0              // output buffers rendered (mainMixerNode tap)
+    var outRms: Int32 = 0               // last mixed-output RMS 0..100 (level meter)
+
+    init?(sampleRate: Double, channels: AVAudioChannelCount) {
+        guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channels)
+        else { return nil }
+        format = fmt
+        // Touch mainMixerNode (builds mixer→output), then tap it to count rendered
+        // buffers — the "the mix is still advancing" signal for the stall test. The tap
+        // fires on the audio thread whenever the engine renders, even silence.
+        let mixer = engine.mainMixerNode
+        mixer.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buf, _ in
+            guard let self = self else { return }
+            self.rendered &+= 1
+            if let ch = buf.floatChannelData, buf.frameLength > 0 {
+                let n = Int(buf.frameLength); var sum = 0.0
+                let p = ch[0]; for i in 0..<n { let v = Double(p[i]); sum += v * v }
+                self.outRms = Int32(min(100.0, (sum / Double(n)).squareRoot() * 300.0))
+            }
+        }
+        engine.prepare()
+        do { try engine.start() } catch { mixer.removeTap(onBus: 0); return nil }
+    }
+
+    func addSource(_ id: Int32) {
+        lock.lock(); defer { lock.unlock() }
+        if sources[id] != nil { return }
+        let s = MixSource()
+        engine.attach(s.node)
+        engine.connect(s.node, to: engine.mainMixerNode, format: format)
+        sources[id] = s
+        recomputeGainsLocked()
+    }
+
+    func removeSource(_ id: Int32) {
+        lock.lock(); defer { lock.unlock() }
+        guard let s = sources.removeValue(forKey: id) else { return }
+        s.node.stop()
+        engine.detach(s.node)              // frees the node — no leaked mixer input eating CPU
+        recomputeGainsLocked()
+    }
+
+    // Power-preserving normalization: N incoherent voices each scaled by 1/sqrt(N) sum
+    // to ~unit RMS instead of N× (which clips). Recomputed on every add/remove.
+    private func recomputeGainsLocked() {
+        let count = sources.count
+        let g = count > 0 ? Float(1.0 / Double(count).squareRoot()) : 1.0
+        for s in sources.values { s.node.volume = g }
+    }
+
+    func push(_ id: Int32, _ bytes: UnsafePointer<UInt8>, _ length: Int) {
+        lock.lock(); let s = sources[id]; lock.unlock()
+        guard let s = s else { return }                    // not added (capped/removed) → drop
+        let sampleCount = length / 2
+        guard sampleCount > 0 else { return }
+
+        s.lock.lock(); let p = s.pending; s.lock.unlock()
+        if p >= s.maxPending { return }                    // overrun guard → drop
+
+        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleCount)),
+              let ch = buf.floatChannelData else { return }
+        buf.frameLength = AVAudioFrameCount(sampleCount)
+        let dst = ch[0]
+        for i in 0..<sampleCount {
+            let v = Int16(bitPattern: UInt16(bytes[i * 2]) | (UInt16(bytes[i * 2 + 1]) << 8))
+            dst[i] = Float(v) / 32768.0
+        }
+
+        s.lock.lock(); s.pending += 1; let cnt = s.pending; s.lock.unlock()
+        s.node.scheduleBuffer(buf) { [weak s] in
+            guard let s = s else { return }
+            s.lock.lock(); s.pending -= 1; s.played &+= 1; s.lock.unlock()
+        }
+        if !s.started && cnt >= s.prebuffer {
+            s.started = true
+            s.node.play()
+        }
+    }
+
+    func played(_ id: Int32) -> Int64 {
+        lock.lock(); let s = sources[id]; lock.unlock()
+        guard let s = s else { return -1 }
+        s.lock.lock(); defer { s.lock.unlock() }
+        return s.played
+    }
+
+    func count() -> Int32 { lock.lock(); defer { lock.unlock() }; return Int32(sources.count) }
+
+    func stop() {
+        lock.lock(); let ss = sources; sources.removeAll(); lock.unlock()
+        for s in ss.values { s.node.stop(); engine.detach(s.node) }
+        engine.mainMixerNode.removeTap(onBus: 0)
+        if engine.isRunning { engine.stop() }
+    }
+}
+
+private enum MixState {
+    static let lock = NSLock()
+    static var session: MixerSession?
+}
+
+/// TT-9-C — start the teacher mix engine at sampleRate×channels (0 → 16000/1).
+/// Returns 0, -3 already running, -7 engine failed (e.g. no output device).
+@_cdecl("nty_mix_start")
+public func nty_mix_start(_ sampleRate: Int32, _ channels: Int32) -> Int32 {
+    MixState.lock.lock(); defer { MixState.lock.unlock() }
+    if MixState.session != nil { return -3 }
+    let rate = sampleRate > 0 ? Double(sampleRate) : 16000.0
+    let chs = AVAudioChannelCount(channels > 0 ? channels : 1)
+    guard let s = MixerSession(sampleRate: rate, channels: chs) else { return -7 }
+    MixState.session = s
+    return 0
+}
+
+/// Register a source (creates its player node + recomputes gains). Idempotent.
+@_cdecl("nty_mix_add")
+public func nty_mix_add(_ sourceId: Int32) {
+    MixState.lock.lock(); let s = MixState.session; MixState.lock.unlock()
+    s?.addSource(sourceId)
+}
+
+/// Enqueue one PCM16-LE frame for a registered source (call-scoped bytes; dropped if
+/// the source isn't registered — i.e. capped or removed).
+@_cdecl("nty_mix_push")
+public func nty_mix_push(_ sourceId: Int32, _ data: UnsafePointer<UInt8>?, _ length: Int32) {
+    guard let data = data, length > 0 else { return }
+    MixState.lock.lock(); let s = MixState.session; MixState.lock.unlock()
+    s?.push(sourceId, data, Int(length))
+}
+
+/// Remove a source (stops + detaches its node; recomputes gains). Idempotent — the
+/// disconnect-cleanup path so a departed student's node can't leak CPU.
+@_cdecl("nty_mix_remove")
+public func nty_mix_remove(_ sourceId: Int32) {
+    MixState.lock.lock(); let s = MixState.session; MixState.lock.unlock()
+    s?.removeSource(sourceId)
+}
+
+@_cdecl("nty_mix_stop")
+public func nty_mix_stop() {
+    MixState.lock.lock(); let s = MixState.session; MixState.session = nil; MixState.lock.unlock()
+    s?.stop()
+}
+
+@_cdecl("nty_mix_active_count")
+public func nty_mix_active_count() -> Int32 {
+    MixState.lock.lock(); let s = MixState.session; MixState.lock.unlock(); return s?.count() ?? 0
+}
+
+@_cdecl("nty_mix_rendered_frames")
+public func nty_mix_rendered_frames() -> Int64 {
+    MixState.lock.lock(); let s = MixState.session; MixState.lock.unlock(); return s?.rendered ?? 0
+}
+
+@_cdecl("nty_mix_output_rms")
+public func nty_mix_output_rms() -> Int32 {
+    MixState.lock.lock(); let s = MixState.session; MixState.lock.unlock(); return s?.outRms ?? 0
+}
+
+/// Per-source count of frames actually PLAYED (scheduleBuffer completions). Freezes when
+/// a source stalls; -1 if the source isn't registered. The survivor-vs-killed signal for
+/// the TT-9-D stall test.
+@_cdecl("nty_mix_source_played")
+public func nty_mix_source_played(_ sourceId: Int32) -> Int64 {
+    MixState.lock.lock(); let s = MixState.session; MixState.lock.unlock(); return s?.played(sourceId) ?? -1
+}

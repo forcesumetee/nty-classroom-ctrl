@@ -233,6 +233,36 @@ int nty_audio_play_start(int sampleRate, int channels);
 void nty_audio_play_pcm(const uint8_t *data, int length);
 void nty_audio_play_stop(void);
 
+/*
+ * Multi-source mixer — TT-9-C (path A of TT-9: teacher mixes N students' mics).
+ * The REUSABLE CORE, keyed by an opaque Int32 source id — TT-11's student peer mixer
+ * reuses the same ABI. SEPARATE engine/state from capture + single-stream playback.
+ *
+ * Invariant: ONE AVAudioPlayerNode per source, summed by mainMixerNode. A starved node
+ * plays SILENCE and never blocks → one stalled sender never silences the mix (the
+ * shipped NAudio ReadFully semantics, structural). Per-source gain = 1/sqrt(count)
+ * (power-preserving; avoids the shipped mixer's un-normalized clipping). The CAP is a
+ * managed-layer policy (TeacherAudioMixer); the core mixes whatever it is given.
+ *   nty_mix_start          — start the mix engine (0 → 16000/1). 0, -3 running, -7 engine.
+ *   nty_mix_add            — register a source (player node + gain recompute). Idempotent.
+ *   nty_mix_push           — enqueue one PCM16-LE frame for a source (dropped if unregistered).
+ *   nty_mix_remove         — remove a source (stop + detach + gain recompute). Disconnect cleanup.
+ *   nty_mix_stop           — tear the engine down. Safe when idle.
+ *   nty_mix_active_count   — number of registered sources.
+ *   nty_mix_rendered_frames— output buffers rendered (advances while the mix plays).
+ *   nty_mix_output_rms     — last mixed-output RMS 0..100 (level meter).
+ *   nty_mix_source_played  — frames PLAYED for a source (freezes on stall; -1 if unregistered).
+ */
+int nty_mix_start(int sampleRate, int channels);
+void nty_mix_add(int sourceId);
+void nty_mix_push(int sourceId, const uint8_t *data, int length);
+void nty_mix_remove(int sourceId);
+void nty_mix_stop(void);
+int nty_mix_active_count(void);
+int64_t nty_mix_rendered_frames(void);
+int nty_mix_output_rms(void);
+int64_t nty_mix_source_played(int sourceId);
+
 /* ==========================================================================
  * Screen lock — Phase 30-B (Sources/Lock.swift).
  * HARD kiosk-lite lock (exceeds the soft Windows teacher-lock): a borderless
