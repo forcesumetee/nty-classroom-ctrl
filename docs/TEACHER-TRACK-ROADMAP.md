@@ -3,7 +3,7 @@
 > 🔴 **RE-SCOPE 2026-07-14 — READ §0 (top of file) FIRST.** Customer B (Mac teacher + Mac students,
 > 50 seats) wants ALL 7 previously-"deferred" features. **NO new wire needed** (except restoring
 > `Exam.Shared`). Critical path **CORRECTED** — the conference is *silent* without audio, so TT-9 +
-> TT-10 move onto it. Honest completion (**TT-0…TT-9 done; TT-9 LIVE 2026-07-14**): **Teacher ~50% · Student ~60% · System ~47%.**
+> TT-10 move onto it. Honest completion (**TT-0…TT-9 + TT-10-B done; TT-9 LIVE 2026-07-14**): **Teacher ~52% · Student ~60% · System ~48%.** 🔴 **FINAL Mac session 2026-07-14 — see `PROJECT-HANDOVER.md` (no more Mac access after today).**
 > Companion: `docs/STUDENT-TRACK-ROADMAP-V2.md`. The §5 phase list below is **superseded by §0**
 > where they conflict (§5 kept for the TT-0…TT-6 history).
 
@@ -85,7 +85,8 @@ channels (`_audioOutbox`/`_voiceOutbox` vs the video `_outbox`). Consequences:
 | **TT-7 ✅** | Chat + hand-raise + reactions (+ Mac-Student SEND) | no | ⚠️ aggregation | **M·LOW** | **DONE + LIVE 2026-07-14** — hand-raise send pre-existed; chat/reaction send + DMs reliable; bug #6 fixed |
 | **TT-8 ✅** | Teacher "Share My Screen" | no (reuse M17/M18) | ⚠️ broadcast | **M·LOW–MED** | **DONE + LIVE 2026-07-14** — Teacher bundle (Screen Rec TCC); shared Media decode lib; item #10 done; bug #5 fixed |
 | **TT-9 ✅** | Student audio mixing | extend M20 (native nty_mix_*) | 🟢 no (0x032B/C/D vendored) | **M·MED** | **DONE + LIVE 2026-07-14** — reusable N-node mixer core (TT-11 reuses it); **3 deliberate divergences** (cap w/ visible degrade · gain-norm · one core vs shipped's two mixers); kill-one-sender STALL gate; teacher-only ~10%/core at N=25 **and** N=50 (cap-bounded). See `docs/TT-9-FINDINGS.md` + `TT-9-LIVE-CONFIRMATION.md` |
-| **TT-10** | Teacher audio broadcast + mic-monitor | reuse M20 | ⚠️ | **M–H·MED–HIGH** | **ON critical path**; system-loopback gap (§6) |
+| **TT-10-B ✅** | Teacher audio BROADCAST ("Talk to Class") | reuse M20 | 🟢 no | **M·LOW–MED** | **DONE 2026-07-14** (gate-green; LIVE-pending) — teacher mic → all students; SHIPPED BUG #7 (audio Start/Stop lossy) fixed in port. See `PROJECT-HANDOVER.md` |
+| **TT-10 (rest)** | mic-monitor (done via TT-9) + **"Share Computer Audio"** (system loopback) | reuse M20 / SCK | ⚠️ | **M·MED** | system-audio: ⚠️ **first-party API real (SCK capturesAudio, no BlackHole to instantiate); 0 buffers headless → needs foreground-app confirm.** See `TT-10-SYSTEM-AUDIO-PROBE.md`. 🔴 **TOR 11.2.1 power-ON cannot be met on Apple Silicon** — see `TOR-COMPLIANCE.md` |
 | **TT-11** | Camera + Conference (star relay) **+ peer audio** | reuse M19 + student voice mixer | 🔴 yes (flagship) | **L·HIGH** | + peer audio (rides 0x0640, **NO new wire**; star-relay + student mixer; AEC open — §0.6) |
 | **TT-12a** | File distribution | no | ⚠️ broadcast | **S·LOW** | reliable channel |
 | **TT-12b** | **Net movie** | 🔴 AVPlayer + sync | ⚠️ broadcast | **M·MED** | rides TT-12a transport; teacher SEND ported |
@@ -456,18 +457,16 @@ Everything else (screen capture, H.264 encode, camera, mic capture, single-strea
 Distinct from the optional *features* above: these are **known gaps/fixes** surfaced by the port, each
 recorded so it isn't re-investigated. None block the current Teacher-track phases.
 
-- **Windows-track follow-ups (6) — all found in the macOS port, all v1.2.x candidates; shipped repo
-  untouched.** ① **v1.2.1 installer** (ship — customer commitment); ② **teacher-mic `WaveInEvent`
-  robustness** (M20 — brittle fixed-format capture); ③ **roster namespace-gap** (peerId vs EndpointId →
-  wrong-student-greys-out at 50; found TT-1); ④ **per-student lossy-channel commands** (per-student
-  commands defaulted `reliable:false` → DropOldest; found TT-5-A); ⑤ **lossy `ScreenStreamStop`**
-  (a dropped Stop under a frame flood strands a student in the takeover viewer; found TT-8-A →
-  Stop→reliable, Start stays lossy); ⑥ **lossy `SendHandLowerAsync`** (Recognize's hand-lower is a
-  targeted STATE TOGGLE on the lossy queue → a dropped lower clears the teacher's UI but leaves the
-  student's hand raised = permanent desync; found TT-7 → routed reliable in the port). *All fixed in
-  the port; reported to the Windows team; we do not touch the shipped repo.*
+- **Windows-track follow-ups (7) — all found in the macOS port, all v1.2.x candidates; shipped repo
+  untouched. Definitive list w/ file:line in `PROJECT-HANDOVER.md` §3.** ① **v1.2.1 installer** (ship);
+  ② **teacher-mic `WaveInEvent`** brittleness (M20); ③ **roster namespace-gap** (peerId vs EndpointId →
+  wrong-student removed at 50; found TT-1); ④ **per-student lossy-channel commands** (found TT-5-A);
+  ⑤ **lossy `ScreenStreamStop`** (found TT-8-A); ⑥ **lossy `SendHandLowerAsync`** + `BroadcastReactionAsync`,
+  doc says reliable (found TT-7); ⑦ **lossy `AudioStreamStart/Stop`** (dropped Stop strands every
+  student's playback session open; student re-creates the player on a straggler frame → can't self-heal;
+  found TT-10-B). *All fixed in the port; reported to the Windows team; we do not touch the shipped repo.*
 
-  🔴 **RECOMMEND A SWEEP, NOT SIX POINT FIXES.** **THREE of the six (④⑤⑥) are the same bug class:** a
+  🔴 **RECOMMEND A SWEEP, NOT SEVEN POINT FIXES.** **FOUR of the seven (④⑤⑥⑦) are the same bug class:** a
   **control/state message riding the lossy (DropOldest) video/broadcast queue.** Dropping such a
   message leaves a client in a state the server thinks it left — a *stuck state*. v1.2.1 fixed ONE
   instance (bulk commands); the class was never swept. **The invariant to hand the Windows team:** for
