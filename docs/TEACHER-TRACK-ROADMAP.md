@@ -68,6 +68,10 @@ channels (`_audioOutbox`/`_voiceOutbox` vs the video `_outbox`). Consequences:
   was never wired to the conference (breakout-only). If customer B expects peer-to-peer conference
   audio, that is **net-new work** (a 0x0640-style relay bound to `ConferenceId`), not a port.
 
+> **FLAG 1 status (2026-07-14): pending sales.** Build TT-9/TT-10 for the **shipped teacher↔student
+> model only**; keep the audio mix seam **add-not-rewrite** (TT-3 render-seam discipline) so a peer
+> mix bus can be ADDED later without a rewrite. **Do NOT build peer audio yet.** Does not block batch 1.
+
 ### 0.3 Revised phase table (TT-7 … TT-18)
 🔴 = multi-peer topology (build + LIVE with ≥2 students); ⚠️ = milder multi-student (aggregation/broadcast).
 
@@ -438,12 +442,15 @@ Everything else (screen capture, H.264 encode, camera, mic capture, single-strea
 Distinct from the optional *features* above: these are **known gaps/fixes** surfaced by the port, each
 recorded so it isn't re-investigated. None block the current Teacher-track phases.
 
-- **Windows-track follow-ups (4) — all found/fixed in the macOS port, all v1.2.x candidates; shipped
+- **Windows-track follow-ups (5) — all found/fixed in the macOS port, all v1.2.x candidates; shipped
   repo untouched:** ① **v1.2.1 installer** (ship — customer commitment); ② **teacher-mic `WaveInEvent`
   robustness** (M20 — brittle fixed-format capture); ③ **roster namespace-gap** (peerId vs EndpointId →
   wrong-student-greys-out at 50; found TT-1, fixed in port); ④ **per-student lossy-channel** (per-student
-  commands defaulted `reliable:false` → DropOldest; found TT-5-A, fixed in port). *Reports to the Windows
-  team; we do not touch the shipped repo.*
+  commands defaulted `reliable:false` → DropOldest; found TT-5-A, fixed in port); ⑤ **lossy
+  `ScreenStreamStop`** (teacher-screen Stop routes DropOldest → a dropped Stop under a frame flood
+  strands a student in the takeover viewer; camera Start/Stop was already reliable, screen wasn't; found
+  TT-8-A, fixing in the port by promoting **Stop→reliable, Start stays lossy** — asymmetry deliberate).
+  *Reports to the Windows team; we do not touch the shipped repo.*
 - **Student-track follow-ups (macOS enforcement gaps — block Mac-only feature parity for customer B):**
   **macOS power execution** (Sandbox has no logoff/restart/shutdown handler — power is a no-op on Mac;
   Teacher disables it per-platform) and **macOS policy enforcement** (Sandbox shows a policy badge but

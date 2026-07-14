@@ -21,7 +21,7 @@ namespace ClassroomCtrl.Avalonia.Teacher.Services;
 /// Extracted (not inlined in App) so the socket-teardown is unit-testable — the
 /// same "never leave :7777 bound" discipline as TeacherHost / the TT-1 self-tests.
 /// </summary>
-public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudentCommandSink
+public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudentCommandSink, ITeacherMessaging
 {
     private readonly ControlServer _server;
     private bool _disposed;
@@ -69,6 +69,40 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudent
 
     public Task PowerAsync(Guid endpointId, MessageType type, bool reliable, CancellationToken ct)
         => _server.PowerOneAsync(endpointId, type, ct, reliable);
+
+    // ─────── TT-7-B: ITeacherMessaging — chat / hand-raise / reaction seam ───────
+    // Same passthrough shape as the two seams above. The DM send bakes in reliable:true
+    // (the seam guarantees a DM never rides the DropOldest queue — TT-5-A discipline).
+
+    public event EventHandler<ChatMessage>? ChatReceived
+    {
+        add => _server.ChatReceived += value;
+        remove => _server.ChatReceived -= value;
+    }
+
+    public event EventHandler<HandRaiseMessage>? HandRaiseReceived
+    {
+        add => _server.HandRaiseReceived += value;
+        remove => _server.HandRaiseReceived -= value;
+    }
+
+    public event EventHandler<(Guid SenderId, ReactionMessage Msg)>? ReactionReceived
+    {
+        add => _server.ReactionReceived += value;
+        remove => _server.ReactionReceived -= value;
+    }
+
+    public Task BroadcastChatAsync(string text, CancellationToken ct)
+        => _server.BroadcastChatAsync(text, ct);
+
+    public Task SendDirectMessageAsync(Guid endpointId, string text, CancellationToken ct)
+        => _server.SendDirectMessageAsync(endpointId, text, ct, reliable: true);
+
+    public Task BroadcastReactionAsync(ReactionMessage msg, CancellationToken ct)
+        => _server.BroadcastReactionAsync(msg, ct);
+
+    public Task SendHandLowerAsync(Guid studentId, CancellationToken ct)
+        => _server.SendHandLowerAsync(studentId, ct);
 
     public string ListenAddress
     {

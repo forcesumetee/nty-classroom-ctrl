@@ -51,7 +51,7 @@ Effort: S ≈ 1–2 d, M ≈ 3–5 d, L ≈ 1–2 wk (loose). "New native" = new
 | # | Item | What the Student must gain | New native | TCC | Effort·Risk | Gates |
 |---|---|---|---|---|---|---|
 | 1 | **Power execution** | logoff/restart/shutdown handler (no-op today) | 🔴 NSWorkspace / `osascript` | **Automation (Apple Events)** — NEW, *or* admin | M · MED | (Teacher power-gate; not one of the 7) |
-| 2 | **Policy enforcement** | actually block USB/print/sites/processes (reflect-only today) | 🔴 config-profile / system-extension class | **MDM-class** — may be out of reach without MDM | **L · HIGH** | TT-5/TT-6 deferred policy |
+| 2 | **Policy enforcement** | actually block USB/print/sites/processes (reflect-only today) | 🔴 config-profile / system-extension class | **MDM-class** | 🔴 **RISK — see §6; DO NOT BUILD** | TT-5/TT-6 deferred policy |
 | 3 | **Chat SEND** | text input → `ChatBroadcast`/`ChatDirect` (receive exists) | no | none | S · LOW | TT-7 |
 | 4 | **Reaction SEND** | emoji picker → `Reaction` | no | none | S · LOW | TT-7 |
 | — | *(Hand-raise SEND)* | *already exists (`RaiseHand` command)* | — | — | **done** | TT-7 |
@@ -106,3 +106,32 @@ different mechanism entirely, and may be **partial-only** on macOS without an MD
   (remote inject, AVPlayer, capture-to-file is teacher-side). The base half is the bigger *effort*
   chunk; the remaining half is the broader *feature* surface.
 - **The "95%" was measuring the wrong denominator.** Recorded so it isn't quoted again.
+
+---
+
+## 6. 🔴 RISK (not a task) — policy enforcement is MDM-class · pending sales (2026-07-14)
+
+Item #2 is a **RISK, not a scheduled task.** Real enforcement of USB / printing / app / site blocking
+on macOS is **not achievable by an ordinary app** (sandboxed or not) — it requires MDM enrollment or
+installed configuration profiles. This is a **business blocker**, not an engineering task.
+
+**Actual macOS mechanisms — and whether they work WITHOUT MDM:**
+
+| Restriction | macOS mechanism | Without MDM? |
+|---|---|---|
+| USB / external media | config-profile media-access restriction / MDM `Restrictions` payload; USB Restricted Mode | ❌ no app API; needs profile + supervision |
+| Printing | MDM / config-profile print restriction | ❌ no system-wide app-level block |
+| App launching | Screen Time / `com.apple.applicationaccess` payload | ❌ MDM/config-profile; legacy app API removed |
+| Web / site filtering | content-filter Network Extension (special entitlement + user approval) or MDM web-content-filter | ⚠️ NE possible but heavy (entitlement + approval) |
+
+Config profiles not delivered by MDM must be **manually installed**, and many payloads need
+**supervision** (Apple Business Manager). **Bottom line: without MDM, macOS policy enforcement is
+effectively unavailable to this app.**
+
+**Business questions (for sales):**
+1. Are customer B's 50 Macs enrolled in an MDM (Jamf / Mosyle / ABM-supervised)?
+2. If not — is "policy does not enforce on Mac" acceptable, or a dealbreaker?
+3. If they'd need to buy/deploy MDM — that's cost + IT work **outside our scope**.
+
+The honest customer answer may be **"policy is Windows-only."** Say it early, not at delivery.
+🔴 **DO NOT attempt policy enforcement until sales returns.**
