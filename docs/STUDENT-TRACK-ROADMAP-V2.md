@@ -51,7 +51,7 @@ Effort: S ≈ 1–2 d, M ≈ 3–5 d, L ≈ 1–2 wk (loose). "New native" = new
 | # | Item | What the Student must gain | New native | TCC | Effort·Risk | Gates |
 |---|---|---|---|---|---|---|
 | 1 | **Power execution** | logoff/restart/shutdown handler (no-op today) | 🔴 NSWorkspace / `osascript` | **Automation (Apple Events)** — NEW, *or* admin | M · MED | (Teacher power-gate; not one of the 7) |
-| 2 | **Policy enforcement** | actually block USB/print/sites/processes (reflect-only today) | 🔴 config-profile / system-extension class | **MDM-class** | 🔴 **RISK — see §6; DO NOT BUILD** | TT-5/TT-6 deferred policy |
+| 2 | ~~Policy enforcement~~ | **OUT OF SCOPE — Windows-only** (§6) | — | — | ❌ **removed — macOS can't (no MDM)** | Teacher UI: Mac = visibly unavailable |
 | 3 ✅ | **Chat SEND** | text input → `ChatBroadcast` (receive exists) | no | none | S · LOW | **DONE — TT-7 (LIVE 2026-07-14)** |
 | 4 ✅ | **Reaction SEND** | emoji picker → `Reaction` 0x0674 | no | none | S · LOW | **DONE — TT-7** |
 | — ✅ | *(Hand-raise SEND)* | *already existed (`RaiseHand`)* | — | — | done | TT-7 |
@@ -103,37 +103,38 @@ different mechanism entirely, and may be **partial-only** on macOS without an MD
   encode, decode-reuse, camera, mic, playback, lock) is built and LIVE-proven.
 - **Against full customer-B scope: ~60%** (was ~55% at re-scope). **Batch 1 (2026-07-14) completed
   chat-send (#3), reaction-send (#4), and teacher-screen RECEIVE+display (#5 — the TT-8-A "item
-  #10").** Remaining = 8 items, incl. two **L·HIGH** (breakout, quiz), one **HIGH/RISK** (policy —
-  §6, MDM class), and the new-native ones (remote inject, AVPlayer movie; capture-to-file is
-  teacher-side). The base half is the bigger *effort* chunk; the remaining half is the broader
-  *feature* surface.
+  #10").** Remaining = **7 buildable items** (policy carved out as Windows-only, §6), incl. two
+  **L·HIGH** (breakout, quiz) and the new-native ones (remote inject, AVPlayer movie; capture-to-file
+  is teacher-side). PLUS, with TT-11 conference: a **student-side voice mixer** for peer audio
+  (Answer 1 — mix N-1 peers, skip own; rides `VoiceAudioFrame` 0x0640, **no new wire**). The base
+  half is the bigger *effort* chunk; the remaining half is the broader *feature* surface.
 - **The "95%" was measuring the wrong denominator.** Recorded so it isn't quoted again.
 
 ---
 
-## 6. 🔴 RISK (not a task) — policy enforcement is MDM-class · pending sales (2026-07-14)
+## 6. ✅ RESOLVED (2026-07-14) — policy enforcement is WINDOWS-ONLY (customer B has no MDM)
 
-Item #2 is a **RISK, not a scheduled task.** Real enforcement of USB / printing / app / site blocking
-on macOS is **not achievable by an ordinary app** (sandboxed or not) — it requires MDM enrollment or
-installed configuration profiles. This is a **business blocker**, not an engineering task.
+**Decision (from sales): customer B's Macs are NOT MDM-enrolled → macOS policy enforcement is
+unavailable → policy is Windows-only.** Item #2 is **removed as a task** and recorded as a **KNOWN
+LIMITATION**, not a RISK. Real enforcement of USB / printing / app / site blocking on macOS is **not
+achievable by an ordinary app** — it needs MDM enrollment or installed configuration profiles, which
+customer B does not have.
 
-**Actual macOS mechanisms — and whether they work WITHOUT MDM:**
+**KNOWN LIMITATION (sales must state to customer B early, before deployment):** *USB / optical /
+printing / app blocking is **Windows-only**. macOS students cannot be policy-enforced without MDM
+enrollment. This is a real cross-platform capability gap.*
 
+**Teacher-side policy UI (when eventually built):** a Mac student's policy action is a **NO-OP by
+platform** → show it **visibly unavailable** (greyed, like the TT-5 power actions on Macs), never
+silently ignored — so the teacher knows it won't take effect on that student.
+
+**Why (for the record) — macOS mechanisms, none of which work without MDM:**
 | Restriction | macOS mechanism | Without MDM? |
 |---|---|---|
-| USB / external media | config-profile media-access restriction / MDM `Restrictions` payload; USB Restricted Mode | ❌ no app API; needs profile + supervision |
-| Printing | MDM / config-profile print restriction | ❌ no system-wide app-level block |
-| App launching | Screen Time / `com.apple.applicationaccess` payload | ❌ MDM/config-profile; legacy app API removed |
-| Web / site filtering | content-filter Network Extension (special entitlement + user approval) or MDM web-content-filter | ⚠️ NE possible but heavy (entitlement + approval) |
+| USB / external media | config-profile / MDM `Restrictions`; USB Restricted Mode | ❌ no app API |
+| Printing | MDM / config-profile print restriction | ❌ no app-level block |
+| App launching | Screen Time / `com.apple.applicationaccess` | ❌ MDM/config-profile only |
+| Web / site filtering | content-filter Network Extension or MDM | ⚠️ NE heavy (entitlement + approval) |
 
-Config profiles not delivered by MDM must be **manually installed**, and many payloads need
-**supervision** (Apple Business Manager). **Bottom line: without MDM, macOS policy enforcement is
-effectively unavailable to this app.**
-
-**Business questions (for sales):**
-1. Are customer B's 50 Macs enrolled in an MDM (Jamf / Mosyle / ABM-supervised)?
-2. If not — is "policy does not enforce on Mac" acceptable, or a dealbreaker?
-3. If they'd need to buy/deploy MDM — that's cost + IT work **outside our scope**.
-
-The honest customer answer may be **"policy is Windows-only."** Say it early, not at delivery.
-🔴 **DO NOT attempt policy enforcement until sales returns.**
+**Net effect on scope:** this REMOVES a hard MDM-class item — the Student track's remaining buildable
+work shrinks by one (policy is now a documented limitation, not a phase).

@@ -68,9 +68,14 @@ channels (`_audioOutbox`/`_voiceOutbox` vs the video `_outbox`). Consequences:
   was never wired to the conference (breakout-only). If customer B expects peer-to-peer conference
   audio, that is **net-new work** (a 0x0640-style relay bound to `ConferenceId`), not a port.
 
-> **FLAG 1 status (2026-07-14): pending sales.** Build TT-9/TT-10 for the **shipped teacher↔student
-> model only**; keep the audio mix seam **add-not-rewrite** (TT-3 render-seam discipline) so a peer
-> mix bus can be ADDED later without a rewrite. **Do NOT build peer audio yet.** Does not block batch 1.
+> **FLAG 1 RESOLVED (2026-07-14): peer audio = YES** (net-new, Zoom-style — everyone hears everyone).
+> 🟢 **NO new wire** — rides the existing `VoiceAudioFrame 0x0640` (group-targeted, sender-excluded)
+> + `Envelope.TargetGroupId`; the 13-session byte-stability holds. **Topology: star-relay + student-
+> side voice mixer** — the teacher forwards each frame to group peers via the ported 0x0640 relay
+> (just bind it to the ConferenceId; today it gates on breakout-room membership), and each student
+> mixes the N-1 incoming peers, skipping its own SenderId — matches the shipped receiver-mix design.
+> A **TT-11 addition, NOT a TT-9 reshape** (TT-9/TT-10 stay the shipped teacher↔student model). Open
+> technical item: **acoustic echo (AEC)** — see §0.6. Still: build TT-9/TT-10 first (shipped model).
 
 ### 0.3 Revised phase table (TT-7 … TT-18)
 🔴 = multi-peer topology (build + LIVE with ≥2 students); ⚠️ = milder multi-student (aggregation/broadcast).
@@ -81,7 +86,7 @@ channels (`_audioOutbox`/`_voiceOutbox` vs the video `_outbox`). Consequences:
 | **TT-8 ✅** | Teacher "Share My Screen" | no (reuse M17/M18) | ⚠️ broadcast | **M·LOW–MED** | **DONE + LIVE 2026-07-14** — Teacher bundle (Screen Rec TCC); shared Media decode lib; item #10 done; bug #5 fixed |
 | **TT-9** | Student audio mixing | extend M20 | 🔴 yes | **M·MED** | **ON critical path** (conference audio) |
 | **TT-10** | Teacher audio broadcast + mic-monitor | reuse M20 | ⚠️ | **M–H·MED–HIGH** | **ON critical path**; system-loopback gap (§6) |
-| **TT-11** | Camera + Conference (star relay) | reuse M19 | 🔴 yes (flagship) | **L·HIGH** | video-only relay; audio via TT-9/10; peer-audio net-new (0.2) |
+| **TT-11** | Camera + Conference (star relay) **+ peer audio** | reuse M19 + student voice mixer | 🔴 yes (flagship) | **L·HIGH** | + peer audio (rides 0x0640, **NO new wire**; star-relay + student mixer; AEC open — §0.6) |
 | **TT-12a** | File distribution | no | ⚠️ broadcast | **S·LOW** | reliable channel |
 | **TT-12b** | **Net movie** | 🔴 AVPlayer + sync | ⚠️ broadcast | **M·MED** | rides TT-12a transport; teacher SEND ported |
 | **TT-13** | System integration + packaging **+ UDP discovery** | UdpClient + LNP entitlement | no | **M·MED** | discovery = near-direct `UdpClient` port |
@@ -112,8 +117,14 @@ net movie (TT-12b) and UDP discovery (TT-13) fold into those phases. The three *
 - **TT-16 Recording — ffmpeg-bundle vs AVAssetWriter.** ffmpeg (shipped uses NReco/ffmpeg):
   cross-platform, but a large bundled binary + licensing to clear. AVAssetWriter: native, cleaner,
   but new code. A real trade-off — decide **at** TT-16, not by accident.
-- **TT-11 conference audio topology.** teacher↔student (shipped parity, via TT-9/10) vs student↔student
-  peer audio (net-new, see 0.2). Confirm the expectation before building TT-11.
+- ✅ **TT-11 conference audio — RESOLVED (2026-07-14): peer audio YES** (§0.2). No new wire (rides
+  `VoiceAudioFrame 0x0640` + `TargetGroupId`); star-relay + student-side voice mixer. **Still open
+  (technical, decide at TT-11): acoustic echo (AEC).** Exclude-self is handled at the mixer (skip own
+  SenderId), but ACOUSTIC echo (a mic hearing the speaker output) needs either AVAudioEngine
+  voice-processing IO (built-in AEC — a change to the M20 capture) or headphones (classroom reality).
+- ✅ **Policy — RESOLVED (2026-07-14): Windows-only** (customer B has no MDM). Removed from macOS
+  scope; the Teacher's policy UI (when built) shows a Mac student's policy visibly unavailable (like
+  the greyed power actions). Known limitation; see Student V2 §6.
 
 ### 0.7 Honest completion (updated 2026-07-14 after batch 1: TT-7 + TT-8)
 - **Teacher track: ~47%** — **9 of ~19 phases done (TT-0…TT-8)**. (Was ~37% at re-scope.)
@@ -463,10 +474,10 @@ recorded so it isn't re-investigated. None block the current Teacher-track phase
   the invariant + the audit, not six tickets. *(①②③ are distinct classes — installer/packaging,
   mic-capture robustness, and a roster id-namespace bug — NOT the lossy-queue class; the "same class"
   is ④⑤⑥ only.)*
-- **Student-track follow-ups (macOS enforcement gaps — block Mac-only feature parity for customer B):**
-  **macOS power execution** (Sandbox has no logoff/restart/shutdown handler — power is a no-op on Mac;
-  Teacher disables it per-platform) and **macOS policy enforcement** (Sandbox shows a policy badge but
-  enforces nothing — why TT-5/TT-6 deferred policy).
+- **Student-track follow-ups (macOS enforcement gaps):** **macOS power execution** (Sandbox has no
+  logoff/restart/shutdown handler — power is a no-op on Mac; Teacher disables it per-platform) and
+  **macOS policy enforcement → RESOLVED 2026-07-14: WINDOWS-ONLY** (customer B has no MDM; macOS
+  can't enforce USB/print/app without it — removed from scope, known limitation; Student V2 §6).
 - **Multi-peer re-tests (from TT-6-D — single-student-blind):** **Conference/peer-camera relay (M19)**
   (highest — a dedicated 2-Mac-student re-test; subsumed into TT-11) and **Student Demonstration**
   (DemoFrame rebroadcast), if/when ported.
