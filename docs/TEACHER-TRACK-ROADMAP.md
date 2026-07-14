@@ -3,7 +3,7 @@
 > 🔴 **RE-SCOPE 2026-07-14 — READ §0 (top of file) FIRST.** Customer B (Mac teacher + Mac students,
 > 50 seats) wants ALL 7 previously-"deferred" features. **NO new wire needed** (except restoring
 > `Exam.Shared`). Critical path **CORRECTED** — the conference is *silent* without audio, so TT-9 +
-> TT-10 move onto it. Honest completion (TT-0…TT-8 LIVE; **TT-9 built + headless-proven 2026-07-14, awaiting LIVE**): **Teacher ~50% · Student ~60% · System ~47%.**
+> TT-10 move onto it. Honest completion (**TT-0…TT-9 done; TT-9 LIVE 2026-07-14**): **Teacher ~50% · Student ~60% · System ~47%.**
 > Companion: `docs/STUDENT-TRACK-ROADMAP-V2.md`. The §5 phase list below is **superseded by §0**
 > where they conflict (§5 kept for the TT-0…TT-6 history).
 
@@ -84,7 +84,7 @@ channels (`_audioOutbox`/`_voiceOutbox` vs the video `_outbox`). Consequences:
 |---|---|---|---|---|---|
 | **TT-7 ✅** | Chat + hand-raise + reactions (+ Mac-Student SEND) | no | ⚠️ aggregation | **M·LOW** | **DONE + LIVE 2026-07-14** — hand-raise send pre-existed; chat/reaction send + DMs reliable; bug #6 fixed |
 | **TT-8 ✅** | Teacher "Share My Screen" | no (reuse M17/M18) | ⚠️ broadcast | **M·LOW–MED** | **DONE + LIVE 2026-07-14** — Teacher bundle (Screen Rec TCC); shared Media decode lib; item #10 done; bug #5 fixed |
-| **TT-9 ✅** | Student audio mixing | extend M20 (native nty_mix_*) | 🟢 no (0x032B/C/D vendored) | **M·MED** | **BUILT + headless-proven; awaiting ≥2-Mac LIVE** — reusable N-node mixer core; cap+gain-norm (2 deliberate divergences vs shipped); kill-one-sender STALL gate; teacher-only ~10%/core at N=25 **and** N=50 (cap-bounded). See `docs/TT-9-FINDINGS.md` |
+| **TT-9 ✅** | Student audio mixing | extend M20 (native nty_mix_*) | 🟢 no (0x032B/C/D vendored) | **M·MED** | **DONE + LIVE 2026-07-14** — reusable N-node mixer core (TT-11 reuses it); **3 deliberate divergences** (cap w/ visible degrade · gain-norm · one core vs shipped's two mixers); kill-one-sender STALL gate; teacher-only ~10%/core at N=25 **and** N=50 (cap-bounded). See `docs/TT-9-FINDINGS.md` + `TT-9-LIVE-CONFIRMATION.md` |
 | **TT-10** | Teacher audio broadcast + mic-monitor | reuse M20 | ⚠️ | **M–H·MED–HIGH** | **ON critical path**; system-loopback gap (§6) |
 | **TT-11** | Camera + Conference (star relay) **+ peer audio** | reuse M19 + student voice mixer | 🔴 yes (flagship) | **L·HIGH** | + peer audio (rides 0x0640, **NO new wire**; star-relay + student mixer; AEC open — §0.6) |
 | **TT-12a** | File distribution | no | ⚠️ broadcast | **S·LOW** | reliable channel |
@@ -126,9 +126,10 @@ net movie (TT-12b) and UDP discovery (TT-13) fold into those phases. The three *
   scope; the Teacher's policy UI (when built) shows a Mac student's policy visibly unavailable (like
   the greyed power actions). Known limitation; see Student V2 §6.
 
-### 0.7 Honest completion (updated 2026-07-14 — after the TT-9 build)
-- **Teacher track: ~50%** — **TT-0…TT-8 LIVE + TT-9 built/headless-proven (10 of ~19), awaiting the
-  TT-9 ≥2-Mac LIVE gate**. (Was ~37% at re-scope, ~47% after batch 1.)
+### 0.7 Honest completion (updated 2026-07-14 — after TT-9 LIVE)
+- **Teacher track: ~50%** — **TT-0…TT-9 done + LIVE (10 of ~19)**. TT-9 LIVE on a one-Mac rig (two
+  co-located sources + headphones); cap/stall/scale proven headlessly. (Was ~37% at re-scope, ~47%
+  after batch 1.)
 - **Student track: ~60%** against full customer-B scope — batch 1 added chat-send + reaction-send +
   teacher-screen display (item #10). Remaining V2 items: power, policy (RISK), remote-inject, demo,
   movie, recording-indicator, breakout, quiz. (Was ~55%; NOT the 95% claimed at M23.)

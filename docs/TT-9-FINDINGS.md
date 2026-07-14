@@ -1,9 +1,9 @@
 # TT-9 — Student Audio Mixing (teacher hears N students) · FINDINGS
 
 **Built:** TT-9-B (audio-load harness) → TT-9-C (teacher multi-source mixer) → TT-9-D (measure +
-stall gate). **Status: built + headlessly proven; awaiting the ≥2-Mac LIVE gate.**
-No `Shared.Wire` change (0x032B/C/D + `AudioStreamFrameMessage` already vendored **and** already
-deserialized in the port). Shipped Windows repo untouched.
+stall gate). **Status: built · headless-proven · LIVE-confirmed 2026-07-14** (see
+`docs/TT-9-LIVE-CONFIRMATION.md`). No `Shared.Wire` change (0x032B/C/D + `AudioStreamFrameMessage`
+already vendored **and** already deserialized in the port). Shipped Windows repo untouched.
 
 ---
 
@@ -22,29 +22,44 @@ contains it and the teacher is *told*, instead of clipping and silently dropping
 
 ---
 
-## Why "50 mics" is survivable — the crux (from TT-9-A, now confirmed by measurement)
+## Why "50 mics survives" in shipped Windows — the crux (do not soften this)
 
-The shipped product has **no scaling mechanism**: no VAD (both mic paths send continuous PCM; the one
-RMS is cosmetic), no codec (raw 16 kHz PCM), no cap (`MaxInputCount` = `int.MaxValue`; the intended
-gate `_micMonitorTargets` is dead code), no gain-normalization. It survives only because the
-**operating point is a handful of mics** — not because the architecture scales to 50.
+**It doesn't. There is no scaling mechanism.**
+- **No VAD** — every 100 ms frame is sent unconditionally; the one RMS check is commented *"cosmetic
+  only"* and drives a UI dot, not the wire.
+- **No codec** — raw 16 kHz / 16-bit / mono PCM, 3200 bytes / 100 ms = **256 kbps per open mic**;
+  ×50 ≈ **12.8 Mbps** into one machine.
+- **No cap** — `MixingSampleProvider.MaxInputCount` left at `int.MaxValue`; `_micMonitorTargets` is
+  **DEAD CODE** (declared, never read).
+- **Not teacher-exclusive** — students can self-unmute; the mixer **auto-registers on first frame**
+  with **no allow-list**.
+- **No gain normalization** — 50 summed inputs clip.
 
-TT-9-D **measured** the consequence and the fix: with a **cap**, teacher-side mix work is *constant*
-above the cap — **N=25 and N=50 both cost ~10% of one core teacher-only** (only 12 are mixed). So 50
-open mics becomes survivable **because the cap bounds the mix** (and gain-norm prevents the clip the
-shipped mixer would produce). The one load-bearing correctness property — a stalled stream must not
-silence the class — is reproduced structurally (see the stall gate) and asserted.
+What makes it work in the field is the **operating point** — a teacher opens a handful — **not the
+architecture**. "50 mics mixed" is a pathological maximum the design tolerates and has almost
+certainly never run. **It is NOT proven at scale on Windows either.**
+
+**THE ONE LOAD-BEARING PROPERTY: the non-blocking mixer.** Shipped `ReadFully=true` means a starved
+input reads as silence, never blocks → one stalled student never silences the class. Our port
+reproduces it **structurally** — independent `AVAudioPlayerNode`s; a node with nothing scheduled plays
+silence. A naive shared-queue / blocking mixer fails the stall test; ours passes it **by
+construction** (asserted — see the stall gate + LIVE checkpoint 4).
+
+TT-9-D **measured** the fix: with a **cap**, teacher-side mix work is *constant* above the cap —
+**N=25 and N=50 both cost ~10% of one core teacher-only** (only 12 mixed). So 50 open mics becomes
+survivable **because the cap bounds the mix** (and gain-norm prevents the clip shipped would produce).
 
 ---
 
-## Two DELIBERATE DIVERGENCES from shipped (we fixed two things shipped got wrong)
+## THREE DELIBERATE DIVERGENCES from shipped (improvements, NOT "matching shipped")
 
-| # | Shipped Windows `StudentAudioMixer` | Our port `TeacherAudioMixer` | Why |
+| # | Shipped Windows | Our port | Why |
 |---|---|---|---|
-| 1 | **No cap** (`MaxInputCount`=∞; `_micMonitorTargets` dead) — N unbounded ~256 kbps streams summed | **CAP** (default 12, configurable) with **VISIBLE degradation**: sources past the cap are counted + surfaced ("N of M open — mixing first 12"), **never silently dropped** | never drop a student the teacher believes they can hear without saying so (the TT-6 bulk-skip-report principle) |
+| 1 | **No cap** (`MaxInputCount`=∞; `_micMonitorTargets` dead) — N unbounded ~256 kbps streams summed | **CAP** (12, configurable) with **VISIBLE degradation**: sources past the cap are counted + surfaced ("N of M open — mixing first 12"), **never silently dropped**. Above the cap, mix work is **constant** (N=25 and N=50 both ~10%/core) | a teacher must never believe they can hear a student they can't (the TT-6 bulk-skip-report principle) |
 | 2 | **No gain normalization** — sums un-normalized inputs, **clips at high N** | **Per-source gain = 1/√(activeCount)** (power-preserving), recomputed on every add/remove | N summed voices stay ~unit RMS instead of N× |
+| 3 | **Two near-identical mixers** — `StudentAudioMixer` (teacher) + `VoiceMixer` (peers) | **One reusable, source-keyed native core** (`nty_mix_*`) — **TT-11's peer mixer consumes the same ABI** | share must-not-diverge infra (the TT-8 decoder-extraction principle); build the mixer once |
 
-These are improvements, not parity — recorded so we don't "match shipped" by regressing them.
+These are improvements, not parity — recorded so a later pass doesn't "match shipped" by regressing them.
 
 ---
 

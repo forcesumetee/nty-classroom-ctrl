@@ -44,9 +44,36 @@ The **batched-delivery model** for LOW-risk, no-new-native, independent phases �
 - Gates: T1–T27 · `--selftest` · `--teacherselftest` (now incl. 0e/0f/1c) — all green; Shared.Wire
   untouched; shipped repo untouched.
 
-## 5. Next — the multi-peer + new-native cluster (where the hard part begins)
-- **TT-9** student audio mixing (**new native** — per-student jitter + mix bus) → **TT-10** teacher
-  audio broadcast + mic-monitor (system-loopback gap) → **TT-11** conference (**flagship multi-peer
-  relay**). The separate-machine 2-Mac rig (proven this LIVE) becomes load-bearing here.
-- **Two open business questions:** (1) peer-to-peer conference audio (net-new vs shipped
-  teacher↔student); (2) MDM/policy (is customer B MDM-enrolled, or is policy Windows-only?).
+## 5. Peer-audio + policy business answers (recorded)
+- **Peer conference audio = YES**, but **wire-safe** — rides `VoiceAudioFrame` 0x0640 + `TargetGroupId`
+  (no new wire); star-relay + student-side voice mixer; lands in **TT-11**, not a TT-9 reshape.
+- **Policy = Windows-only** (customer B has no MDM) — removed as a Student-track task, recorded as a
+  KNOWN LIMITATION; Teacher policy UI (when built) shows Mac = visibly unavailable.
+
+## 6. TT-9 — Student audio mixing (teacher hears N students) ✅ COMPLETE + LIVE 2026-07-14
+Approved A-phase (TT-9-A) → built **TT-9-B → TT-9-C → TT-9-D** autonomously → LIVE PASS. No
+`Shared.Wire` change (0x032B/C/D + `AudioStreamFrameMessage` already vendored + deserialized).
+- **The crux (headline, un-softened):** shipped Windows has **no scaling mechanism** for 50 mics — no
+  VAD (RMS is "cosmetic only"), no codec (raw 16 kHz PCM, 256 kbps/mic → 12.8 Mbps ×50), **no cap**
+  (`_micMonitorTargets` is DEAD CODE), not teacher-exclusive (auto-registers, no allow-list), no
+  gain-norm. It works by **operating point** (teachers open a handful), **not architecture**; 50-at-once
+  is unproven on **both** platforms. The one load-bearing property is the **non-blocking mixer**
+  (ReadFully → starved = silence), which the port reproduces **structurally** (independent
+  `AVAudioPlayerNode`s).
+- **THREE deliberate divergences** (improvements, not parity): **cap** (12, configurable, VISIBLE
+  degradation) · **gain-norm** (1/√N) · **one reusable source-keyed native core** (`nty_mix_*`, TT-11
+  reuses it) vs shipped's two near-identical mixers.
+- **🔴 ASSUMPTION (unverified w/ customer):** teacher opens ~3–5 mics — flagged for sales/deployment.
+- **Measured (M2):** teacher-only ~10%/core at **N=25 and N=50** (cap holds mix work constant); idle ~0%.
+  **Stall gate asserted** headlessly at N=3/10/15/25/50; **cap** at 15/25/50.
+- **LIVE:** real voice (Sandbox mic) + synthetic tone (MockStudent) mixed on real `AVAudioEngine`
+  hardware. One-Mac rig (co-located → headphones; no AEC in TT-9 by design). Headless carries the
+  invariants; LIVE carries "real hardware renders it." See `docs/TT-9-FINDINGS.md` +
+  `TT-9-LIVE-CONFIRMATION.md`. Commits `844d755`→`fd3ac11` (+ close-out).
+
+## 7. Next — TT-10, then TT-11
+- **TT-10** teacher audio broadcast + mic-monitor — **carries the last genuinely-unknown macOS
+  mechanism: system-audio loopback** ("Share Computer Audio"). Teacher-mic broadcast reuses M20 (low
+  risk); the loopback is the open investigation (§6/§7).
+- **TT-11** conference + **peer audio** (rides 0x0640) + the **AEC spike (TT-11-A)** — **reuses the
+  TT-9 mixer core**. Separate-machine 2-Mac audio topology becomes load-bearing here (still to prove).
