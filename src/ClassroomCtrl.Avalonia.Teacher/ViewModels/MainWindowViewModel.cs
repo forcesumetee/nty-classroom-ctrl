@@ -23,6 +23,10 @@ public partial class MainWindowViewModel : ObservableObject
     /// (it needs the messaging seam). Observable so the rail binds when it arrives.</summary>
     [ObservableProperty] private ChatViewModel? chat;
 
+    /// <summary>TT-8-C — the "Share My Screen" VM (set by App). Observable so the header
+    /// button binds when it arrives.</summary>
+    [ObservableProperty] private ScreenShareViewModel? screenShare;
+
     /// <summary>TT-7-C — the transient notification banner (hand-raise / incoming chat).
     /// null = hidden. Auto-clears after a few seconds.</summary>
     [ObservableProperty] private string? toast;

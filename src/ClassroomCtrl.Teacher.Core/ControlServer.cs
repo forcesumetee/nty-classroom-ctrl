@@ -336,13 +336,19 @@ public class ControlServer : IDisposable
 
     // ─────── Phase 4 Part 1: Teacher → all students screen broadcast ───────
 
-    /// <summary>Send Start/Stop control message for screen sharing.</summary>
+    /// <summary>Send Start/Stop control message for screen sharing.
+    /// TT-8-A (SHIPPED BUG #5) fix — the STOP routes RELIABLE, the START stays LOSSY. Asymmetry is
+    /// deliberate: a dropped START just means a student misses this share (the next frame or a
+    /// re-share fixes it — no stuck state), but a dropped STOP under a frame flood (exactly when the
+    /// lossy queue is full) strands a student in the takeover viewer, unable to see their own screen.
+    /// Camera Start/Stop were already promoted to reliable; screen Stop was not. Shipped is lossy for
+    /// both (Windows-track follow-up #5; shipped repo untouched).</summary>
     public Task BroadcastScreenStreamControlAsync(bool start, CancellationToken ct)
     {
         var type = start ? MessageType.ScreenStreamStart : MessageType.ScreenStreamStop;
         var env = Envelope.Create(type, Array.Empty<byte>(), _teacherId);
         _logger.LogInformation("Screen stream {Type}", start ? "START" : "STOP");
-        return _tcp.BroadcastAsync(env, ct);
+        return start ? _tcp.BroadcastAsync(env, ct) : _tcp.BroadcastReliableAsync(env, ct);
     }
 
     /// <summary>Send a single screen frame to all students.</summary>

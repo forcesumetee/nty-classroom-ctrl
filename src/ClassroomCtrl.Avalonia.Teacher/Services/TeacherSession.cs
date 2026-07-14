@@ -21,7 +21,7 @@ namespace ClassroomCtrl.Avalonia.Teacher.Services;
 /// Extracted (not inlined in App) so the socket-teardown is unit-testable — the
 /// same "never leave :7777 bound" discipline as TeacherHost / the TT-1 self-tests.
 /// </summary>
-public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudentCommandSink, ITeacherMessaging
+public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudentCommandSink, ITeacherMessaging, ITeacherScreenSink
 {
     private readonly ControlServer _server;
     private bool _disposed;
@@ -103,6 +103,15 @@ public sealed class TeacherSession : IDisposable, IStudentStreamSource, IStudent
 
     public Task SendHandLowerAsync(Guid studentId, CancellationToken ct)
         => _server.SendHandLowerAsync(studentId, ct);
+
+    // ─────── TT-8-C: ITeacherScreenSink — teacher "Share My Screen" broadcast ───────
+    // Passthrough to the already-ported ControlServer sends (frames lossy; STOP reliable — bug #5).
+
+    public Task BroadcastScreenStreamControlAsync(bool start, CancellationToken ct)
+        => _server.BroadcastScreenStreamControlAsync(start, ct);
+
+    public Task BroadcastScreenFrameAsync(ScreenStreamFrameMessage frame, CancellationToken ct)
+        => _server.BroadcastScreenFrameAsync(frame, ct);
 
     public string ListenAddress
     {

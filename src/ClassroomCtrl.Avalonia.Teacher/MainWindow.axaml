@@ -18,9 +18,19 @@
                     <TextBlock Text="{Binding ListenAddress}" FontSize="11"
                                Foreground="{StaticResource ConfTextSecondaryBrush}" Margin="0,2,0,0"/>
                 </StackPanel>
-                <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center"
-                           FontSize="13" FontWeight="SemiBold"
-                           Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
+                    <!-- TT-8-C: Share My Screen (+ status; visible errors, not a silent no-op). -->
+                    <TextBlock Text="{Binding ScreenShare.Status}" VerticalAlignment="Center" FontSize="11"
+                               Foreground="{StaticResource ConfTextSecondaryBrush}" MaxWidth="320"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding ScreenShare.Status, Converter={x:Static ac:StringConverters.IsNotNullOrEmpty}}"/>
+                    <Button Content="{Binding ScreenShare.ButtonText}" Command="{Binding ScreenShare.ToggleCommand}"
+                            Cursor="Hand" Padding="12,5"
+                            IsVisible="{Binding ScreenShare, Converter={x:Static ac:ObjectConverters.IsNotNull}}"/>
+                    <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                               FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource ConfTextPrimaryBrush}"/>
+                </StackPanel>
             </Grid>
         </Border>
 
