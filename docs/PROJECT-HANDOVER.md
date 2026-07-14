@@ -20,6 +20,9 @@ After today, macOS builds/LIVE tests STOP indefinitely (borrowed MacBook returne
   - **TT-9: multi-student audio mixer** — teacher hears N students mixed (native N-node AVAudioEngine,
     cap 12 + gain-norm; LIVE 2026-07-14)
   - **TT-10-B: "Talk to Class"** — teacher mic → all students (LIVE-pending user test; gate-proven)
+  - **TT-10-C: "Share Computer Audio"** — teacher SYSTEM audio → all students (first-party SCK
+    `capturesAudio`, no wire change; pairs with Share My Screen for video-with-sound; LIVE-pending;
+    wire path gate-proven, capture proven by the probe)
 - 🔴 **NOT DONE — camera view:** the teacher **cannot open a student's camera**. It is NOT built and
   is entangled with the conference relay (TT-11). Fully scoped ready-to-build in
   `docs/TT-CAMERA-VIEW-SCOPE.md`. Don't let "audio both directions is done" imply camera is done.

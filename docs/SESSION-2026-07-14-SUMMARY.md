@@ -77,3 +77,24 @@ Approved A-phase (TT-9-A) → built **TT-9-B → TT-9-C → TT-9-D** autonomousl
   risk); the loopback is the open investigation (§6/§7).
 - **TT-11** conference + **peer audio** (rides 0x0640) + the **AEC spike (TT-11-A)** — **reuses the
   TT-9 mixer core**. Separate-machine 2-Mac audio topology becomes load-bearing here (still to prove).
+
+## 8. FINAL Mac session (2026-07-14) — TT-10-B/-C, the system-audio probe, camera scoped
+🔴 **Last day of Mac access.** Everything pushed; see `PROJECT-HANDOVER.md` / `STATUS-FOR-TEAM.md` /
+`TOR-COMPLIANCE.md`.
+- **TT-10-B "Talk to Class"** ✅ built + gate-green (teacher mic → all students; **SHIPPED BUG #7** —
+  audio Start/Stop lossy → student playback stuck open — fixed in port). LIVE-pending.
+- **TT-10 system-audio probe** ✅ **RESOLVED** — SCK `capturesAudio` captures system audio
+  first-party (200 buf, non-silent) AND coexists with screen in one SCStream. Gate was **bundle
+  identity** (a bare binary has no TCC identity; the granted Teacher bundle works). Rules out the
+  BlackHole worst case. `TT-10-SYSTEM-AUDIO-PROBE.md`.
+- **TT-10-C "Share Computer Audio"** ✅ built (system audio → AudioStreamFrame 0x0329, no wire
+  change; pairs with Share My Screen for video-with-sound). LIVE-pending. Wire path gate-covered.
+- **Camera view (teacher watches a student)** 🔴 **NOT built — deliberately abandoned**: the
+  student→teacher camera path (`ConferenceCameraFrame`) auto-relays to all peers (= TT-11 star
+  topology); no clean 1:1 monitor without a wire add or relay surgery. Fully scoped in
+  `TT-CAMERA-VIEW-SCOPE.md` (+ candidate bug #8: verify conference capture-stop is reliable — privacy).
+- **Contract findings recorded:** 🔴 TOR 11.2.1 power-ON impossible on Apple Silicon (no network
+  cold-boot; shipped Windows never had WoL either) + workarounds; 🔴 iMac M4 base model may lack
+  Ethernet (verify SKU); ⚠️ in-room 50-mic conference audio would howl acoustically (AEC can't fix
+  cross-machine coupling — ask sales). Windows follow-ups now **SEVEN** (four are the lossy-channel class).
+- **Dev-machine to resume:** Apple Silicon, macOS 26, **2 Macs** (TT-11 can't be validated on one).

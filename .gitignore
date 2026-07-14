@@ -23,3 +23,9 @@ native/NtyCapture/libNtyCapture.dylib
 ## Packaged app bundle (rebuild via scripts/package-app.sh)
 *.app/
 mockteacher-frames/
+
+# TT-10 system-audio probe: build artifacts + output (sources are tracked)
+probe_bundle_result.txt
+tools/SckAudioProbe/sck_gui
+tools/SckAudioProbe/sck_probe
+tools/SckAudioProbe/sck_gui2
