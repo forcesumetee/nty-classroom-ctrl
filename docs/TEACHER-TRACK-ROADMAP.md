@@ -3,7 +3,7 @@
 > 🔴 **RE-SCOPE 2026-07-14 — READ §0 (top of file) FIRST.** Customer B (Mac teacher + Mac students,
 > 50 seats) wants ALL 7 previously-"deferred" features. **NO new wire needed** (except restoring
 > `Exam.Shared`). Critical path **CORRECTED** — the conference is *silent* without audio, so TT-9 +
-> TT-10 move onto it. Honest completion: **Teacher ~37% · Student ~55% (not 95%) · System ~40%.**
+> TT-10 move onto it. Honest completion (TT-0…TT-8 done, batch 1 LIVE 2026-07-14): **Teacher ~47% · Student ~60% · System ~45%.**
 > Companion: `docs/STUDENT-TRACK-ROADMAP-V2.md`. The §5 phase list below is **superseded by §0**
 > where they conflict (§5 kept for the TT-0…TT-6 history).
 
@@ -77,8 +77,8 @@ channels (`_audioOutbox`/`_voiceOutbox` vs the video `_outbox`). Consequences:
 
 | Phase | Goal | New native? | Multi-peer | Effort·Risk | Notes |
 |---|---|---|---|---|---|
-| **TT-7** | Chat + hand-raise + reactions **(+ Mac-Student SEND)** | no | ⚠️ aggregation | **M·LOW** | hand-raise SEND already exists; chat/reaction send net-new; DMs `reliable:true` |
-| **TT-8** | Teacher "Share My Screen" | no (reuse M17/M18) | ⚠️ broadcast | **M·LOW–MED** | +Screen Recording TCC on Teacher (**new** — first capture); **Mac-Student display = Student item #10** |
+| **TT-7 ✅** | Chat + hand-raise + reactions (+ Mac-Student SEND) | no | ⚠️ aggregation | **M·LOW** | **DONE + LIVE 2026-07-14** — hand-raise send pre-existed; chat/reaction send + DMs reliable; bug #6 fixed |
+| **TT-8 ✅** | Teacher "Share My Screen" | no (reuse M17/M18) | ⚠️ broadcast | **M·LOW–MED** | **DONE + LIVE 2026-07-14** — Teacher bundle (Screen Rec TCC); shared Media decode lib; item #10 done; bug #5 fixed |
 | **TT-9** | Student audio mixing | extend M20 | 🔴 yes | **M·MED** | **ON critical path** (conference audio) |
 | **TT-10** | Teacher audio broadcast + mic-monitor | reuse M20 | ⚠️ | **M–H·MED–HIGH** | **ON critical path**; system-loopback gap (§6) |
 | **TT-11** | Camera + Conference (star relay) | reuse M19 | 🔴 yes (flagship) | **L·HIGH** | video-only relay; audio via TT-9/10; peer-audio net-new (0.2) |
@@ -115,13 +115,14 @@ net movie (TT-12b) and UDP discovery (TT-13) fold into those phases. The three *
 - **TT-11 conference audio topology.** teacher↔student (shipped parity, via TT-9/10) vs student↔student
   peer audio (net-new, see 0.2). Confirm the expectation before building TT-11.
 
-### 0.7 Honest completion (the denominator grew)
-- **Teacher track: ~37%** — 7 of ~19 phases (was a nominal 50% over the old TT-0…TT-13).
-- **Student track: ~55%** against full customer-B scope — **NOT the 95% claimed at M23** (that was
-  the original narrow scope: a base Mac Student talking to a Windows teacher). See V2 doc.
-- **SYSTEM: ~40%.** Wire 100% done; the hardest foundational native (capture/encode/decode/lock/
-  audio/camera) done and LIVE; the broad feature tail mostly not. **Not under 37%** — but the
-  Student-track "95%" was the real illusion, not the Teacher's already-honest 37%.
+### 0.7 Honest completion (updated 2026-07-14 after batch 1: TT-7 + TT-8)
+- **Teacher track: ~47%** — **9 of ~19 phases done (TT-0…TT-8)**. (Was ~37% at re-scope.)
+- **Student track: ~60%** against full customer-B scope — batch 1 added chat-send + reaction-send +
+  teacher-screen display (item #10). Remaining V2 items: power, policy (RISK), remote-inject, demo,
+  movie, recording-indicator, breakout, quiz. (Was ~55%; NOT the 95% claimed at M23.)
+- **SYSTEM: ~45%.** Wire 100%; foundational native done + LIVE; **+2 feature areas fully closed both
+  sides** (chat/notifications, teacher screen-share). The hard part (multi-peer relay + new-native
+  audio + quiz) is still ahead — see §0.4.
 
 ---
 
