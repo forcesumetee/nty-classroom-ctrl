@@ -73,6 +73,9 @@ public partial class ConnectionViewModel : ObservableObject
     [ObservableProperty] private string displayName = $"Mac Sandbox ({Environment.MachineName})";
     [ObservableProperty] private string errorMessage = "";
 
+    /// <summary>TT-7-D — the student's outgoing chat draft (bound to the input box).</summary>
+    [ObservableProperty] private string chatDraft = "";
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(IsDisconnected))]
@@ -137,6 +140,8 @@ public partial class ConnectionViewModel : ObservableObject
             ConnectCommand.NotifyCanExecuteChanged();
             DisconnectCommand.NotifyCanExecuteChanged();
             RaiseHandCommand.NotifyCanExecuteChanged();
+            SendChatCommand.NotifyCanExecuteChanged();
+            SendReactionCommand.NotifyCanExecuteChanged();
         });
         Client.Traffic += (dir, label, size) => Post(() => AddLog(dir, label, size));
         Client.EnvelopeReceived += env => Post(() => Dispatch(env));
@@ -496,6 +501,58 @@ public partial class ConnectionViewModel : ObservableObject
                                    MessagePackSerializer.Serialize(msg), CancellationToken.None);
         }
         catch (Exception ex) { AddLog(WireDirection.System, $"hand-raise send failed: {ex.Message}", 0); }
+    }
+
+    // ─────── TT-7-D: student SEND — chat + reactions (mirror of RaiseHand) ───────
+    // The student's only send API is WireClient.SendAsync(type, payload) — always a broadcast
+    // envelope (SenderId = EndpointId); the Teacher attributes by SenderId. A student broadcasts
+    // chat to the class/teacher and can't DM (no targeting on this send path — by design).
+
+    private bool CanSendChat() => Status == WireStatus.Connected && !string.IsNullOrWhiteSpace(ChatDraft);
+
+    [RelayCommand(CanExecute = nameof(CanSendChat))]
+    private async Task SendChat()
+    {
+        var text = ChatDraft?.Trim();
+        if (string.IsNullOrEmpty(text)) return;
+        ChatDraft = "";
+        var msg = new ClassroomCtrl.Shared.Protocol.ChatMessage
+        {
+            SenderId = Client.EndpointId,
+            SenderName = DisplayName,
+            RecipientId = null,   // broadcast to the class/teacher
+            Text = text,
+            TimestampUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        };
+        try
+        {
+            await Client.SendAsync(MessageType.ChatBroadcast, MessagePackSerializer.Serialize(msg), CancellationToken.None);
+            SelfTile.LastChat = $"You: {text}";
+        }
+        catch (Exception ex) { AddLog(WireDirection.System, $"chat send failed: {ex.Message}", 0); }
+    }
+
+    partial void OnChatDraftChanged(string value) => SendChatCommand.NotifyCanExecuteChanged();
+
+    private bool CanReact() => Status == WireStatus.Connected;
+
+    /// <summary>Send an ephemeral reaction emoji (MessageType.Reaction 0x0674 — NOT the dead
+    /// ChatReaction 0x0103). The Teacher pops it on this student's tile for a few seconds.</summary>
+    [RelayCommand(CanExecute = nameof(CanReact))]
+    private async Task SendReaction(string? emoji)
+    {
+        if (string.IsNullOrEmpty(emoji)) return;
+        var msg = new ReactionMessage
+        {
+            Emoji = emoji,
+            ExpiresAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 4000,
+        };
+        try
+        {
+            await Client.SendAsync(MessageType.Reaction, MessagePackSerializer.Serialize(msg), CancellationToken.None);
+            AddLog(WireDirection.System, $"reaction sent: {emoji}", 0);
+        }
+        catch (Exception ex) { AddLog(WireDirection.System, $"reaction send failed: {ex.Message}", 0); }
     }
 
     [RelayCommand]

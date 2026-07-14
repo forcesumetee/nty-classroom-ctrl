@@ -163,6 +163,25 @@
                                    IsVisible="{Binding SelfTile.LastChat, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    Text="{Binding SelfTile.LastChat, StringFormat='💬 {0}'}"/>
 
+                        <!-- TT-7-D: student send — chat (broadcast to class/teacher) + reactions.
+                             Enabled only while connected (commands gate on Status). -->
+                        <Grid Margin="0,10,0,0" ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0" Text="{Binding ChatDraft}" PlaceholderText="Message the teacher…"
+                                     FontSize="12" AcceptsReturn="False"/>
+                            <Button Grid.Column="1" Content="Send" Margin="6,0,0,0"
+                                    Theme="{StaticResource Button.Secondary}"
+                                    Command="{Binding SendChatCommand}" IsDefault="True"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Spacing="6">
+                            <TextBlock Text="React:" FontSize="12" VerticalAlignment="Center"
+                                       Foreground="{StaticResource Text.Secondary}"/>
+                            <Button Content="👍" Command="{Binding SendReactionCommand}" CommandParameter="👍" Padding="8,4"/>
+                            <Button Content="❤️" Command="{Binding SendReactionCommand}" CommandParameter="❤️" Padding="8,4"/>
+                            <Button Content="😂" Command="{Binding SendReactionCommand}" CommandParameter="😂" Padding="8,4"/>
+                            <Button Content="🎉" Command="{Binding SendReactionCommand}" CommandParameter="🎉" Padding="8,4"/>
+                            <Button Content="😮" Command="{Binding SendReactionCommand}" CommandParameter="😮" Padding="8,4"/>
+                        </StackPanel>
+
                         <!-- Streaming-to-teacher indicator (27-C) -->
                         <Border Margin="0,10,0,0" CornerRadius="6" Padding="10,6"
                                 Background="#DCFCE7" IsVisible="{Binding SelfTile.IsStreaming}">
