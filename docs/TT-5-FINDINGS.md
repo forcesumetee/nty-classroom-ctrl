@@ -1,4 +1,18 @@
-# TT-5 Findings — core commands (lock/unlock + power) · COMPLETE (LIVE-confirmed)
+# TT-5 Findings — core commands (lock/unlock + power) · COMPLETE (targeting corrected TT-6-D)
+
+> ⚠️ **CORRECTION (2026-07-14, found TT-6-D):** TT-5-D was a **false pass** for per-student
+> targeting. The Teacher-side send was correct (each command is `CreateTargeted` at the right
+> `EndpointId`, on the reliable channel) — but the **Student-side receive filter was missing** in
+> the macOS port. The shipped Windows Student runs an `IsForMe` filter in its Service
+> (`ClassroomWorker.IsForMe`, **verified present** — Windows customers were never exposed); the
+> port collapsed Service+Agent into one process (the Sandbox) and dropped that filter, so a
+> targeted `LockScreen`/power/policy was acted on by **every** connected Mac student, not just the
+> target. It was invisible in TT-5-D because the Mac student and BELL were tested in **separate
+> runs** (BELL, a shipped Windows Student, filters correctly, so BELL-only tests looked fine).
+> **Fixed in the TT-6-D receive-side-filter step** (`StudentEnvelopeFilter.IsForMe`, default-deny,
+> guarded at the top of `ConnectionViewModel.Dispatch`; committed negative gates in
+> `--selftest`/`--teacherselftest` for LockScreen + StudentStreamStart). TT-5's per-student
+> commands are correct **as of that fix**. The design/scope findings below stand unchanged.
 
 **Goal:** the Mac Teacher COMMANDS a student — lock/unlock (both platforms) and power
 (logoff/restart/shutdown, Windows students). The full-circle interop: a macOS Teacher

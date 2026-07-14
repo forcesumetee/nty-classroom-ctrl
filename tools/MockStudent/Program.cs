@@ -67,8 +67,12 @@ return await Interactive.RunAsync(ip, port, name);
 static class Framing
 {
     public static async Task SendAsync(NetworkStream s, MessageType type, byte[] payload, Guid sender, CancellationToken ct = default)
+        => await SendAsync(s, Envelope.Create(type, payload, sender), ct);
+
+    // TT-6-D — send a pre-built envelope (e.g. CreateTargeted) so the self-tests can exercise
+    // the receive-side target filter with real targeted frames.
+    public static async Task SendAsync(NetworkStream s, Envelope env, CancellationToken ct = default)
     {
-        var env = Envelope.Create(type, payload, sender);
         var body = env.Serialize();
         var frame = new byte[4 + body.Length];
         BinaryPrimitives.WriteInt32BigEndian(frame.AsSpan(0, 4), body.Length);
@@ -413,6 +417,31 @@ static class SelfTest
             await Framing.SendAsync(serverStream, MessageType.LockScreen, Array.Empty<byte>(), teacherId);
         Check("client received the LockScreen command", await WaitUntil(() => received.Contains(MessageType.LockScreen), 3000));
 
+        // (2b) TT-6-D — receive-side target filter: a command targeted at ANOTHER student must be
+        // dropped by THIS student (the wrong-blast-radius fix). The student RECEIVES the frame
+        // (the Teacher broadcasts + relies on client filtering), but its filter must return false.
+        // Assert the negative for BOTH high-blast commands (LockScreen, StudentStreamStart) + the
+        // positive (targeted-at-me → acts).
+        var recvEnv = new ConcurrentBag<Envelope>();
+        client.EnvelopeReceived += env => recvEnv.Add(env);
+        var otherId = Guid.NewGuid();
+        if (serverStream is not null)
+        {
+            await Framing.SendAsync(serverStream, Envelope.CreateTargeted(MessageType.LockScreen, Array.Empty<byte>(), teacherId, otherId));
+            await Framing.SendAsync(serverStream, Envelope.CreateTargeted(MessageType.StudentStreamStart, Array.Empty<byte>(), teacherId, otherId));
+            await Framing.SendAsync(serverStream, Envelope.CreateTargeted(MessageType.LockScreen, Array.Empty<byte>(), teacherId, client.EndpointId));
+        }
+        Envelope? Rx(MessageType t, Guid target) => recvEnv.FirstOrDefault(e => e.Type == t && e.TargetEndpointId == target);
+        Check("filter: LockScreen for ANOTHER student → received but IsForMe FALSE (would NOT lock)",
+            await WaitUntil(() => Rx(MessageType.LockScreen, otherId) is not null, 3000)
+            && !StudentEnvelopeFilter.IsForMe(Rx(MessageType.LockScreen, otherId)!, client.EndpointId));
+        Check("filter: StudentStreamStart for ANOTHER student → received but IsForMe FALSE (no wrong screen capture)",
+            await WaitUntil(() => Rx(MessageType.StudentStreamStart, otherId) is not null, 3000)
+            && !StudentEnvelopeFilter.IsForMe(Rx(MessageType.StudentStreamStart, otherId)!, client.EndpointId));
+        Check("filter: LockScreen for ME → received and IsForMe TRUE (acts)",
+            await WaitUntil(() => Rx(MessageType.LockScreen, client.EndpointId) is not null, 3000)
+            && StudentEnvelopeFilter.IsForMe(Rx(MessageType.LockScreen, client.EndpointId)!, client.EndpointId));
+
         // (3) heartbeat: the client Pings within ~5 s; the stub replies Pong → link stays up
         Check("stub-teacher received the client's heartbeat Ping", await WaitTask(pingTcs.Task, 8000));
         await Task.Delay(300);
@@ -634,6 +663,27 @@ static class TeacherSelfTest
             Check("bulk confirm prompt is count-aware", StudentCommandController.BulkConfirmPrompt(StudentCommand.Shutdown, 2).Contains("2 students"));
         }
 
+        // ── (0d) TT-6-D RECEIVE-SIDE FILTER (StudentEnvelopeFilter.IsForMe) — the wrong-blast-
+        //    radius fix (the port dropped the shipped Service's IsForMe when it collapsed
+        //    Service+Agent into one process). DEFAULT-DENY: only whole-class broadcast / my-endpoint
+        //    / my-group act. Covers BOTH high-blast-radius commands (Lock, StudentStreamStart).
+        Console.WriteLine("-- (0d) TT-6-D receive-side filter (StudentEnvelopeFilter.IsForMe) --");
+        {
+            var me = Guid.NewGuid(); var other = Guid.NewGuid(); var teacher = Guid.NewGuid();
+            Envelope Targeted(MessageType t, Guid target) => Envelope.CreateTargeted(t, Array.Empty<byte>(), teacher, target);
+
+            Check("IsForMe: LockScreen targeted at me → ACT", StudentEnvelopeFilter.IsForMe(Targeted(MessageType.LockScreen, me), me));
+            Check("IsForMe: LockScreen targeted at ANOTHER → DROP (no wrong-lock)", !StudentEnvelopeFilter.IsForMe(Targeted(MessageType.LockScreen, other), me));
+            Check("IsForMe: StudentStreamStart targeted at me → ACT", StudentEnvelopeFilter.IsForMe(Targeted(MessageType.StudentStreamStart, me), me));
+            Check("IsForMe: StudentStreamStart targeted at ANOTHER → DROP (no wrong-screen-capture)", !StudentEnvelopeFilter.IsForMe(Targeted(MessageType.StudentStreamStart, other), me));
+            Check("IsForMe: whole-class broadcast (Empty target) → ACT", StudentEnvelopeFilter.IsForMe(Envelope.Create(MessageType.LockScreen, Array.Empty<byte>(), teacher), me));
+            Check("IsForMe: group-targeted while in NO room → DROP (default-deny)",
+                !StudentEnvelopeFilter.IsForMe(Envelope.CreateGroupTargeted(MessageType.LockScreen, Array.Empty<byte>(), teacher, Guid.NewGuid()), me, myRoomId: null));
+            var room = Guid.NewGuid();
+            Check("IsForMe: my-group target while in that room → ACT",
+                StudentEnvelopeFilter.IsForMe(Envelope.CreateGroupTargeted(MessageType.LockScreen, Array.Empty<byte>(), teacher, room), me, myRoomId: room));
+        }
+
         // ── Server 1: the REAL student WireClient against the REAL server. ──
         // Large stale window (8 s > the client's 5 s heartbeat) so healthy clients never false-stale.
         await WithServer(8000, Check, "server-1 (real WireClient)", async (server, roster, port) =>
@@ -679,6 +729,24 @@ static class TeacherSelfTest
             // (2) 3 REAL WireClients → disconnect the MIDDLE one → the RIGHT one is removed.
             var a = StartClient(port, "Alice"); var b = StartClient(port, "Bob"); var c = StartClient(port, "Cara");
             Check("3 real students joined", await WaitUntil(() => roster.Count == 3, 5000));
+
+            // (2b) TT-6-D — WRONG-BLAST-RADIUS with 3 connected: a command targeted at A (Alice) is
+            // broadcast to all peers, so bystander C RECEIVES it — but C's filter must DROP it. This
+            // is the scenario TT-5 never tested (one student at a time). Assert for BOTH high-blast
+            // commands, over the REAL Teacher (CreateTargeted) + real transport.
+            var cRx = new System.Collections.Concurrent.ConcurrentBag<Envelope>();
+            c.client.EnvelopeReceived += e => cRx.Add(e);
+            await server.LockOneAsync(a.client.EndpointId, true, CancellationToken.None, reliable: true);
+            await server.RequestStudentStreamAsync(a.client.EndpointId, VideoCodec.Mjpeg, CancellationToken.None);
+            Envelope? CRx(MessageType t) => cRx.FirstOrDefault(e => e.Type == t && e.TargetEndpointId == a.client.EndpointId);
+            Check("targeted-at-A LockScreen: bystander C DROPS it (IsForMe false for C, true for A)",
+                await WaitUntil(() => CRx(MessageType.LockScreen) is not null, 3000)
+                && !StudentEnvelopeFilter.IsForMe(CRx(MessageType.LockScreen)!, c.client.EndpointId)
+                && StudentEnvelopeFilter.IsForMe(CRx(MessageType.LockScreen)!, a.client.EndpointId));
+            Check("targeted-at-A StudentStreamStart: bystander C DROPS it (no wrong screen capture)",
+                await WaitUntil(() => CRx(MessageType.StudentStreamStart) is not null, 3000)
+                && !StudentEnvelopeFilter.IsForMe(CRx(MessageType.StudentStreamStart)!, c.client.EndpointId));
+
             b.cts.Cancel(); try { await b.run.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
             Check("disconnecting the MIDDLE student removes B", await WaitUntil(() => !roster.Contains(b.client.EndpointId), 3000));
             Check("A and C REMAIN — buggy RemoveAt(Count-1) would have dropped C",

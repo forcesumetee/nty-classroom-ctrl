@@ -4,7 +4,17 @@
 **Gate:** *right-click a student tile → lock/unlock (both platforms) and power (Windows) →
 the command takes effect on the student.*
 
-## Result: PASS — all sub-gates
+> ⚠️ **CORRECTION (2026-07-14, found TT-6-D):** this run was a **false pass** for per-student
+> *targeting*. Each sub-gate below happened with only ONE Mac student (or BELL) connected, so a
+> missing Student-side target filter went unseen: a command targeted at one student was acted on
+> by **every** connected Mac student. The Teacher send was correct; the Mac Student's `IsForMe`
+> filter was missing in the port (the shipped Windows Student has it — verified). **Fixed in the
+> TT-6-D receive-side-filter step**, whose re-LIVE gate is the standing test: **2 Mac students +
+> BELL connected at once**, command targeted at one → only that one acts. The commands below do
+> take effect on the targeted student; what was unverified here was that they *don't* also hit the
+> others.
+
+## Result: PASS — all sub-gates (see correction above re: targeting)
 
 ### ✅ Sub-gate 1 — Windows Student (BELL), scenario 3: power + lock, confirmed
 A real, shipped, **unmodified Windows Student** ("BELL", v1.2) driven from the Mac Teacher:

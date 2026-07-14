@@ -311,6 +311,15 @@ public partial class ConnectionViewModel : ObservableObject
             return;
         }
 
+        // TT-6-D fix — receive-side target filter (DEFAULT-DENY). The Teacher broadcasts targeted
+        // commands to all peers and relies on client-side filtering; the shipped Windows Student
+        // does this in its Service (ClassroomWorker.IsForMe), but the port dropped it when it
+        // collapsed Service+Agent into this single process. Without this guard EVERY targeted
+        // command (lock/unlock/policy/power/DM/screen-stream/mic) hit every Mac student — a
+        // wrong-blast-radius bug (found TT-6-D). Only broadcasts / my-endpoint / my-group act.
+        if (!StudentEnvelopeFilter.IsForMe(env, Client.EndpointId))
+            return;
+
         string detail;
         switch (env.Type)
         {
